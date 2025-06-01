@@ -35,6 +35,7 @@ import tf2_ros # ROS bindings for tf2 library to handle transforms
 from std_msgs.msg import Int32, Float32, Header # Int32, Float32 and Header message classes
 from geometry_msgs.msg import Point, TransformStamped # Point and TransformStamped message classes
 from sensor_msgs.msg import JointState, Imu, LaserScan, Image # JointState, Imu, LaserScan and Image message classes
+from nav_msgs.msg import Odometry # Odometry message class
 from tf_transformations import quaternion_from_euler # Euler angle representation to quaternion representation
 from ament_index_python.packages import get_package_share_directory # Access package's shared directory path
 
@@ -101,16 +102,68 @@ def create_imu_msg(orientation_quaternion, angular_velocity, linear_acceleration
     imu.orientation.y = orientation_quaternion[1]
     imu.orientation.z = orientation_quaternion[2]
     imu.orientation.w = orientation_quaternion[3]
-    imu.orientation_covariance = [0.0025, 0.0, 0.0, 0.0, 0.0025, 0.0, 0.0, 0.0, 0.0025]
+    imu.orientation_covariance = [0.0001, 0.0, 0.0,
+                                  0.0, 0.0001, 0.0,
+                                  0.0, 0.0, 0.0001] # Noise of sqrt(0.0001) = 0.01 rad
     imu.angular_velocity.x = angular_velocity[0]
     imu.angular_velocity.y = angular_velocity[1]
     imu.angular_velocity.z = angular_velocity[2]
-    imu.angular_velocity_covariance = [0.0025, 0.0, 0.0, 0.0, 0.0025, 0.0, 0.0, 0.0, 0.0025]
+    imu.angular_velocity_covariance = [0.0001, 0.0, 0.0,
+                                       0.0, 0.0001, 0.0,
+                                       0.0, 0.0, 0.0001] # Noise of sqrt(0.0001) = 0.01 rad/s
     imu.linear_acceleration.x = linear_acceleration[0]
     imu.linear_acceleration.y = linear_acceleration[1]
     imu.linear_acceleration.z = linear_acceleration[2]
-    imu.linear_acceleration_covariance = [0.0025, 0.0, 0.0, 0.0, 0.0025, 0.0, 0.0, 0.0, 0.0025]
+    imu.linear_acceleration_covariance = [0.0001, 0.0, 0.0,
+                                          0.0, 0.0001, 0.0,
+                                          0.0, 0.0, 0.0001] # Noise of sqrt(0.0001) = 0.01 m/s^2
     return imu
+
+def create_odom_msg(position, orientation_quaternion, angular_velocity, linear_acceleration, last_timestamp=[None]):
+    current_timestamp = autodrive_incoming_bridge.get_clock().now().to_msg()
+    if last_timestamp[0] is not None:
+        dt = current_timestamp.sec - last_timestamp[0].sec
+    else:
+        dt = 0.0
+    odom = Odometry()
+    odom.header = Header()
+    odom.header.stamp = current_timestamp
+    odom.header.frame_id = 'world'
+    # Pose
+    odom.pose.pose.position.x = position[0]
+    odom.pose.pose.position.y = position[1]
+    odom.pose.pose.position.z = position[2]
+    odom.pose.pose.orientation.x = orientation_quaternion[0]
+    odom.pose.pose.orientation.y = orientation_quaternion[1]
+    odom.pose.pose.orientation.z = orientation_quaternion[2]
+    odom.pose.pose.orientation.w = orientation_quaternion[3]
+    odom.pose.covariance = [0.0001, 0.0, 0.0, 0.0, 0.0, 0.0,
+                            0.0, 0.0001, 0.0, 0.0, 0.0, 0.0,
+                            0.0, 0.0, 0.0001, 0.0, 0.0, 0.0,
+                            0.0, 0.0, 0.0, 0.0001, 0.0, 0.0,
+                            0.0, 0.0, 0.0, 0.0, 0.0001, 0.0,
+                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0001] # Noise of sqrt(0.0001) = 0.01 m or rad
+    # Twist
+    if last_timestamp[0] is not None:
+        linear_velocity = np.cumsum(linear_acceleration * dt, axis=0)
+        odom.twist.twist.linear.x = linear_velocity[0]
+        odom.twist.twist.linear.y = linear_velocity[1]
+        odom.twist.twist.linear.z = linear_velocity[2]
+    else:
+        odom.twist.twist.linear.x = 0.0
+        odom.twist.twist.linear.y = 0.0
+        odom.twist.twist.linear.z = 0.0
+    odom.twist.twist.angular.x = angular_velocity[0]
+    odom.twist.twist.angular.y = angular_velocity[1]
+    odom.twist.twist.angular.z = angular_velocity[2]
+    odom.twist.covariance = [0.0001, 0.0, 0.0, 0.0, 0.0, 0.0,
+                            0.0, 0.0001, 0.0, 0.0, 0.0, 0.0,
+                            0.0, 0.0, 0.0001, 0.0, 0.0, 0.0,
+                            0.0, 0.0, 0.0, 0.0001, 0.0, 0.0,
+                            0.0, 0.0, 0.0, 0.0, 0.0001, 0.0,
+                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0001] # Noise of sqrt(0.0001) = 0.01 m/s or rad/s
+    last_timestamp[0] = current_timestamp
+    return odom
 
 def create_laser_scan_msg(lidar_scan_rate, lidar_range_array, lidar_intensity_array):
     ls = LaserScan()
@@ -169,6 +222,9 @@ def publish_ips_data(position):
 
 def publish_imu_data(orientation_quaternion, angular_velocity, linear_acceleration):
     publishers['pub_imu'].publish(create_imu_msg(orientation_quaternion, angular_velocity, linear_acceleration))
+
+def publish_odom_data(position, orientation_quaternion, angular_velocity, linear_acceleration):
+    publishers['pub_odom'].publish(create_odom_msg(position, orientation_quaternion, angular_velocity, linear_acceleration))
 
 def publish_lidar_scan(lidar_scan_rate, lidar_range_array, lidar_intensity_array):
     publishers['pub_lidar'].publish(create_laser_scan_msg(lidar_scan_rate, lidar_range_array.tolist(), lidar_intensity_array.tolist()))
@@ -230,8 +286,10 @@ def bridge(sid, data):
         angular_velocity = np.fromstring(data["V1 Angular Velocity"], dtype=float, sep=' ')
         linear_acceleration = np.fromstring(data["V1 Linear Acceleration"], dtype=float, sep=' ')
         publish_imu_data(orientation_quaternion, angular_velocity, linear_acceleration)
+        # Odometry
+        publish_odom_data(position, orientation_quaternion, angular_velocity, linear_acceleration)
         # Cooordinate transforms
-        broadcast_transform("f1tenth_1", "map", position, orientation_quaternion) # Vehicle frame defined at center of rear axle
+        broadcast_transform("f1tenth_1", "world", position, orientation_quaternion) # Vehicle frame defined at center of rear axle
         broadcast_transform("left_encoder", "f1tenth_1", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles[0]%6.283, 0.0))
         broadcast_transform("right_encoder", "f1tenth_1", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles[1]%6.283, 0.0))
         broadcast_transform("ips", "f1tenth_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
