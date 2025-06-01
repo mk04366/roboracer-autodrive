@@ -29,9 +29,10 @@
 ################################################################################
 
 # ROS 2 module imports
-from std_msgs.msg import Int32, Float32 # Int32 and Float32 message classes
+from std_msgs.msg import Float32 # Float32 message class
 from geometry_msgs.msg import Point # Point message class
 from sensor_msgs.msg import JointState, Imu, LaserScan, Image # JointState, Imu, LaserScan and Image message classes
+from nav_msgs.msg import Odometry # Odometry message class
 
 # Python mudule imports
 from attrdict import AttrDict # Mapping objects that allow their elements to be accessed both as keys and as attributes
@@ -53,6 +54,7 @@ pub_sub_dict = AttrDict({
         {'topic': '/autodrive/f1tenth_1/right_encoder', 'type': JointState, 'name': 'pub_right_encoder'},
         {'topic': '/autodrive/f1tenth_1/ips', 'type': Point, 'name': 'pub_ips'},
         {'topic': '/autodrive/f1tenth_1/imu', 'type': Imu, 'name': 'pub_imu'},
+        {'topic': '/autodrive/f1tenth_1/odom', 'type': Odometry, 'name': 'pub_odom'},
         {'topic': '/autodrive/f1tenth_1/lidar', 'type': LaserScan, 'name': 'pub_lidar'},
         {'topic': '/autodrive/f1tenth_1/front_camera', 'type': Image, 'name': 'pub_front_camera'},
     ]
