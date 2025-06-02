@@ -38,7 +38,7 @@ from nav_msgs.msg import Odometry # Odometry message class
 from attrdict import AttrDict # Mapping objects that allow their elements to be accessed both as keys and as attributes
 
 ################################################################################
-
+testingvariable = 1
 # ROS 2 publishers and subscribers
 pub_sub_dict = AttrDict({
     'subscribers': [
