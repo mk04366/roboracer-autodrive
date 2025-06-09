@@ -11,17 +11,12 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 
 # Add your executable
-add_executable(controller_node src/controller_node.cpp)
-
-ament_target_dependencies(controller_node
-  rclcpp
-  std_msgs
-)
-
+add_executable(pid_controller_node src/pid_controller_node.cpp)
+ament_target_dependencies(pid_controller_node rclcpp std_msgs)
 install(TARGETS
-  controller_node
+  pid_controller_node
   DESTINATION lib/${PROJECT_NAME}
-)
+  )
 
 
 if(BUILD_TESTING)
