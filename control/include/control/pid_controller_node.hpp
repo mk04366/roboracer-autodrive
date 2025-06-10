@@ -4,34 +4,34 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float64.hpp"
 
-namespace second_cpp_pkg
+namespace pid_controller_node
 {
 
-class PIDControllerNode : public rclcpp::Node
-{
-public:
-    PIDControllerNode();
+    class PIDControllerNode : public rclcpp::Node
+    {
+    public:
+        PIDControllerNode();
 
-private:
-    void compute_pid(double current_value);
+    private:
+        void compute_pid(double current_value);
 
-    // PID parameters
-    double kp_;
-    double ki_;
-    double kd_;
+        // PID parameters
+        double kiThrottle, kdThrottle, kpThrottle;
+        double kiSteeringAngle, kdSteeringAngle, kpSteeringAngle;
 
-    // PID state
-    double setpoint_;
-    double integral_;
-    double prev_error_;
-    rclcpp::Time last_time_;
+        // PID states
+        double setpointSteeringAngle, integralSteeringAngle, prevErrorSteeringAngle;
+        double setpointThrottle, integralThrottle ,prevErrorThrottle;
+        rclcpp::Time lastTime;
 
-    // ROS interfaces
-    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr target_sub_;
-    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedback_sub_;
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr control_pub_;
-};
+        // ROS interfaces
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr targetThrottleSub, targetSteeringAngleSub;
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedbackThrottleSub, feedbackSteeringAngleSub;
 
-}  // namespace second_cpp_pkg
+        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr controlThrottlePub;
+        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr controlSteeringAnglePub;
+    };
 
-#endif  // SECOND_CPP_PKG__PID_CONTROLLER_NODE_HPP_
+}
+
+#endif
