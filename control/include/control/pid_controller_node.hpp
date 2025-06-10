@@ -17,17 +17,29 @@ namespace pid_controller_node
         void compute_pid_throttle(double current_value);
 
         // PID parameters
-        double kiThrottle, kdThrottle, kpThrottle;
-        double kiSteering, kdSteering, kpSteering;
+        double kiThrottle;
+        double kdThrottle;
+        double kpThrottle;
+
+        double kiSteering;
+        double kdSteering;
+        double kpSteering;
 
         // PID states
-        double setpointSteering, integralSteering, prevErrorSteering;
-        double setpointThrottle, integralThrottle ,prevErrorThrottle;
+        double setpointSteering;
+        double integralSteering;
+        double prevErrorSteering;
+        double setpointThrottle;
+        double integralThrottle;
+        double prevErrorThrottle;
+
         rclcpp::Time lastTime;
 
         // ROS interfaces
-        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr targetThrottleSub, targetSteeringSub;
-        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedbackThrottleSub, feedbackSteeringSub;
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr targetThrottleSub;
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr targetSteeringSub;
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedbackThrottleSub;
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedbackSteeringSub;
 
         //final control commands given to the simulator
         rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr throttle_command_pub;

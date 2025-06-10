@@ -1,13 +1,14 @@
-#include "pid_controller_node.hpp"
+#include "control/pid_controller_node.hpp"
 
 namespace pid_controller_node
 {
 
     PIDControllerNode::PIDControllerNode()
         : Node("pid_controller_node"),
-          kpSteering(1.0), kpThrottle(1.0), kiThrottle(0.0), kiSteering(0.0), kdThrottle(0.1), kdSteering(0.1),
-          setpointThrottle(0.0), setpointSteering(0.0), integralThrottle(0.0), integralSteering(0.0),
-          prevErrorThrottle(0.0), prevErrorSteering(0.0)
+          kiThrottle(0.0), kdThrottle(0.0), kpThrottle(1.0),
+          kiSteering(0.0), kdSteering(0.0), kpSteering(1.0),
+          setpointSteering(0.0), integralSteering(0.0), prevErrorSteering(0.0),
+          setpointThrottle(0.0), integralThrottle(0.0), prevErrorThrottle(0.0)
     {
         this->declare_parameter("kpThrottle", kpThrottle);
         this->declare_parameter("kiThrottle", kiThrottle);
@@ -51,7 +52,6 @@ namespace pid_controller_node
                 compute_pid_steering(msg->data);
             });
 
-
         steering_command_pub = this->create_publisher<std_msgs::msg::Float64>("steering_command", 10);
         throttle_command_pub = this->create_publisher<std_msgs::msg::Float64>("throttle_command", 10);
 
@@ -62,7 +62,7 @@ namespace pid_controller_node
     {
         rclcpp::Time now = this->now();
         double dt = (now - lastTime).seconds();
-        lastTime= now;
+        lastTime = now;
 
         double error = setpointSteering - current_value;
         integralSteering += error * dt;
@@ -103,3 +103,11 @@ namespace pid_controller_node
     }
 
 }
+
+int main(int argc, char *argv[])
+{
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<pid_controller_node::PIDControllerNode>());
+    rclcpp::shutdown();
+    return 0;
+};

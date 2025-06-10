@@ -3,7 +3,7 @@
 <package format="3">
   <name>control</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>This package contains various algorithms which are related to the control of f1tenth</description>
   <maintainer email="49035936+mk04366@users.noreply.github.com">ammar</maintainer>
   <license>TODO: License declaration</license>
 
