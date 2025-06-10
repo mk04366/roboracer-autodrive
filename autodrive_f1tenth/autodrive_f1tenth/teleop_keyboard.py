@@ -124,8 +124,8 @@ def main():
     rclpy.init()
     qos = QoSProfile(depth=1)
     node = rclpy.create_node('teleop_keyboard')
-    pub_steering_command = node.create_publisher(Float32, '/autodrive/f1tenth_1/steering_command', qos)
-    pub_throttle_command = node.create_publisher(Float32, '/autodrive/f1tenth_1/throttle_command', qos)
+    pub_steering_command_raw = node.create_publisher(Float32, '/autodrive/f1tenth_1/steering_command_raw', qos)
+    pub_throttle_command_raw = node.create_publisher(Float32, '/autodrive/f1tenth_1/throttle_command_raw', qos)
     pub_reset_command = node.create_publisher(Bool, '/autodrive/reset_command', qos)
 
     # Initialize
@@ -172,8 +172,8 @@ def main():
             reset_msg.data = reset_flag
 
             # Publish control messages
-            pub_throttle_command.publish(throttle_msg)
-            pub_steering_command.publish(steering_msg)
+            pub_throttle_command_raw.publish(throttle_msg)
+            pub_steering_command_raw.publish(steering_msg)
             pub_reset_command.publish(reset_msg)
             
             # Reset the flag
@@ -188,8 +188,8 @@ def main():
         throttle_msg.data = float(0.0)
         steering_msg.data = float(0.0)
         reset_msg.data = False
-        pub_throttle_command.publish(throttle_msg)
-        pub_steering_command.publish(steering_msg)
+        pub_throttle_command_raw.publish(throttle_msg)
+        pub_steering_command_raw.publish(steering_msg)
         pub_reset_command.publish(reset_msg)
         if os.name != 'nt':
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)

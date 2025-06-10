@@ -5,57 +5,101 @@ namespace pid_controller_node
 
     PIDControllerNode::PIDControllerNode()
         : Node("pid_controller_node"),
-          kpSteeringAngle(1.0), kpThrottle(1.0), kiThrottle(0.0), kiSteeringAngle(0.0), kdThrottle(0.1), kdSteeringAngle(0.1),
-          setpointThrottle(0.0), setpointSteeringAngle(0.0), integralThrottle(0.0), integralSteeringAngle(0.0),
-          prevErrorThrottle(0.0), prevErrorSteeringAngle(0.0)
+          kpSteering(1.0), kpThrottle(1.0), kiThrottle(0.0), kiSteering(0.0), kdThrottle(0.1), kdSteering(0.1),
+          setpointThrottle(0.0), setpointSteering(0.0), integralThrottle(0.0), integralSteering(0.0),
+          prevErrorThrottle(0.0), prevErrorSteering(0.0)
     {
-        declare_parameter("kp", 1.0);
-        declare_parameter("ki", 0.0);
-        declare_parameter("kd", 0.1);
+        this->declare_parameter("kpThrottle", kpThrottle);
+        this->declare_parameter("kiThrottle", kiThrottle);
+        this->declare_parameter("kdThrottle", kdThrottle);
+        this->declare_parameter("kpSteering", kpSteering);
+        this->declare_parameter("kiSteering", kiSteering);
+        this->declare_parameter("kdSteering", kdSteering);
 
-        get_parameter("kp", kp_);
-        get_parameter("ki", ki_);
-        get_parameter("kd", kd_);
+        get_parameter("kpThrottle", kpThrottle);
+        get_parameter("kiThrottle", kiThrottle);
+        get_parameter("kdThrottle", kdThrottle);
+        get_parameter("kpSteering", kpSteering);
+        get_parameter("kiSteering", kiSteering);
+        get_parameter("kdSteering", kdSteering);
 
         targetThrottleSub = this->create_subscription<std_msgs::msg::Float64>(
-            "throttle_command", 10,
+            "throttle_command_raw", 10,
             [this](std_msgs::msg::Float64::SharedPtr msg)
             {
-                setpoint_ = msg->data;
+                setpointThrottle = msg->data;
             });
 
         feedbackThrottleSub = this->create_subscription<std_msgs::msg::Float64>(
             "throttle", 10,
             [this](std_msgs::msg::Float64::SharedPtr msg)
             {
-                compute_pid(msg->data);
+                compute_pid_throttle(msg->data);
             });
 
-        control_pub_ = this->create_publisher<std_msgs::msg::Float64>("control", 10);
+        targetSteeringSub = this->create_subscription<std_msgs::msg::Float64>(
+            "steering_command_raw", 10,
+            [this](std_msgs::msg::Float64::SharedPtr msg)
+            {
+                setpointSteering = msg->data;
+            });
 
-        last_time_ = this->now();
+        feedbackSteeringSub = this->create_subscription<std_msgs::msg::Float64>(
+            "steering", 10,
+            [this](std_msgs::msg::Float64::SharedPtr msg)
+            {
+                compute_pid_steering(msg->data);
+            });
+
+
+        steering_command_pub = this->create_publisher<std_msgs::msg::Float64>("steering_command", 10);
+        throttle_command_pub = this->create_publisher<std_msgs::msg::Float64>("throttle_command", 10);
+
+        lastTime = this->now();
     }
 
-    void PIDControllerNode::compute_pid(double current_value)
+    void PIDControllerNode::compute_pid_steering(double current_value)
     {
         rclcpp::Time now = this->now();
-        double dt = (now - last_time_).seconds();
-        last_time_ = now;
+        double dt = (now - lastTime).seconds();
+        lastTime= now;
 
-        double error = setpoint_ - current_value;
-        integral_ += error * dt;
-        double derivative = (dt > 0.0) ? (error - prev_error_) / dt : 0.0;
+        double error = setpointSteering - current_value;
+        integralSteering += error * dt;
+        double derivative = (dt > 0.0) ? (error - prevErrorSteering) / dt : 0.0;
 
-        double output = kp_ * error + ki_ * integral_ + kd_ * derivative;
+        double output = kpSteering * error + kiSteering * integralSteering + kdSteering * derivative;
 
-        prev_error_ = error;
+        prevErrorSteering = error;
 
         auto msg = std_msgs::msg::Float64();
         msg.data = output;
-        control_pub_->publish(msg);
+        steering_command_pub->publish(msg);
 
         RCLCPP_INFO(this->get_logger(), "Setpoint: %.2f | Feedback: %.2f | Output: %.2f",
-                    setpoint_, current_value, output);
+                    setpointSteering, current_value, output);
+    }
+
+    void PIDControllerNode::compute_pid_throttle(double current_value)
+    {
+        rclcpp::Time now = this->now();
+        double dt = (now - lastTime).seconds();
+        lastTime = now;
+
+        double error = setpointThrottle - current_value;
+        integralThrottle += error * dt;
+        double derivative = (dt > 0.0) ? (error - prevErrorThrottle) / dt : 0.0;
+
+        double output = kpThrottle * error + kiThrottle * integralThrottle + kdThrottle * derivative;
+
+        prevErrorThrottle = error;
+
+        auto msg = std_msgs::msg::Float64();
+        msg.data = output;
+        throttle_command_pub->publish(msg);
+
+        RCLCPP_INFO(this->get_logger(), "Setpoint: %.2f | Feedback: %.2f | Output: %.2f",
+                    setpointThrottle, current_value, output);
     }
 
 }

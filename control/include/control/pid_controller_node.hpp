@@ -13,23 +13,25 @@ namespace pid_controller_node
         PIDControllerNode();
 
     private:
-        void compute_pid(double current_value);
+        void compute_pid_steering(double current_value);
+        void compute_pid_throttle(double current_value);
 
         // PID parameters
         double kiThrottle, kdThrottle, kpThrottle;
-        double kiSteeringAngle, kdSteeringAngle, kpSteeringAngle;
+        double kiSteering, kdSteering, kpSteering;
 
         // PID states
-        double setpointSteeringAngle, integralSteeringAngle, prevErrorSteeringAngle;
+        double setpointSteering, integralSteering, prevErrorSteering;
         double setpointThrottle, integralThrottle ,prevErrorThrottle;
         rclcpp::Time lastTime;
 
         // ROS interfaces
-        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr targetThrottleSub, targetSteeringAngleSub;
-        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedbackThrottleSub, feedbackSteeringAngleSub;
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr targetThrottleSub, targetSteeringSub;
+        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedbackThrottleSub, feedbackSteeringSub;
 
-        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr controlThrottlePub;
-        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr controlSteeringAnglePub;
+        //final control commands given to the simulator
+        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr throttle_command_pub;
+        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr steering_command_pub;
     };
 
 }
