@@ -24,36 +24,42 @@ namespace pid_controller_node
         get_parameter("kiSteering", kiSteering);
         get_parameter("kdSteering", kdSteering);
 
-        targetThrottleSub = this->create_subscription<std_msgs::msg::Float64>(
-            "throttle_command_raw", 10,
-            [this](std_msgs::msg::Float64::SharedPtr msg)
+        RCLCPP_INFO(this->get_logger(), "PID Controller Node initialized with parameters: "
+                    "kpThrottle=%.2f, kiThrottle=%.2f, kdThrottle=%.2f, "
+                    "kpSteering=%.2f, kiSteering=%.2f, kdSteering=%.2f",
+                    kpThrottle, kiThrottle, kdThrottle,
+                    kpSteering, kiSteering, kdSteering);
+
+        targetThrottleSub = this->create_subscription<std_msgs::msg::Float32>(
+            "/autodrive/f1tenth_1/throttle_command_raw", 10,
+            [this](std_msgs::msg::Float32::SharedPtr msg)
             {
                 setpointThrottle = msg->data;
             });
 
-        feedbackThrottleSub = this->create_subscription<std_msgs::msg::Float64>(
-            "throttle", 10,
-            [this](std_msgs::msg::Float64::SharedPtr msg)
+        feedbackThrottleSub = this->create_subscription<std_msgs::msg::Float32>(
+            "/autodrive/f1tenth_1/throttle", 10,
+            [this](std_msgs::msg::Float32::SharedPtr msg)
             {
                 compute_pid_throttle(msg->data);
             });
 
-        targetSteeringSub = this->create_subscription<std_msgs::msg::Float64>(
-            "steering_command_raw", 10,
-            [this](std_msgs::msg::Float64::SharedPtr msg)
+        targetSteeringSub = this->create_subscription<std_msgs::msg::Float32>(
+            "/autodrive/f1tenth_1/steering_command_raw", 10,
+            [this](std_msgs::msg::Float32::SharedPtr msg)
             {
                 setpointSteering = msg->data;
             });
 
-        feedbackSteeringSub = this->create_subscription<std_msgs::msg::Float64>(
-            "steering", 10,
-            [this](std_msgs::msg::Float64::SharedPtr msg)
+        feedbackSteeringSub = this->create_subscription<std_msgs::msg::Float32>(
+            "/autodrive/f1tenth_1/steering", 10,
+            [this](std_msgs::msg::Float32::SharedPtr msg)
             {
                 compute_pid_steering(msg->data);
             });
 
-        steering_command_pub = this->create_publisher<std_msgs::msg::Float64>("steering_command", 10);
-        throttle_command_pub = this->create_publisher<std_msgs::msg::Float64>("throttle_command", 10);
+        steering_command_pub = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
+        throttle_command_pub = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
 
         lastTime = this->now();
     }
@@ -72,7 +78,7 @@ namespace pid_controller_node
 
         prevErrorSteering = error;
 
-        auto msg = std_msgs::msg::Float64();
+        auto msg = std_msgs::msg::Float32();
         msg.data = output;
         steering_command_pub->publish(msg);
 
@@ -94,7 +100,7 @@ namespace pid_controller_node
 
         prevErrorThrottle = error;
 
-        auto msg = std_msgs::msg::Float64();
+        auto msg = std_msgs::msg::Float32();
         msg.data = output;
         throttle_command_pub->publish(msg);
 

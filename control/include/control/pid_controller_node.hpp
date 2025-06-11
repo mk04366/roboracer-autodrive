@@ -2,7 +2,7 @@
 #define SECOND_CPP_PKG__PID_CONTROLLER_NODE_HPP_
 
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/float64.hpp"
+#include "std_msgs/msg/float32.hpp"
 
 namespace pid_controller_node
 {
@@ -36,14 +36,14 @@ namespace pid_controller_node
         rclcpp::Time lastTime;
 
         // ROS interfaces
-        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr targetThrottleSub;
-        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr targetSteeringSub;
-        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedbackThrottleSub;
-        rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr feedbackSteeringSub;
+        rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr targetThrottleSub;
+        rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr targetSteeringSub;
+        rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr feedbackThrottleSub;
+        rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr feedbackSteeringSub;
 
         //final control commands given to the simulator
-        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr throttle_command_pub;
-        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr steering_command_pub;
+        rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_command_pub;
+        rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_command_pub;
     };
 
 }
