@@ -50,7 +50,6 @@ namespace pid_controller_node
 
         rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr feedbackThrottleSub;
         rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr feedbackSteeringSub;
-        rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr feedbackSpeedSub;
 
         // final control commands given to the simulator
         rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_command_pub;
