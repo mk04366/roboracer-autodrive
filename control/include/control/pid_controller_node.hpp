@@ -1,5 +1,5 @@
-#ifndef SECOND_CPP_PKG__PID_CONTROLLER_NODE_HPP_
-#define SECOND_CPP_PKG__PID_CONTROLLER_NODE_HPP_
+#ifndef CONTROL__PID_CONTROLLER_NODE_HPP_
+#define CONTROL__PID_CONTROLLER_NODE_HPP_
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
