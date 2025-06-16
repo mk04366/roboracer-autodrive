@@ -27,7 +27,7 @@ namespace pid_controller_node
         RCLCPP_INFO(this->get_logger(), "PID Controller Node initialized with parameters: "
                                         "kpThrottle=%.2f, kiThrottle=%.2f, kdThrottle=%.2f, "
                                         "kpSteering=%.2f, kiSteering=%.2f, kdSteering=%.2f",
-                    kpThrottle, kpThrottle, kdThrottle,
+                    kpThrottle, kiThrottle, kdThrottle,
                     kpSteering, kiSteering, kdSteering);
 
         // given from the planning algorithm
