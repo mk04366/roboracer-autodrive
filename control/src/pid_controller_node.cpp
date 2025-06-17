@@ -5,8 +5,8 @@ namespace pid_controller_node
 
     PIDControllerNode::PIDControllerNode()
         : Node("pid_controller_node"),
-          kiSteering(0.01), kdSteering(0.05), kpSteering(1.2),
-          kiThrottle(0.01), kdThrottle(0.05), kpThrottle(1.5),
+          kiSteering(1e-3), kdSteering(1e-2), kpSteering(1),
+          kiThrottle(1e-3), kdThrottle(1e-2), kpThrottle(1),
           setpointSteering(0.0), integralSteering(0.0), prevErrorSteering(0.0),
           setpointThrottle(0.0), integralThrottle(0.0), prevErrorThrottle(0.0)
     {
@@ -82,7 +82,7 @@ namespace pid_controller_node
         const double error = setpointSteering - current_value;
 
         integralSteering += error * dt;
-        integralSteering = clamp(integralSteering, -10.0, 10.0); 
+        integralSteering = clamp(integralSteering, -1.0, 1.0); // clamp the values to max limits
 
         const double derivative = (error - prevErrorSteering) / dt;
 
@@ -107,7 +107,7 @@ namespace pid_controller_node
         const double error = setpointThrottle - current_Throttle;
 
         integralThrottle += error * dt;
-        integralThrottle = clamp(integralThrottle, -10.0, 10.0); // Clamp integral to prevent windup
+        integralThrottle = clamp(integralThrottle, -1.0, 1.0);
         const double derivative = (dt > 0.0) ? (error - prevErrorThrottle) / dt : 0.0;
 
         const double output = kpThrottle * error + kiThrottle * integralThrottle + kdThrottle * derivative;
