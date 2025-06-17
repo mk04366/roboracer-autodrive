@@ -84,7 +84,7 @@ def get_key(settings):
     if os.name == 'nt':
         return msvcrt.getch().decode('utf-8')
     tty.setraw(sys.stdin.fileno())
-    rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+    rlist, _, _ = select.select([sys.stdin], [], [], 0.0556)  # 0.0556 seconds ~ 18 Hz
     if rlist:
         key = sys.stdin.read(1)
     else:
