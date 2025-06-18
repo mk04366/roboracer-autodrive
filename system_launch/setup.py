@@ -11,7 +11,8 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/system_launch']),
         ('share/system_launch', ['package.xml']),
-        ('share/system_launch/launch', ['launch/full_system_launch.py']),
+        ('share/system_launch/launch', ['launch/full_system_launch_rviz.py']),
+        ('share/system_launch/launch', ['launch/full_system_launch_foxglove.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
