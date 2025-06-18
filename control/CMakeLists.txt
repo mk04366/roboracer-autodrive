@@ -13,6 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 # Include the include/ directory
 include_directories(include)
@@ -26,6 +27,7 @@ add_executable(pid_controller_node
 ament_target_dependencies(pid_controller_node
   rclcpp
   std_msgs
+  sensor_msgs
 )
 
 # Install target
