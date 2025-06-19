@@ -158,7 +158,6 @@ namespace pid_controller_node
         output = clamp(output, 0.0, 0.5);
 
         // Low-pass filter
-        double alpha = 0.1; // Lower = smoother, but slower response (try between 0.05 and 0.3)
         smoothed_throttle_output = alpha * output + (1 - alpha) * smoothed_throttle_output;
 
         auto msg = std_msgs::msg::Float32();
