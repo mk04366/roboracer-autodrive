@@ -26,7 +26,7 @@ namespace pid_controller_node
         RCLCPP_INFO(
             this->get_logger(),
             "PID Controller Node initialized with parameters:\n"
-            "kp_steering: %f, ki_steering: %f, kd_steering: %f"
+            "kp_steering: %f, ki_steering: %f, kd_steering: %f, "
             "kp_throttle: %f, ki_throttle: %f, kd_throttle: %f, setpointSpeed: %f\n"
             "integralSteering: %f, prevErrorSteering: %f, integralThrottle: %f, prevErrorThrottle: %f",
             kp_steering, ki_steering, kd_steering,
