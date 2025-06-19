@@ -60,7 +60,7 @@ namespace pid_controller_node
 
 
         // Feedback states
-        double feedbackSpeed;
+        double feedbackSpeed = 0.0;
         double feedbackLidar;
         double feedbackSteering;
         double feedbackThrottle;
