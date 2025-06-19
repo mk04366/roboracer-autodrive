@@ -118,7 +118,7 @@ namespace pid_controller_node
 
         double output = kp_steering * error + ki_steering * integralSteering + kd_steering * derivative;
 
-        output = clamp(output, -1.0, 1.0);
+        output = clamp(output, -0.5, 0.5);
 
         auto msg = std_msgs::msg::Float32();
         msg.data = static_cast<float>(output);
@@ -137,7 +137,7 @@ namespace pid_controller_node
         if (std::abs(wall_following_error) > 0.3)
             setpointSpeed = 0.3;
         else
-            setpointSpeed = 0.8;
+            setpointSpeed = 1.0;
 
         double error = setpointSpeed - feedbackSpeed;
 
