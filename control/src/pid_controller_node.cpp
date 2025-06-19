@@ -4,11 +4,7 @@ namespace pid_controller_node
 {
 
     PIDControllerNode::PIDControllerNode()
-        : Node("pid_controller_node"),
-          kiSteering(1e-3), kdSteering(1e-2), kpSteering(1),
-          kiThrottle(1e-3), kdThrottle(1e-2), kpThrottle(1),
-          setpointSteering(0.0), integralSteering(0.0), prevErrorSteering(0.0),
-          setpointThrottle(0.0), integralThrottle(0.0), prevErrorThrottle(0.0)
+        : Node("pid_controller_node")
     {
         auto declare_and_get = [this](const std::string &name, double &value)
         {
@@ -16,110 +12,160 @@ namespace pid_controller_node
             this->get_parameter(name, value);
         };
 
-        declare_and_get("kpThrottle", kpThrottle);
-        declare_and_get("kiThrottle", kiThrottle);
-        declare_and_get("kdThrottle", kdThrottle);
+        declare_and_get("kp_steering", kp_steering);
+        declare_and_get("ki_steering", ki_steering);
+        declare_and_get("kd_steering", kd_steering);
+        declare_and_get("kp_throttle", kp_throttle);
+        declare_and_get("ki_throttle", ki_throttle);
+        declare_and_get("kd_throttle", kd_throttle);
+        declare_and_get("setpointSpeed", setpointSpeed);
+        declare_and_get("integralSteering", integralSteering);
+        declare_and_get("prevErrorSteering", prevErrorSteering);
+        declare_and_get("integralThrottle", integralThrottle);
+        declare_and_get("prevErrorThrottle", prevErrorThrottle);
 
-        declare_and_get("kpSteering", kpSteering);
-        declare_and_get("kiSteering", kiSteering);
-        declare_and_get("kdSteering", kdSteering);
+        RCLCPP_INFO(
+            this->get_logger(),
+            "PID Controller Node initialized with parameters:\n"
+            "kp_steering: %f, ki_steering: %f, kd_steering: %f, "
+            "kp_throttle: %f, ki_throttle: %f, kd_throttle: %f, setpointSpeed: %f\n"
+            "integralSteering: %f, prevErrorSteering: %f, integralThrottle: %f, prevErrorThrottle: %f",
+            kp_steering, ki_steering, kd_steering,
+            kp_throttle, ki_throttle, kd_throttle, setpointSpeed,
+            integralSteering, prevErrorSteering, integralThrottle, prevErrorThrottle);
 
-        RCLCPP_INFO(this->get_logger(), "PID Controller Node initialized with parameters: "
-                                        "kpThrottle=%.2f, kiThrottle=%.2f, kdThrottle=%.2f, "
-                                        "kpSteering=%.2f, kiSteering=%.2f, kdSteering=%.2f",
-                    kpThrottle, kiThrottle, kdThrottle,
-                    kpSteering, kiSteering, kdSteering);
-
-        // given from the planning algorithm
-        targetSteeringSub = this->create_subscription<std_msgs::msg::Float32>(
-            "/autodrive/f1tenth_1/steering_command_raw", 10,
+        feedbackSpeedSub = this->create_subscription<std_msgs::msg::Float32>(
+            "/autodrive/f1tenth_1/speed", 10,
             [this](std_msgs::msg::Float32::SharedPtr msg)
             {
-                setpointSteering = msg->data;
+                feedbackSpeed = msg->data;
             });
 
-        // given from the planning algorithm
-        targetThrottleSub = this->create_subscription<std_msgs::msg::Float32>(
-            "/autodrive/f1tenth_1/throttle_command_raw", 10,
-            [this](std_msgs::msg::Float32::SharedPtr msg)
+        feedbackLidarSub = this->create_subscription<sensor_msgs::msg::LaserScan>(
+            "/autodrive/f1tenth_1/lidar", 10,
+            [this](sensor_msgs::msg::LaserScan::SharedPtr msg)
             {
-                setpointThrottle = msg->data;
+                process_lidar_scan(msg);
             });
 
-        // feedback from the simulator
         feedbackSteeringSub = this->create_subscription<std_msgs::msg::Float32>(
             "/autodrive/f1tenth_1/steering", 10,
             [this](std_msgs::msg::Float32::SharedPtr msg)
             {
-                compute_pid_steering(msg->data);
+                feedbackSteering = msg->data;
             });
 
-        // feedback from the simulator
         feedbackThrottleSub = this->create_subscription<std_msgs::msg::Float32>(
             "/autodrive/f1tenth_1/throttle", 10,
             [this](std_msgs::msg::Float32::SharedPtr msg)
             {
-                compute_pid_throttle(msg->data);
+                feedbackThrottle = msg->data;
             });
 
-        // final control commands given to the simulator
         steering_command_pub = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
         throttle_command_pub = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
 
         lastTimeSteering = this->now();
         lastTimeThrottle = this->now();
+
+        control_timer = this->create_wall_timer(
+            std::chrono::milliseconds(56), // ~18 Hz = 1000 ms / 18 ≈ 56 ms
+            [this]()
+            {
+                compute_steering_control();
+                compute_throttle_control();
+            });
     }
 
-    void PIDControllerNode::compute_pid_steering(double current_value)
+    void PIDControllerNode::process_lidar_scan(sensor_msgs::msg::LaserScan::SharedPtr scan)
+    {
+        // Angles for side distances (in radians)
+        float right_angle = -M_PI_2; // -90 degrees
+        float left_angle = M_PI_2;   // +90 degrees
+
+        // Convert angles to indices
+        int right_index = static_cast<int>((right_angle - scan->angle_min) / scan->angle_increment);
+        int left_index = static_cast<int>((left_angle - scan->angle_min) / scan->angle_increment);
+
+        if (right_index < 0 || right_index >= static_cast<int>(scan->ranges.size()) ||
+            left_index < 0 || left_index >= static_cast<int>(scan->ranges.size()))
+            return;
+
+        float right_dist = scan->ranges[right_index];
+        float left_dist = scan->ranges[left_index];
+
+        if (std::isnan(right_dist) || std::isinf(right_dist) ||
+            std::isnan(left_dist) || std::isinf(left_dist))
+            return;
+
+        // The error is the difference between left and right distances
+        wall_following_error = (left_dist - right_dist) - desired_center_offset;
+    }
+
+    void PIDControllerNode::compute_steering_control()
     {
         rclcpp::Time now = this->now();
         double dt = (now - lastTimeSteering).seconds();
         if (dt < 1e-6)
-            return; // to avoid unstable derivative
+            return;
 
         lastTimeSteering = now;
 
-        const double error = setpointSteering - current_value;
-
+        double error = wall_following_error;
         integralSteering += error * dt;
-        integralSteering = clamp(integralSteering, -1.0, 1.0); // clamp the values to max limits
 
-        const double derivative = (error - prevErrorSteering) / dt;
+        // Clamp integral to prevent windup
+        integralSteering = clamp(integralSteering, -1.0, 1.0);
 
-        const double output = kpSteering * error + kiSteering * integralSteering + kdSteering * derivative;
-
+        double derivative = (error - prevErrorSteering) / dt;
         prevErrorSteering = error;
 
+        double output = kp_steering * error + ki_steering * integralSteering + kd_steering * derivative;
+
+        output = clamp(output, -0.5, 0.5);
+
         auto msg = std_msgs::msg::Float32();
-        msg.data = output;
+        msg.data = static_cast<float>(output);
         steering_command_pub->publish(msg);
     }
 
-    void PIDControllerNode::compute_pid_throttle(double current_Throttle)
+    void PIDControllerNode::compute_throttle_control()
     {
         rclcpp::Time now = this->now();
         double dt = (now - lastTimeThrottle).seconds();
         if (dt < 1e-6)
-            return; // to avoid unstable derivative
+            return;
 
         lastTimeThrottle = now;
 
-        const double error = setpointThrottle - current_Throttle;
+        if (std::abs(wall_following_error) > 0.3)
+            setpointSpeed = 0.3;
+        else
+            setpointSpeed = 1.0;
+
+        double error = setpointSpeed - feedbackSpeed;
 
         integralThrottle += error * dt;
+
+        // Clamp integral to prevent windup
         integralThrottle = clamp(integralThrottle, -1.0, 1.0);
-        const double derivative = (dt > 0.0) ? (error - prevErrorThrottle) / dt : 0.0;
 
-        const double output = kpThrottle * error + kiThrottle * integralThrottle + kdThrottle * derivative;
-
+        double derivative = (error - prevErrorThrottle) / dt;
         prevErrorThrottle = error;
 
+        double output = kp_throttle * error + ki_throttle * integralThrottle + kd_throttle * derivative;
+
+        output = clamp(output, 0.0, 0.5);
+
+        // Low-pass filter
+        smoothed_throttle_output = alpha * output + (1 - alpha) * smoothed_throttle_output;
+
         auto msg = std_msgs::msg::Float32();
-        msg.data = output; // Throttle output
+        msg.data = static_cast<float>(smoothed_throttle_output);
         throttle_command_pub->publish(msg);
     }
 
-}
+} // namespace pid_controller_node
 
 int main(int argc, char *argv[])
 {
@@ -127,4 +173,4 @@ int main(int argc, char *argv[])
     rclcpp::spin(std::make_shared<pid_controller_node::PIDControllerNode>());
     rclcpp::shutdown();
     return 0;
-};
+}
