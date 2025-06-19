@@ -49,7 +49,7 @@ DRIVE_LIMIT = 1.0
 STEER_LIMIT = 1.0
 DRIVE_STEP_SIZE = 0.2
 STEER_STEP_SIZE = 0.2
-LOOP_PERIOD = 0.0556 # 18 Hz loop period (55.56 ms)
+LOOP_PERIOD = 0.1 # 10Hz Loop periods
 ################################################################################
 
 # Information

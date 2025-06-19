@@ -4,6 +4,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include <algorithm>
 
 namespace pid_controller_node
 {
@@ -32,22 +33,31 @@ namespace pid_controller_node
         void process_lidar_scan(const sensor_msgs::msg::LaserScan::SharedPtr msg);
 
         // PID parameters
-        double ki_steering = 1e-3;
-        double kd_steering = 1e-2;
         double kp_steering = 1.0;
-        double kp_throttle = 1.0;
-        double ki_throttle = 0.1;
-        double kd_throttle = 0.05;
+        double ki_steering = 0.1;
+        double kd_steering = 0.2;
+
+        double kp_throttle = 0.2;
+        double ki_throttle = 1e-3;
+        double kd_throttle = 0.1;
 
         double wall_following_error = 0.0;
 
         // PID states
-        double setpoint = 1.0; // Desired distance from wall in meters
-        double integral = 0.0;
-        double prevError = 0.0;
-        double setpointSpeed = 1.0; // Desired speed in m/s
+        double integralSteering = 0.0;
+        double prevErrorSteering = 0.0;
         double integralThrottle = 0.0;
         double prevErrorThrottle = 0.0;
+
+        // Control parameters
+        double setpointSpeed = 0.5;      // Desired speed in m/s
+        double desired_center_offset = 0.0; // Desired offset from the wall
+
+
+        // low pass filter parameters
+        double smoothed_throttle_output = 0.0;
+        double alpha = 0.1;
+
 
         // Feedback states
         double feedbackSpeed;
