@@ -22,6 +22,7 @@ namespace pid_controller_node
         declare_and_get("integralSteering", integralSteering);
         declare_and_get("prevErrorSteering", prevErrorSteering);
         declare_and_get("integralThrottle", integralThrottle);
+        declare_and_get("prevErrorThrottle", prevErrorThrottle);
 
         RCLCPP_INFO(
             this->get_logger(),
@@ -113,6 +114,9 @@ namespace pid_controller_node
         double error = wall_following_error;
         integralSteering += error * dt;
 
+        // Clamp integral to prevent windup
+        integralSteering = clamp(integralSteering, -1.0, 1.0);
+
         double derivative = (error - prevErrorSteering) / dt;
         prevErrorSteering = error;
 
@@ -142,6 +146,9 @@ namespace pid_controller_node
         double error = setpointSpeed - feedbackSpeed;
 
         integralThrottle += error * dt;
+
+        // Clamp integral to prevent windup
+        integralThrottle = clamp(integralThrottle, -1.0, 1.0);
 
         double derivative = (error - prevErrorThrottle) / dt;
         prevErrorThrottle = error;

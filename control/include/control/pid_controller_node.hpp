@@ -61,16 +61,12 @@ namespace pid_controller_node
 
         // Feedback states
         double feedbackSpeed;
-        double feedbackLidar;
         double feedbackSteering;
         double feedbackThrottle;
         rclcpp::TimerBase::SharedPtr control_timer;
 
         rclcpp::Time lastTimeSteering;
         rclcpp::Time lastTimeThrottle;
-
-        // ROS interfaces
-        rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr targetSub;
 
         rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr feedbackSpeedSub;
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr feedbackLidarSub;
