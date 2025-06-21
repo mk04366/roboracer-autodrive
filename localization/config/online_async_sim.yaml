@@ -1,0 +1,9 @@
+slam_toolbox:
+  ros__parameters:
+    use_sim_time: false
+    map_frame: map
+    odom_frame: f1tenth_1
+    base_frame: base_link
+    scan_topic: /scan
+    max_laser_sub_queue_size: 2000
+    tf_buffer_duration: 60.0
