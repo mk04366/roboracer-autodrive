@@ -31,7 +31,7 @@
 # ROS 2 module imports
 import rclpy # ROS 2 client library (rcl) for Python (built on rcl C API)
 from rclpy.qos import QoSProfile # Ouality of Service (tune communication between nodes)
-from std_msgs.msg import Float32 # Float32 message class
+from std_msgs.msg import Float32, Bool # Float32 and Bool message classes
 
 # Python mudule imports
 import os # Miscellaneous operating system interfaces
@@ -44,12 +44,13 @@ else:
     import tty # Terminal control functions
 
 ################################################################################
-
 # Parameters
 DRIVE_LIMIT = 1.0
 STEER_LIMIT = 1.0
 DRIVE_STEP_SIZE = 0.2
 STEER_STEP_SIZE = 0.2
+LOOP_PERIOD = 0.1 # 10Hz Loop periods
+################################################################################
 
 # Information
 info = """
@@ -60,13 +61,14 @@ AutoDRIVE - F1TENTH Teleoperation Panel
               Q   W   E
               A   S   D
                   X
+                  R
 
 W/S : Increase/decrease drive command
 D/A : Increase/decrease steer command
 Q   : Zero steer
 E   : Emergency brake
-X   : Force stop and reset
-
+X   : Force stop and zero steer
+R   : Soft-reset the simulator
 Press CTRL+C to quit
 
 NOTE: Press keys within this terminal
@@ -83,7 +85,7 @@ def get_key(settings):
     if os.name == 'nt':
         return msvcrt.getch().decode('utf-8')
     tty.setraw(sys.stdin.fileno())
-    rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+    rlist, _, _ = select.select([sys.stdin], [], [], LOOP_PERIOD) 
     if rlist:
         key = sys.stdin.read(1)
     else:
@@ -125,12 +127,15 @@ def main():
     node = rclpy.create_node('teleop_keyboard')
     pub_steering_command = node.create_publisher(Float32, '/autodrive/f1tenth_1/steering_command', qos)
     pub_throttle_command = node.create_publisher(Float32, '/autodrive/f1tenth_1/throttle_command', qos)
+    pub_reset_command = node.create_publisher(Bool, '/autodrive/reset_command', qos)
 
     # Initialize
     throttle_msg = Float32()
     steering_msg = Float32()
+    reset_msg = Bool()
     throttle = 0.0
     steering = 0.0
+    reset_flag = False
 
     try:
         # Print information
@@ -154,6 +159,10 @@ def main():
             elif key == 'x' :
                 throttle = 0.0
                 steering = 0.0
+            elif key == 'r' :
+                throttle = 0.0
+                steering = 0.0
+                reset_flag = True
             else:
                 if (key == '\x03'): # CTRL+C
                     break
@@ -161,10 +170,15 @@ def main():
             # Generate control messages
             throttle_msg.data = float(throttle)
             steering_msg.data = float(steering)
+            reset_msg.data = reset_flag
 
             # Publish control messages
             pub_throttle_command.publish(throttle_msg)
             pub_steering_command.publish(steering_msg)
+            pub_reset_command.publish(reset_msg)
+            
+            # Reset the flag
+            reset_flag = False
 
     except Exception as error:
         # Print error
@@ -174,8 +188,10 @@ def main():
         # Generate and publish zero commands
         throttle_msg.data = float(0.0)
         steering_msg.data = float(0.0)
+        reset_msg.data = False
         pub_throttle_command.publish(throttle_msg)
         pub_steering_command.publish(steering_msg)
+        pub_reset_command.publish(reset_msg)
         if os.name != 'nt':
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
 
