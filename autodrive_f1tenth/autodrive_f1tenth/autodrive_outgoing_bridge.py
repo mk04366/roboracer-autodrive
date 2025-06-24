@@ -72,8 +72,8 @@ def main():
     rclpy.init() # Initialize ROS 2 communication for this context
     autodrive_outgoing_bridge = rclpy.create_node('autodrive_outgoing_bridge') # Create ROS 2 node
     qos_profile = QoSProfile( # Ouality of Service profile
-        reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE, # Reliable (not best effort) communication
-        history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST, # Keep/store only up to last N samples
+        reliability=QoSReliabilityPolicy.RELIABLE, # Reliable (not best effort) communication
+        history=QoSHistoryPolicy.KEEP_LAST, # Keep/store only up to last N samples
         depth=1 # Queue (buffer) size/depth (only honored if the “history” policy was set to “keep last”)
         )
     callbacks = {
