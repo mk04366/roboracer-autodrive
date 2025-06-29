@@ -50,6 +50,10 @@ from PIL import Image # Python Imaging Library's (PIL's) Image module
 import gzip # Inbuilt module to compress and decompress data and files
 import autodrive_f1tenth.config as config # AutoDRIVE Ecosystem ROS 2 configuration for F1TENTH vehicle
 
+import tf2_ros
+from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
+from tf2_ros import StaticTransformBroadcaster  # ← 新增
+
 ################################################################################
 
 # AutoDRIVE class
@@ -302,7 +306,7 @@ def bridge(sid, data):
         # IMU
         publish_imu_data(autodrive.orientation_quaternion, autodrive.angular_velocity, autodrive.linear_acceleration)
         # Cooordinate transforms
-        broadcast_transform(msg_transform, transform_broadcaster, "f1tenth_1", "map", autodrive.position, autodrive.orientation_quaternion) # Vehicle frame defined at center of rear axle
+        broadcast_transform(msg_transform, transform_broadcaster, "f1tenth_1", "f1tenth_1_odom", autodrive.position, autodrive.orientation_quaternion) # Vehicle frame defined at center of rear axle
         broadcast_transform(msg_transform, transform_broadcaster, "left_encoder", "f1tenth_1", np.asarray([0.0, 0.12, 0.0]), quaternion_from_euler(0.0, 120*autodrive.encoder_angles[0]%6.283, 0.0))
         broadcast_transform(msg_transform, transform_broadcaster, "right_encoder", "f1tenth_1", np.asarray([0.0, -0.12, 0.0]), quaternion_from_euler(0.0, 120*autodrive.encoder_angles[1]%6.283, 0.0))
         broadcast_transform(msg_transform, transform_broadcaster, "ips", "f1tenth_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
@@ -388,6 +392,28 @@ def main():
         )
     cv_bridge = CvBridge() # ROS bridge object for opencv library to handle image data
     transform_broadcaster = tf2_ros.TransformBroadcaster(autodrive_bridge) # Initialize transform broadcaster
+
+
+    # ============ 只发一次的静态 TF =============
+    static_broadcaster = tf2_ros.StaticTransformBroadcaster(autodrive_bridge)
+
+    static_tf = TransformStamped()
+    static_tf.header.stamp = autodrive_bridge.get_clock().now().to_msg()
+    static_tf.header.frame_id  = "odom"           # 父坐标系
+    static_tf.child_frame_id   = "f1tenth_1_odom" # 子坐标系
+    static_tf.transform.translation.x = 0.0
+    static_tf.transform.translation.y = 0.0
+    static_tf.transform.translation.z = 0.0
+    static_tf.transform.rotation.x    = 0.0
+    static_tf.transform.rotation.y    = 0.0
+    static_tf.transform.rotation.z    = 0.0
+    static_tf.transform.rotation.w    = 1.0
+
+    static_broadcaster.sendTransform(static_tf)
+
+    # ===========================================
+
+
     publishers = {e.name: autodrive_bridge.create_publisher(e.type, e.topic, qos_profile)
                   for e in config.pub_sub_dict.publishers} # Publishers
     callbacks = {

@@ -1,9 +1,84 @@
 slam_toolbox:
   ros__parameters:
-    use_sim_time: false
-    map_frame: map
-    odom_frame: f1tenth_1
-    base_frame: base_link
-    scan_topic: /scan
-    max_laser_sub_queue_size: 2000
-    tf_buffer_duration: 60.0
+    # —————— 时钟与模式 ——————
+    use_sim_time:       true
+    mode:               mapping
+
+    # —————— 关键 TF 配置 ——————
+    provide_odom_frame: true         # 发布 map→odom
+    map_frame:          map          # 地图坐标系
+    odom_frame:         odom         # 里程计坐标系（和桥的 parent 对齐）
+    base_frame:         f1tenth_1_odom  # 车辆根坐标系（和桥的 child 对齐）
+
+    # —————— 激光雷达 ——————
+    scan_topic:         /autodrive/f1tenth_1/lidar
+    throttle_scans:     1            # 扫描频率控制
+    scan_queue_size:    50
+
+    # —————— 地图调参（可选） ——————
+    resolution:         0.05
+    max_laser_range:    10.0
+    map_update_interval: 1.0
+
+    # —————— 回环（可选） ——————
+    do_loop_closing:          true
+    loop_search_maximum_distance: 3.0
+
+    # —————— 日志等级 ——————
+    debug_logging:      false
+
+
+# slam_toolbox:
+#   ros__parameters:
+#     # --- 基本帧与话题 ---
+#     use_sim_time: true
+#     mode: mapping                       # mapping / localization
+
+#     # odom_frame: odom
+#     # map_frame: map
+#     # base_frame: base_link
+#     # scan_topic: /autodrive/f1tenth_1/lidar
+
+#     provide_odom_frame:   true
+#     scan_topic: /autodrive/f1tenth_1/lidar              # 你已经 remap 成 /scan
+#     map_frame:   map
+#     # odom_frame: odom       # ← 改成 odom/
+#     # base_frame: f1tenth_1_odom  # ← 对应桥里 static_broadcaster 的 child
+
+#     odom_frame:  f1tenth_1          # ← TF 里确实存在
+#     base_frame:  f1tenth_1          # ← 同一帧即可
+
+#     # throttle_scans:   2        # ~20 Hz
+#     # scan_queue_size:  50
+
+#     # --- 常用调参 ---
+#     resolution:            0.05         # 地图分辨率
+#     max_laser_range:       10.0
+#     map_update_interval:   1.0          # 地图刷新频率 (s)
+ 
+
+#     # --- 回环 (保持默认即可) ---
+#     do_loop_closing: true
+#     loop_search_maximum_distance: 3.0   # 例：调大回环搜索范围
+
+#      # 建议先降低频率，避免“queue is full”
+#     throttle_scans:      1                  # 1 = 每帧都用；3 = 每 3 帧用 1 帧
+
+
+#     debug_logging:       false
+
+
+
+    # ming ling hang:
+    
+# source /opt/ros/humble/setup.bash
+# ros2 run slam_toolbox sync_slam_toolbox_node \
+#   --ros-args \
+#     -p mode:=mapping \
+#     -p use_sim_time:=false \
+#     -p base_frame:=f1tenth_1 \
+#     -p odom_frame:=f1tenth_1_odom \
+#     -p map_frame:=map \
+#     -p throttle_scans:=2 \
+#     -p scan_queue_size:=50 \
+#     -r /scan:=/autodrive/f1tenth_1/lidar
