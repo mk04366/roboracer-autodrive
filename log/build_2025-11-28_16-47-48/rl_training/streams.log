@@ -1,0 +1,13 @@
+[0.448s] Invoking command in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl-training': PYTHONPATH=/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/rl_training build --build-base /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build install --record /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/install.log --install-scripts $base/lib/rl_training --single-version-externally-managed
+[0.623s] /usr/lib/python3/dist-packages/setuptools/dist.py:723: UserWarning: Usage of dash-separated 'script-dir' will not be supported in future versions. Please use the underscore name 'script_dir' instead
+[0.623s]   warnings.warn(
+[0.631s] running egg_info
+[0.632s] creating ../build/rl_training/rl_training.egg-info
+[0.632s] writing ../build/rl_training/rl_training.egg-info/PKG-INFO
+[0.632s] writing dependency_links to ../build/rl_training/rl_training.egg-info/dependency_links.txt
+[0.632s] writing entry points to ../build/rl_training/rl_training.egg-info/entry_points.txt
+[0.632s] writing requirements to ../build/rl_training/rl_training.egg-info/requires.txt
+[0.633s] writing top-level names to ../build/rl_training/rl_training.egg-info/top_level.txt
+[0.633s] writing manifest file '../build/rl_training/rl_training.egg-info/SOURCES.txt'
+[0.634s] error: package directory 'rl_training' does not exist
+[0.649s] Invoked command in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl-training' returned '1': PYTHONPATH=/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/rl_training build --build-base /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build install --record /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/install.log --install-scripts $base/lib/rl_training --single-version-externally-managed

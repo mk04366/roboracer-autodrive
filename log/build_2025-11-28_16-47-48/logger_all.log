@@ -1,0 +1,277 @@
+[0.088s] DEBUG:colcon:Command line arguments: ['/usr/bin/colcon', 'build', '--packages-select', 'rl_training']
+[0.088s] DEBUG:colcon:Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=False, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=8, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=['rl_training'], packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, verb_parser=<colcon_defaults.argument_parser.defaults.DefaultArgumentsDecorator object at 0x7d8a790d3160>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0x7d8a790d2d10>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0x7d8a790d2d10>>)
+[0.208s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) check parameters
+[0.208s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) check parameters
+[0.208s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) check parameters
+[0.208s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
+[0.208s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) discover
+[0.208s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
+[0.208s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/autroboracer/ros2_ws/src/roboracer-autodrive'
+[0.208s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.208s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore'
+[0.208s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore_ament_install'
+[0.208s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_pkg']
+[0.208s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_pkg'
+[0.209s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_meta']
+[0.209s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_meta'
+[0.209s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ros']
+[0.209s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ros'
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['cmake', 'python']
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'cmake'
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python'
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['python_setup_py']
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python_setup_py'
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extensions ['ignore', 'ignore_ament_install']
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extension 'ignore'
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extension 'ignore_ament_install'
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extensions ['colcon_pkg']
+[0.218s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extension 'colcon_pkg'
+[0.219s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extensions ['colcon_meta']
+[0.219s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extension 'colcon_meta'
+[0.219s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extensions ['ros']
+[0.219s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_f1tenth) by extension 'ros'
+[0.221s] DEBUG:colcon.colcon_core.package_identification:Package 'autodrive_f1tenth' with type 'ros.ament_python' and name 'autodrive_f1tenth'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extensions ['ignore', 'ignore_ament_install']
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extension 'ignore'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extension 'ignore_ament_install'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extensions ['colcon_pkg']
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extension 'colcon_pkg'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extensions ['colcon_meta']
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extension 'colcon_meta'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extensions ['ros']
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extension 'ros'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extensions ['cmake', 'python']
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extension 'cmake'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extension 'python'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extensions ['python_setup_py']
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator) by extension 'python_setup_py'
+[0.221s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extensions ['ignore', 'ignore_ament_install']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extension 'ignore'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extension 'ignore_ament_install'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extensions ['colcon_pkg']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extension 'colcon_pkg'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extensions ['colcon_meta']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extension 'colcon_meta'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extensions ['ros']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extension 'ros'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extensions ['cmake', 'python']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extension 'cmake'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extension 'python'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extensions ['python_setup_py']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data) by extension 'python_setup_py'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extensions ['ignore', 'ignore_ament_install']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extension 'ignore'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extension 'ignore_ament_install'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extensions ['colcon_pkg']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extension 'colcon_pkg'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extensions ['colcon_meta']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extension 'colcon_meta'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extensions ['ros']
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extension 'ros'
+[0.222s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extensions ['cmake', 'python']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extension 'cmake'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extension 'python'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extensions ['python_setup_py']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Plugins) by extension 'python_setup_py'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extensions ['ignore', 'ignore_ament_install']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extension 'ignore'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extension 'ignore_ament_install'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extensions ['colcon_pkg']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extension 'colcon_pkg'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extensions ['colcon_meta']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extension 'colcon_meta'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extensions ['ros']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extension 'ros'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extensions ['cmake', 'python']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extension 'cmake'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extension 'python'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extensions ['python_setup_py']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/Resources) by extension 'python_setup_py'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extensions ['ignore', 'ignore_ament_install']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extension 'ignore'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extension 'ignore_ament_install'
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extensions ['colcon_pkg']
+[0.223s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extension 'colcon_pkg'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extensions ['colcon_meta']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extension 'colcon_meta'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extensions ['ros']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extension 'ros'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extensions ['cmake', 'python']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extension 'cmake'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extension 'python'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extensions ['python_setup_py']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems) by extension 'python_setup_py'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extensions ['ignore', 'ignore_ament_install']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extension 'ignore'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extension 'ignore_ament_install'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extensions ['colcon_pkg']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extension 'colcon_pkg'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extensions ['colcon_meta']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extension 'colcon_meta'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extensions ['ros']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extension 'ros'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extensions ['cmake', 'python']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extension 'cmake'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extension 'python'
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extensions ['python_setup_py']
+[0.224s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/OculusXRPlugin) by extension 'python_setup_py'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extensions ['ignore', 'ignore_ament_install']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extension 'ignore'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extension 'ignore_ament_install'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extensions ['colcon_pkg']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extension 'colcon_pkg'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extensions ['colcon_meta']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extension 'colcon_meta'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extensions ['ros']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extension 'ros'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extensions ['cmake', 'python']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extension 'cmake'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extension 'python'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extensions ['python_setup_py']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/UnitySubsystems/UnityOpenXR) by extension 'python_setup_py'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extensions ['ignore', 'ignore_ament_install']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extension 'ignore'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extension 'ignore_ament_install'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extensions ['colcon_pkg']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extension 'colcon_pkg'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extensions ['colcon_meta']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extension 'colcon_meta'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extensions ['ros']
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extension 'ros'
+[0.225s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extensions ['cmake', 'python']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extension 'cmake'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extension 'python'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extensions ['python_setup_py']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data) by extension 'python_setup_py'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extensions ['ignore', 'ignore_ament_install']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extension 'ignore'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extension 'ignore_ament_install'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extensions ['colcon_pkg']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extension 'colcon_pkg'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extensions ['colcon_meta']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extension 'colcon_meta'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extensions ['ros']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extension 'ros'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extensions ['cmake', 'python']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extension 'cmake'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extension 'python'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extensions ['python_setup_py']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Metadata) by extension 'python_setup_py'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extensions ['ignore', 'ignore_ament_install']
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extension 'ignore'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extension 'ignore_ament_install'
+[0.226s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extensions ['colcon_pkg']
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extension 'colcon_pkg'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extensions ['colcon_meta']
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extension 'colcon_meta'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extensions ['ros']
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extension 'ros'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extensions ['cmake', 'python']
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extension 'cmake'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extension 'python'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extensions ['python_setup_py']
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/Data/il2cpp_data/Resources) by extension 'python_setup_py'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/build) by extensions ['ignore', 'ignore_ament_install']
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/build) by extension 'ignore'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/build) ignored
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/install) by extensions ['ignore', 'ignore_ament_install']
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/install) by extension 'ignore'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/install) ignored
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/log) by extensions ['ignore', 'ignore_ament_install']
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/log) by extension 'ignore'
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(autodrive_simulator/log) ignored
+[0.227s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extension 'ignore'
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(build) ignored
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extension 'ignore'
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(install) ignored
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extensions ['ignore', 'ignore_ament_install']
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extension 'ignore'
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extension 'ignore_ament_install'
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extensions ['colcon_pkg']
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extension 'colcon_pkg'
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extensions ['colcon_meta']
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extension 'colcon_meta'
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extensions ['ros']
+[0.228s] Level 1:colcon.colcon_core.package_identification:_identify(localization) by extension 'ros'
+[0.229s] DEBUG:colcon.colcon_core.package_identification:Package 'localization' with type 'ros.ament_python' and name 'localization'
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extension 'ignore'
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(log) ignored
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extensions ['ignore', 'ignore_ament_install']
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extension 'ignore'
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extension 'ignore_ament_install'
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extensions ['colcon_pkg']
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extension 'colcon_pkg'
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extensions ['colcon_meta']
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extension 'colcon_meta'
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extensions ['ros']
+[0.229s] Level 1:colcon.colcon_core.package_identification:_identify(path_planning) by extension 'ros'
+[0.230s] DEBUG:colcon.colcon_core.package_identification:Package 'path_planning' with type 'ros.ament_python' and name 'path_planning'
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extensions ['ignore', 'ignore_ament_install']
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extension 'ignore'
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extension 'ignore_ament_install'
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extensions ['colcon_pkg']
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extension 'colcon_pkg'
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extensions ['colcon_meta']
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extension 'colcon_meta'
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extensions ['ros']
+[0.230s] Level 1:colcon.colcon_core.package_identification:_identify(rl-training) by extension 'ros'
+[0.231s] DEBUG:colcon.colcon_core.package_identification:Package 'rl-training' with type 'ros.ament_python' and name 'rl_training'
+[0.231s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) using defaults
+[0.231s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) discover
+[0.231s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) using defaults
+[0.231s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) discover
+[0.231s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) using defaults
+[0.248s] INFO:colcon.colcon_core.package_selection:Skipping not selected package 'autodrive_f1tenth' in 'autodrive_f1tenth'
+[0.248s] INFO:colcon.colcon_core.package_selection:Skipping not selected package 'localization' in 'localization'
+[0.248s] INFO:colcon.colcon_core.package_selection:Skipping not selected package 'path_planning' in 'path_planning'
+[0.249s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) check parameters
+[0.249s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) discover
+[0.249s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) using defaults
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'cmake_args' from command line to 'None'
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'cmake_target' from command line to 'None'
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'cmake_clean_cache' from command line to 'False'
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'cmake_clean_first' from command line to 'False'
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'cmake_force_configure' from command line to 'False'
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'ament_cmake_args' from command line to 'None'
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'catkin_cmake_args' from command line to 'None'
+[0.250s] Level 5:colcon.colcon_core.verb:set package 'rl_training' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.250s] DEBUG:colcon.colcon_core.verb:Building package 'rl_training' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training', 'merge_install': False, 'path': '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl-training', 'symlink_install': False, 'test_result_base': None}
+[0.250s] INFO:colcon.colcon_core.executor:Executing jobs using 'parallel' executor
+[0.251s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete
+[0.252s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl-training' with build type 'ament_python'
+[0.252s] Level 1:colcon.colcon_core.shell:create_environment_hook('rl_training', 'ament_prefix_path')
+[0.254s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.254s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/share/rl_training/hook/ament_prefix_path.ps1'
+[0.254s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/share/rl_training/hook/ament_prefix_path.dsv'
+[0.255s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/share/rl_training/hook/ament_prefix_path.sh'
+[0.255s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.255s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.440s] WARNING:colcon.colcon_ros.task.ament_python.build:Package 'rl_training' doesn't explicitly install a marker in the package index (colcon-ros currently does it implicitly but that fallback will be removed in the future)
+[0.440s] WARNING:colcon.colcon_ros.task.ament_python.build:Package 'rl_training' doesn't explicitly install the 'package.xml' file (colcon-ros currently does it implicitly but that fallback will be removed in the future)
+[0.440s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl-training'
+[0.440s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.440s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.701s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl-training': PYTHONPATH=/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/rl_training build --build-base /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build install --record /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/install.log --install-scripts $base/lib/rl_training --single-version-externally-managed
+[0.901s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl-training' returned '1': PYTHONPATH=/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/rl_training build --build-base /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build install --record /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/install.log --install-scripts $base/lib/rl_training --single-version-externally-managed
+[0.911s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:closing loop
+[0.911s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:loop closed
+[0.911s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete finished with '1'
+[0.911s] DEBUG:colcon.colcon_core.event_reactor:joining thread
+[0.916s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.terminal_notifier': Not used on non-Darwin systems
+[0.916s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
+[0.916s] INFO:colcon.colcon_notification.desktop_notification:Sending desktop notification using 'notify2'
+[0.925s] DEBUG:colcon.colcon_core.event_reactor:joined thread
+[0.926s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/local_setup.ps1'
+[0.927s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/_local_setup_util_ps1.py'
+[0.928s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/setup.ps1'
+[0.929s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/local_setup.sh'
+[0.929s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/_local_setup_util_sh.py'
+[0.930s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/setup.sh'
+[0.930s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/local_setup.bash'
+[0.931s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/setup.bash'
+[0.932s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/local_setup.zsh'
+[0.932s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/setup.zsh'

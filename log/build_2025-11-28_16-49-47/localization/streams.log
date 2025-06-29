@@ -1,0 +1,47 @@
+[1.034s] Invoking command in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/localization': PYTHONPATH=/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/lib/python3.10/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/localization build --build-base /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/build install --record /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/install.log --single-version-externally-managed install_data
+[1.230s] running egg_info
+[1.231s] creating ../build/localization/localization.egg-info
+[1.231s] writing ../build/localization/localization.egg-info/PKG-INFO
+[1.231s] writing dependency_links to ../build/localization/localization.egg-info/dependency_links.txt
+[1.231s] writing entry points to ../build/localization/localization.egg-info/entry_points.txt
+[1.231s] writing requirements to ../build/localization/localization.egg-info/requires.txt
+[1.232s] writing top-level names to ../build/localization/localization.egg-info/top_level.txt
+[1.232s] writing manifest file '../build/localization/localization.egg-info/SOURCES.txt'
+[1.233s] reading manifest file '../build/localization/localization.egg-info/SOURCES.txt'
+[1.234s] writing manifest file '../build/localization/localization.egg-info/SOURCES.txt'
+[1.234s] running build
+[1.234s] running build_py
+[1.235s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/build
+[1.235s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/build/lib
+[1.235s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/build/lib/localization
+[1.235s] copying localization/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/build/lib/localization
+[1.235s] running install
+[1.235s] running install_lib
+[1.236s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/lib/python3.10/site-packages/localization
+[1.236s] copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/build/lib/localization/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/lib/python3.10/site-packages/localization
+[1.237s] byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/lib/python3.10/site-packages/localization/__init__.py to __init__.cpython-310.pyc
+[1.237s] running install_data
+[1.237s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/ament_index
+[1.237s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/ament_index/resource_index
+[1.237s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/ament_index/resource_index/packages
+[1.238s] copying resource/localization -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/ament_index/resource_index/packages
+[1.238s] copying package.xml -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization
+[1.238s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/launch
+[1.238s] copying launch/amcl_launch.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/launch
+[1.238s] copying launch/slam_launch.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/launch
+[1.238s] copying launch/cartographer_launch.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/launch
+[1.238s] copying launch/hector_launch.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/launch
+[1.239s] copying launch/rtabmap_launch.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/launch
+[1.239s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/config
+[1.239s] copying config/amcl_config.yaml -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/config
+[1.239s] copying config/slam_config.yaml -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/config
+[1.239s] copying config/cartographer_config.lua -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/config
+[1.239s] copying config/hector_config.yaml -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/config
+[1.239s] copying config/rtabmap_config.yaml -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/config
+[1.240s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/maps
+[1.240s] copying maps/map5.yaml -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/maps
+[1.240s] copying maps/map5.pgm -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/share/localization/maps
+[1.240s] running install_egg_info
+[1.241s] Copying ../build/localization/localization.egg-info to /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/localization/lib/python3.10/site-packages/localization-0.0.0-py3.10.egg-info
+[1.242s] running install_scripts
+[1.263s] writing list of installed files to '/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/localization/install.log'

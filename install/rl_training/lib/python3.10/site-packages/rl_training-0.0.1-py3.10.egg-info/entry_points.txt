@@ -1,0 +1,3 @@
+[console_scripts]
+train_sac = rl_training.train_sac:main
+

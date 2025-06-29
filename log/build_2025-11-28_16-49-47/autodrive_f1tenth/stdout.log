@@ -1,0 +1,50 @@
+running egg_info
+creating ../build/autodrive_f1tenth/autodrive_f1tenth.egg-info
+writing ../build/autodrive_f1tenth/autodrive_f1tenth.egg-info/PKG-INFO
+writing dependency_links to ../build/autodrive_f1tenth/autodrive_f1tenth.egg-info/dependency_links.txt
+writing entry points to ../build/autodrive_f1tenth/autodrive_f1tenth.egg-info/entry_points.txt
+writing requirements to ../build/autodrive_f1tenth/autodrive_f1tenth.egg-info/requires.txt
+writing top-level names to ../build/autodrive_f1tenth/autodrive_f1tenth.egg-info/top_level.txt
+writing manifest file '../build/autodrive_f1tenth/autodrive_f1tenth.egg-info/SOURCES.txt'
+reading manifest file '../build/autodrive_f1tenth/autodrive_f1tenth.egg-info/SOURCES.txt'
+writing manifest file '../build/autodrive_f1tenth/autodrive_f1tenth.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth
+copying autodrive_f1tenth/autodrive_bridge.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth
+copying autodrive_f1tenth/config.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth
+copying autodrive_f1tenth/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth
+copying autodrive_f1tenth/bridge_backup.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth
+copying autodrive_f1tenth/teleop_keyboard.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth
+running install
+running install_lib
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth/autodrive_bridge.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth/config.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth/bridge_backup.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/build/lib/autodrive_f1tenth/teleop_keyboard.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth/autodrive_bridge.py to autodrive_bridge.cpython-310.pyc
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth/config.py to config.cpython-310.pyc
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth/__init__.py to __init__.cpython-310.pyc
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth/bridge_backup.py to bridge_backup.cpython-310.pyc
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth/teleop_keyboard.py to teleop_keyboard.cpython-310.pyc
+running install_data
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/ament_index
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/ament_index/resource_index
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/ament_index/resource_index/packages
+copying resource/autodrive_f1tenth -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/ament_index/resource_index/packages
+copying package.xml -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/autodrive_f1tenth
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/autodrive_f1tenth/launch
+copying launch/simulator_bringup_headless.launch.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/autodrive_f1tenth/launch
+copying launch/simulator_bringup_rviz.launch.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/autodrive_f1tenth/launch
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/autodrive_f1tenth/rviz
+copying rviz/simulator.rviz -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/share/autodrive_f1tenth/rviz
+running install_egg_info
+Copying ../build/autodrive_f1tenth/autodrive_f1tenth.egg-info to /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/python3.10/site-packages/autodrive_f1tenth-0.1.0-py3.10.egg-info
+running install_scripts
+Installing autodrive_bridge script to /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/autodrive_f1tenth
+Installing teleop_keyboard script to /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/autodrive_f1tenth/lib/autodrive_f1tenth
+writing list of installed files to '/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/autodrive_f1tenth/install.log'

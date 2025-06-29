@@ -1,0 +1,3 @@
+[console_scripts]
+mpcc_node = path_planning.mpcc_node:main
+

@@ -1,0 +1,32 @@
+/usr/lib/python3/dist-packages/setuptools/dist.py:723: UserWarning: Usage of dash-separated 'script-dir' will not be supported in future versions. Please use the underscore name 'script_dir' instead
+  warnings.warn(
+running egg_info
+writing ../build/rl_training/rl_training.egg-info/PKG-INFO
+writing dependency_links to ../build/rl_training/rl_training.egg-info/dependency_links.txt
+writing entry points to ../build/rl_training/rl_training.egg-info/entry_points.txt
+writing requirements to ../build/rl_training/rl_training.egg-info/requires.txt
+writing top-level names to ../build/rl_training/rl_training.egg-info/top_level.txt
+reading manifest file '../build/rl_training/rl_training.egg-info/SOURCES.txt'
+writing manifest file '../build/rl_training/rl_training.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training
+copying rl_training/train_sac.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training
+copying rl_training/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training
+copying rl_training/env_sac.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training
+running install
+running install_lib
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training/train_sac.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training/env_sac.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training/train_sac.py to train_sac.cpython-310.pyc
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training/__init__.py to __init__.cpython-310.pyc
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training/env_sac.py to env_sac.cpython-310.pyc
+running install_egg_info
+Copying ../build/rl_training/rl_training.egg-info to /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training-0.0.1-py3.10.egg-info
+running install_scripts
+Installing train_sac script to /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/rl_training
+writing list of installed files to '/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/install.log'

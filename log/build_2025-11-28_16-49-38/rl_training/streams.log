@@ -1,0 +1,34 @@
+[0.445s] Invoking command in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl_training': PYTHONPATH=/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/rl_training build --build-base /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build install --record /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/install.log --install-scripts $base/lib/rl_training --single-version-externally-managed
+[0.609s] /usr/lib/python3/dist-packages/setuptools/dist.py:723: UserWarning: Usage of dash-separated 'script-dir' will not be supported in future versions. Please use the underscore name 'script_dir' instead
+[0.609s]   warnings.warn(
+[0.616s] running egg_info
+[0.616s] writing ../build/rl_training/rl_training.egg-info/PKG-INFO
+[0.617s] writing dependency_links to ../build/rl_training/rl_training.egg-info/dependency_links.txt
+[0.617s] writing entry points to ../build/rl_training/rl_training.egg-info/entry_points.txt
+[0.617s] writing requirements to ../build/rl_training/rl_training.egg-info/requires.txt
+[0.617s] writing top-level names to ../build/rl_training/rl_training.egg-info/top_level.txt
+[0.618s] reading manifest file '../build/rl_training/rl_training.egg-info/SOURCES.txt'
+[0.619s] writing manifest file '../build/rl_training/rl_training.egg-info/SOURCES.txt'
+[0.619s] running build
+[0.619s] running build_py
+[0.619s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build
+[0.619s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib
+[0.619s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training
+[0.619s] copying rl_training/train_sac.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training
+[0.620s] copying rl_training/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training
+[0.620s] copying rl_training/env_sac.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training
+[0.620s] running install
+[0.620s] running install_lib
+[0.620s] creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training
+[0.621s] copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training/train_sac.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training
+[0.621s] copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training
+[0.621s] copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build/lib/rl_training/env_sac.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training
+[0.621s] byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training/train_sac.py to train_sac.cpython-310.pyc
+[0.621s] byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training/__init__.py to __init__.cpython-310.pyc
+[0.622s] byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training/env_sac.py to env_sac.cpython-310.pyc
+[0.623s] running install_egg_info
+[0.624s] Copying ../build/rl_training/rl_training.egg-info to /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages/rl_training-0.0.1-py3.10.egg-info
+[0.625s] running install_scripts
+[0.643s] Installing train_sac script to /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/rl_training
+[0.644s] writing list of installed files to '/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/install.log'
+[0.662s] Invoked command in '/home/autroboracer/ros2_ws/src/roboracer-autodrive/rl_training' returned '0': PYTHONPATH=/home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/autroboracer/ros2_ws/src/roboracer-autodrive/install/rl_training/lib/python3.10/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../build/rl_training build --build-base /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/build install --record /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/rl_training/install.log --install-scripts $base/lib/rl_training --single-version-externally-managed

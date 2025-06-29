@@ -1,0 +1,29 @@
+running egg_info
+creating ../build/path_planning/path_planning.egg-info
+writing ../build/path_planning/path_planning.egg-info/PKG-INFO
+writing dependency_links to ../build/path_planning/path_planning.egg-info/dependency_links.txt
+writing entry points to ../build/path_planning/path_planning.egg-info/entry_points.txt
+writing requirements to ../build/path_planning/path_planning.egg-info/requires.txt
+writing top-level names to ../build/path_planning/path_planning.egg-info/top_level.txt
+writing manifest file '../build/path_planning/path_planning.egg-info/SOURCES.txt'
+reading manifest file '../build/path_planning/path_planning.egg-info/SOURCES.txt'
+writing manifest file '../build/path_planning/path_planning.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/path_planning/build
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/path_planning/build/lib
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/path_planning/build/lib/path_planning
+copying path_planning/mpcc_node.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/path_planning/build/lib/path_planning
+copying path_planning/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/path_planning/build/lib/path_planning
+running install
+running install_lib
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/path_planning/lib/python3.10/site-packages/path_planning
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/path_planning/build/lib/path_planning/mpcc_node.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/path_planning/lib/python3.10/site-packages/path_planning
+copying /home/autroboracer/ros2_ws/src/roboracer-autodrive/build/path_planning/build/lib/path_planning/__init__.py -> /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/path_planning/lib/python3.10/site-packages/path_planning
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/path_planning/lib/python3.10/site-packages/path_planning/mpcc_node.py to mpcc_node.cpython-310.pyc
+byte-compiling /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/path_planning/lib/python3.10/site-packages/path_planning/__init__.py to __init__.cpython-310.pyc
+running install_data
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/path_planning/share/ament_index
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/path_planning/share/ament_index/resource_index
+creating /home/autroboracer/ros2_ws/src/roboracer-autodrive/install/path_planning/share/ament_index/resource_index/packages
+error: can't copy 'resource/path_planning': doesn't exist or not a regular file

@@ -1,0 +1,11 @@
+/usr/lib/python3/dist-packages/setuptools/dist.py:723: UserWarning: Usage of dash-separated 'script-dir' will not be supported in future versions. Please use the underscore name 'script_dir' instead
+  warnings.warn(
+running egg_info
+creating ../build/rl_training/rl_training.egg-info
+writing ../build/rl_training/rl_training.egg-info/PKG-INFO
+writing dependency_links to ../build/rl_training/rl_training.egg-info/dependency_links.txt
+writing entry points to ../build/rl_training/rl_training.egg-info/entry_points.txt
+writing requirements to ../build/rl_training/rl_training.egg-info/requires.txt
+writing top-level names to ../build/rl_training/rl_training.egg-info/top_level.txt
+writing manifest file '../build/rl_training/rl_training.egg-info/SOURCES.txt'
+error: package directory 'rl_training' does not exist
