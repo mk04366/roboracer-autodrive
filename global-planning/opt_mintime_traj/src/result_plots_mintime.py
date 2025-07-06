@@ -324,8 +324,8 @@ def result_plots_mintime(pars: dict,
 
         f_zlong_fl = -0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xroll - f_xdrag)
         f_zlong_fr = -0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xroll - f_xdrag)
-        f_zlong_rl = 0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_drive - f_xroll - f_xdrag)
-        f_zlong_rr = 0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_drive - f_xroll - f_xdrag)
+        f_zlong_rl = 0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xroll - f_xdrag)
+        f_zlong_rr = 0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xroll - f_xdrag)
 
         f_zlat_fl = - veh["k_roll"] * gamma_y
         f_zlat_fr = veh["k_roll"] * gamma_y
