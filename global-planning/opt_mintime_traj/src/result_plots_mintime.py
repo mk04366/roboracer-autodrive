@@ -192,8 +192,8 @@ def result_plots_mintime(pars: dict,
         fig = plt.gcf()
         ax = fig.gca()
         ax.add_artist(circle1)
-        plt.plot(tf_y_fl / (tf_z_fl * pars["optim_opts"]["mue"]),
-                 tf_x_fl / (tf_z_fl * pars["optim_opts"]["mue"]), '^:')
+        plt.plot(tf_y_fl / (tf_z_fl * pars["optim_opts_mintime"]["mue"]),
+                 tf_x_fl / (tf_z_fl * pars["optim_opts_mintime"]["mue"]), '^:')
         plt.xlim(-1.2, 1.2)
         plt.ylim(-1.2, 1.2)
         plt.xlabel(r'$\it{\frac{F_{y}}{F_{ymax}}}$')
