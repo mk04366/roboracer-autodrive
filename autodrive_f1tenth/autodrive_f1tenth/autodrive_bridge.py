@@ -306,6 +306,7 @@ def bridge(sid, data):
         # IMU
         publish_imu_data(autodrive.orientation_quaternion, autodrive.angular_velocity, autodrive.linear_acceleration)
         # Cooordinate transforms
+        # change: map --> f1tenth_1_odom
         broadcast_transform(msg_transform, transform_broadcaster, "f1tenth_1", "f1tenth_1_odom", autodrive.position, autodrive.orientation_quaternion) # Vehicle frame defined at center of rear axle
         broadcast_transform(msg_transform, transform_broadcaster, "left_encoder", "f1tenth_1", np.asarray([0.0, 0.12, 0.0]), quaternion_from_euler(0.0, 120*autodrive.encoder_angles[0]%6.283, 0.0))
         broadcast_transform(msg_transform, transform_broadcaster, "right_encoder", "f1tenth_1", np.asarray([0.0, -0.12, 0.0]), quaternion_from_euler(0.0, 120*autodrive.encoder_angles[1]%6.283, 0.0))
@@ -395,21 +396,21 @@ def main():
 
 
     # ============ 只发一次的静态 TF =============
-    static_broadcaster = tf2_ros.StaticTransformBroadcaster(autodrive_bridge)
+    # static_broadcaster = tf2_ros.StaticTransformBroadcaster(autodrive_bridge)
 
-    static_tf = TransformStamped()
-    static_tf.header.stamp = autodrive_bridge.get_clock().now().to_msg()
-    static_tf.header.frame_id  = "odom"           # 父坐标系
-    static_tf.child_frame_id   = "f1tenth_1_odom" # 子坐标系
-    static_tf.transform.translation.x = 0.0
-    static_tf.transform.translation.y = 0.0
-    static_tf.transform.translation.z = 0.0
-    static_tf.transform.rotation.x    = 0.0
-    static_tf.transform.rotation.y    = 0.0
-    static_tf.transform.rotation.z    = 0.0
-    static_tf.transform.rotation.w    = 1.0
+    # static_tf = TransformStamped()
+    # static_tf.header.stamp = autodrive_bridge.get_clock().now().to_msg()
+    # static_tf.header.frame_id  = "odom"           # 父坐标系
+    # static_tf.child_frame_id   = "f1tenth_1_odom" # 子坐标系
+    # static_tf.transform.translation.x = 0.0
+    # static_tf.transform.translation.y = 0.0
+    # static_tf.transform.translation.z = 0.0
+    # static_tf.transform.rotation.x    = 0.0
+    # static_tf.transform.rotation.y    = 0.0
+    # static_tf.transform.rotation.z    = 0.0
+    # static_tf.transform.rotation.w    = 1.0
 
-    static_broadcaster.sendTransform(static_tf)
+    # static_broadcaster.sendTransform(static_tf)
 
     # ===========================================
 

@@ -1,8 +1,12 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 image: map3.pgm
 =======
 image: mytrack2.pgm
 >>>>>>> a9f9cdc (Add all maps)
+=======
+image: map3.pgm
+>>>>>>> 1e5e89a (Add AMCL and SLAM configs, launch files, and update maps)
 mode: trinary
 resolution: 0.05
 origin: [-4.12, -8.52, 0]
