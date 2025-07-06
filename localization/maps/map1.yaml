@@ -1,4 +1,4 @@
-image: mytrack.pgm
+image: map1.pgm
 mode: trinary
 resolution: 0.05
 origin: [-9.81, -12.7, 0]
