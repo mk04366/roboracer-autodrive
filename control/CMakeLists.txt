@@ -23,6 +23,11 @@ add_executable(pid_controller_node
   src/pid_controller_node.cpp
 )
 
+add_executable(ftg_controller_node 
+  src/ftg_controller_node.cpp
+)
+
+
 # Link dependencies
 ament_target_dependencies(pid_controller_node
   rclcpp
@@ -30,8 +35,17 @@ ament_target_dependencies(pid_controller_node
   sensor_msgs
 )
 
+ament_target_dependencies(ftg_controller_node 
+  rclcpp 
+  std_msgs 
+  sensor_msgs
+)
+
 # Install target
 install(TARGETS pid_controller_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS ftg_controller_node 
   DESTINATION lib/${PROJECT_NAME}
 )
 

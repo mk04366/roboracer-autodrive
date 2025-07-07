@@ -1,20 +1,15 @@
 #ifndef CONTROL__PID_CONTROLLER_NODE_HPP_
 #define CONTROL__PID_CONTROLLER_NODE_HPP_
 
+#pragma once
 #include "rclcpp/rclcpp.hpp"
+#include "control/common.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include <algorithm>
 
 namespace pid_controller_node
 {
-
-    template <typename T>
-    T clamp(const T &v, const T &lo, const T &hi)
-    {
-        return (v < lo) ? lo : (v > hi) ? hi
-                                        : v;
-    }
     /**
      * @brief PID Controller Node for controlling steering and throttle.
      *
@@ -50,14 +45,12 @@ namespace pid_controller_node
         double prevErrorThrottle = 0.0;
 
         // Control parameters
-        double setpointSpeed = 0.5;      // Desired speed in m/s
+        double setpointSpeed = 0.5;         // Desired speed in m/s
         double desired_center_offset = 0.0; // Desired offset from the wall
-
 
         // low pass filter parameters
         double smoothed_throttle_output = 0.0;
         double alpha = 0.1;
-
 
         // Feedback states
         double feedbackSpeed;
