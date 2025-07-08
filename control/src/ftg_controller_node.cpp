@@ -55,7 +55,7 @@ private:
                 else
                 {
                     // Obstacle on the right side — erase to the left
-                    for (int j = 0; j <= bubble_radius && size_t(j) <= i; ++j)
+                    for (int j = 0; j <= bubble_radius && j <= static_cast<int>(i); ++j)
                     {
                         processed[i - j] = std::min(processed[i - j], d2);
                     }
