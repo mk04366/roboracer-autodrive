@@ -14,6 +14,9 @@ class FTGNode : public rclcpp::Node
 private:
     float last_steering_angle_ = 0.0f;
     float kd_gain_ = 0.7f;
+    float decay = 0.9f;
+    float THROTTLE_ADJUSTMENT_FACTOR = 0.01f;
+    float target_pct = 0.05f;
 
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steer_pub_;
@@ -118,9 +121,11 @@ private:
 
     float calculate_throttle(float steering_angle, const std::vector<float> &ranges)
     {
-        float target_pct = 0.05f;
         int mid = ranges.size() / 2;
         int half_window = static_cast<int>(ranges.size() * target_pct / 2);
+        if(half_window < 1)
+            half_window = 1; // Ensure at least one element in the window & safe for 0 division
+
         float center_avg = std::accumulate(ranges.begin() + mid - half_window,
                                            ranges.begin() + mid + half_window, 0.0f) /
                            (2 * half_window);
@@ -149,7 +154,6 @@ private:
                 base_throttle = 0.01f;
         }
 
-        float decay = 0.9f;
         float throttle = decay * base_throttle * (1 - std::abs(steering_angle) + THROTTLE_ADJUSTMENT_FACTOR);
         RCLCPP_INFO(this->get_logger(), "Throttle out: %f", throttle);
         return throttle;
