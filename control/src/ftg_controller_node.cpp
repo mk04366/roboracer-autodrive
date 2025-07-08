@@ -150,7 +150,7 @@ private:
         }
 
         float decay = 0.9f;
-        float throttle = decay * base_throttle * (1 - std::abs(steering_angle) + 0.01f / 1.0f);
+        float throttle = decay * base_throttle * (1 - std::abs(steering_angle) + THROTTLE_ADJUSTMENT_FACTOR);
         RCLCPP_INFO(this->get_logger(), "Throttle out: %f", throttle);
         return throttle;
     }
