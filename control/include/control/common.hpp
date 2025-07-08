@@ -1,6 +1,3 @@
-#ifndef CONTROL__COMMON_HPP_
-#define CONTROL__COMMON_HPP_
-
 #pragma once
 
 template <typename T>
