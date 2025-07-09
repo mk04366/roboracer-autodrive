@@ -19,6 +19,12 @@ def generate_launch_description():
         'ftg_controller_launch.py'
     )
 
+    localization_launch_path = os.path.join(
+        get_package_share_directory('localization'),
+        'launch',
+        'amcl_launch.py'
+    )
+
     # Run the XML launch file via shell command
     foxglove_process = ExecuteProcess(
         cmd=['ros2', 'launch', 'foxglove_bridge', 'foxglove_bridge_launch.xml', 'port:=8765'],
@@ -31,6 +37,9 @@ def generate_launch_description():
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(control_launch_path)
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(localization_launch_path)
         ),
         foxglove_process
     ])

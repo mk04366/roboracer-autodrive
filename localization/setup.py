@@ -11,6 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/slam_sim_launch.py']),
+        ('share/' + package_name + '/launch', ['launch/amcl_launch.py']),
         ('share/' + package_name + '/config', ['config/online_async_sim.yaml']),
     ],
     install_requires=['setuptools'],
