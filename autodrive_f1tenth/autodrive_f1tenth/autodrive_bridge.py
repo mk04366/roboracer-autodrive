@@ -52,7 +52,7 @@ import autodrive_f1tenth.config as config # AutoDRIVE Ecosystem ROS 2 configurat
 
 import tf2_ros
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
-from tf2_ros import StaticTransformBroadcaster  # ← 新增
+from tf2_ros import StaticTransformBroadcaster  # ← Added
 
 ################################################################################
 
