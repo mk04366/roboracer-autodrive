@@ -44,12 +44,13 @@ else:
     import tty # Terminal control functions
 
 ################################################################################
-
 # Parameters
 DRIVE_LIMIT = 1.0
 STEER_LIMIT = 1.0
 DRIVE_STEP_SIZE = 0.2
 STEER_STEP_SIZE = 0.2
+LOOP_PERIOD = 0.1 # 10Hz Loop periods
+################################################################################
 
 # Information
 info = """
@@ -84,7 +85,7 @@ def get_key(settings):
     if os.name == 'nt':
         return msvcrt.getch().decode('utf-8')
     tty.setraw(sys.stdin.fileno())
-    rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+    rlist, _, _ = select.select([sys.stdin], [], [], LOOP_PERIOD) 
     if rlist:
         key = sys.stdin.read(1)
     else:
