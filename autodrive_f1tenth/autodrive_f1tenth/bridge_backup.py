@@ -269,8 +269,6 @@ def bridge(sid, data):
     # Wait for data to become available
     if data:
         # 打印所有字段名和字段值（前30字符）
-        #print("[debug] Full received data keys:", data.keys())
-       # print("[debug] Full received data (short):", {k: str(data[k])[:30] for k in data})
         expected_keys = [
                 "V1 Throttle", "V1 Steering", "V1 Speed", "V1 Encoder Angles", "V1 Position",
                 "V1 Orientation Quaternion", "V1 Angular Velocity", "V1 Linear Acceleration",

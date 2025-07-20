@@ -306,7 +306,7 @@ def bridge(sid, data):
         # IMU
         publish_imu_data(autodrive.orientation_quaternion, autodrive.angular_velocity, autodrive.linear_acceleration)
         # Cooordinate transforms
-        # change: map --> f1tenth_1_odom
+        # Changed frame reference from 'map' to 'f1tenth_1_odom' to align with the vehicle's odometry-based localization system. This ensures accurate positioning and compatibility with the navigation stack.
         broadcast_transform(msg_transform, transform_broadcaster, "f1tenth_1", "f1tenth_1_odom", autodrive.position, autodrive.orientation_quaternion) # Vehicle frame defined at center of rear axle
         broadcast_transform(msg_transform, transform_broadcaster, "left_encoder", "f1tenth_1", np.asarray([0.0, 0.12, 0.0]), quaternion_from_euler(0.0, 120*autodrive.encoder_angles[0]%6.283, 0.0))
         broadcast_transform(msg_transform, transform_broadcaster, "right_encoder", "f1tenth_1", np.asarray([0.0, -0.12, 0.0]), quaternion_from_euler(0.0, 120*autodrive.encoder_angles[1]%6.283, 0.0))
