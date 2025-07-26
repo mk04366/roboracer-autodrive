@@ -155,14 +155,14 @@ private:
         }
 
         float throttle = decay * base_throttle * (1 - std::abs(steering_angle) + THROTTLE_ADJUSTMENT_FACTOR);
-        RCLCPP_INFO(this->get_logger(), "Throttle out: %f", throttle);
+        // RCLCPP_INFO(this->get_logger(), "Throttle out: %f", throttle);
         return throttle;
     }
 
 public:
     FTGNode() : Node("ftg_node")
     {
-        RCLCPP_INFO(this->get_logger(), "Awaiting subscriptions, ensure bridge is running");
+        // RCLCPP_INFO(this->get_logger(), "Awaiting subscriptions, ensure bridge is running");
 
         lidar_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/autodrive/f1tenth_1/lidar", 10, std::bind(&FTGNode::lidar_callback, this, _1));
@@ -176,7 +176,7 @@ public:
         auto msg = std_msgs::msg::Float32();
         msg.data = angle;
         steer_pub_->publish(msg);
-        RCLCPP_INFO(this->get_logger(), "Steering successfully published: %f", angle);
+        // RCLCPP_INFO(this->get_logger(), "Steering successfully published: %f", angle);
     }
 
     void publish_throttle(float value)
@@ -184,7 +184,7 @@ public:
         auto msg = std_msgs::msg::Float32();
         msg.data = value;
         throttle_pub_->publish(msg);
-        RCLCPP_INFO(this->get_logger(), "Throttle successfully published: %f", value);
+        // RCLCPP_INFO(this->get_logger(), "Throttle successfully published: %f", value);
     }
 };
 
