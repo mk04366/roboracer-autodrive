@@ -17,7 +17,8 @@ def generate_launch_description():
         get_package_share_directory('control'),
         'launch',
         # 'pid_controller_launch.py'
-        'ftg_controller_launch.py'
+        # 'ftg_controller_launch.py'
+        'stanley_controller_launch.py'
     )
 
     localization_launch_path = os.path.join(

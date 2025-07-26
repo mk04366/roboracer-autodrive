@@ -3,6 +3,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include <vector>
 #include <array>
 #include <cmath>
@@ -32,6 +33,7 @@ public:
     explicit StanleyController(double wheelbase = 0.33);
 
     void setWaypoints(const std::vector<Waypoint> &new_waypoints);
+    const std::vector<Waypoint> getWaypoints();
 
     std::pair<double, double> plan(
         double pose_x,
@@ -41,7 +43,6 @@ public:
         double k_path = 5.0,
         const std::vector<Waypoint> *override_waypoints = nullptr);
 
-private:
     double wheelbase_;
     std::vector<Waypoint> waypoints_;
 
@@ -58,6 +59,8 @@ private:
     std::pair<size_t, std::array<double, 2>> nearestPoint(
         const std::array<double, 2> &point,
         const std::vector<Waypoint> &waypoints);
+
+    
 };
 
 #endif // STANLEY_CONTROLLER_HPP

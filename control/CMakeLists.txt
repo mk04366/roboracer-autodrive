@@ -16,6 +16,7 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(ackermann_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # Include the include/ directory
 include_directories(include)
@@ -51,6 +52,7 @@ ament_target_dependencies(stanley_controller_node
   rclcpp
   nav_msgs
   ackermann_msgs
+  visualization_msgs
 )
 
 # Install target

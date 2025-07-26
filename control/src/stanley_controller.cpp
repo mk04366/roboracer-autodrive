@@ -1,11 +1,19 @@
 #include "control/stanley_controller_node.hpp"
+#include "control/common.hpp"
 
 StanleyController::StanleyController(double wheelbase)
-    : wheelbase_(wheelbase) {}
+    : wheelbase_(wheelbase)
+{
+}
 
 void StanleyController::setWaypoints(const std::vector<Waypoint> &new_waypoints)
 {
     waypoints_ = new_waypoints;
+}
+
+const std::vector<Waypoint> StanleyController::getWaypoints()
+{
+    return waypoints_;
 }
 
 double StanleyController::pi2pi(double angle)
@@ -67,9 +75,12 @@ std::pair<double, double> StanleyController::controller(
     const std::vector<Waypoint> &waypoints,
     double k_path)
 {
+    auto max_steering_angle = M_PI / 4;
     auto [theta_e, ef, _, goal_velocity] = calcThetaAndEf(state, waypoints);
-    double cte_term = std::atan2(k_path * ef, state.velocity);
+    double velocity_safe = std::max(0.1, state.velocity); // prevent div by near-zero
+    double cte_term = std::atan2(k_path * ef, velocity_safe);
     double steering_angle = cte_term + theta_e;
+    steering_angle = clamp(steering_angle, -max_steering_angle, max_steering_angle);
     return {steering_angle, goal_velocity};
 }
 
