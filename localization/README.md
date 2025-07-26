@@ -32,9 +32,9 @@ ros2 run slam_toolbox sync_slam_toolbox_node \
 
 # Open RViz2 to visualize
 rviz2
-```  
+```
 
-##  2. Run SLAM (Launch Script)
+## 2. Run SLAM (Launch Script)
 
 ```bash
 # Same build
@@ -77,23 +77,26 @@ ros2 launch localization amcl_launch.py
 rviz2
 
 # If needed, check and control the lifecycle:
-ros2 lifecycle get /map_server
-ros2 lifecycle get /amcl
-ros2 lifecycle set /map_server configure
-ros2 lifecycle set /amcl configure
-ros2 lifecycle set /map_server activate
-ros2 lifecycle set /amcl activate
+ros2 lifecycle get /localization/map_server
+ros2 lifecycle get /localization/amcl
+ros2 lifecycle set /localization/map_server configure
+ros2 lifecycle set /localization/amcl configure
+ros2 lifecycle set /localization/map_server activate
+ros2 lifecycle set /localization/amcl activate
 
 # In RViz, click '2D Pose Estimate' to set the initial pose
 ```
 
 ## Notes
+
 If you want to change the map:
 Update setup.py with your new .yaml and .pgm.
 Update amcl_launch.py to use the correct yaml map file.
 The default TF tree is: map --> f1tenth_1_odom --> f1tenth_1
 
 bridge publishes odom → base_link, AMCL provides map → odom.
+
 ```
 
 RoboRacer Localization | Last updated: 2025
+```

@@ -9,7 +9,7 @@
 class StanleyNode : public rclcpp::Node {
 public:
     StanleyNode() : Node("stanley_controller_node") {
-        this->declare_parameter<std::string>("waypoints_path", "");
+        this->declare_parameter<std::string>("waypoints_path", "../../global-planning/outputs/map5/traj_race_cl.csv");
         this->declare_parameter<double>("k_path", 5.0);
         this->declare_parameter<double>("wheelbase", 0.33);
 
