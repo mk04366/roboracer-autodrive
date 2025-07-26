@@ -4,13 +4,15 @@
 #include "control/stanley_controller_node.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
+#include "control/velocity_pid.hpp"
 #include <fstream>
 #include <sstream>
 
 class StanleyNode : public rclcpp::Node
 {
 public:
-    StanleyNode() : Node("stanley_controller_node")
+    StanleyNode() : Node("stanley_controller_node"),
+     velocity_pid_(1.0, 0.1, 0.05)
     {
         this->declare_parameter<std::string>("waypoints_path", "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl.csv");
         this->declare_parameter<double>("k_path", 5.0);
@@ -21,6 +23,7 @@ public:
         double wheelbase = this->get_parameter("wheelbase").as_double();
 
         controller_ = std::make_unique<StanleyController>(wheelbase);
+        VelocityPID velocity_pid_{1.0, 0.1, 0.05};
 
         if (!path.empty())
         {
@@ -73,6 +76,10 @@ private:
 
     double latest_yaw_ = 0.0;
     double latest_speed_ = 0.0;
+    double velocity_integral_ = 0.0;
+    double previous_velocity_error_ = 0.0;
+    VelocityPID velocity_pid_;
+    rclcpp::Time previous_time_;
 
     std::vector<Waypoint> loadWaypointsFromCSV(const std::string &filepath)
     {
@@ -185,29 +192,31 @@ private:
             double alpha = 0.2;
             smoothed_velocity_ = alpha * velocity + (1 - alpha) * smoothed_velocity_;
 
-            auto [steering_angle, speed] = controller_->plan(x, y, yaw, smoothed_velocity_, k_path_);
+            auto [steering_angle, goal_speed] = controller_->plan(x, y, yaw, smoothed_velocity_, k_path_);
 
-            // Publish to /drive
+            auto now = this->get_clock()->now();
+
+            // Compute throttle using PID velocity control
+            double throttle_unclamped = velocity_pid_.compute(goal_speed, smoothed_velocity_, now);
+
+            // Clamp throttle between 0 and 1
+            double throttle_value = std::clamp(throttle_unclamped, 0.0, 1.0);
+
+            // Publish drive message
             ackermann_msgs::msg::AckermannDriveStamped drive_msg;
-            drive_msg.header.stamp = this->get_clock()->now();
+            drive_msg.header.stamp = now;
             drive_msg.drive.steering_angle = steering_angle;
-            drive_msg.drive.speed = speed;
+            drive_msg.drive.speed = goal_speed;
             drive_pub_->publish(drive_msg);
 
-            // Publish to /steering_command
+            // Steering command
             std_msgs::msg::Float32 steering_msg;
             steering_msg.data = static_cast<float>(steering_angle);
-
             steering_pub_->publish(steering_msg);
 
-            // Publish to /throttle_command
+            // Throttle command
             std_msgs::msg::Float32 throttle_msg;
-            float max_speed = 5.0f;
-            float base_throttle = static_cast<float>(speed) / max_speed;
-            float steering_penalty = 1.0f - std::min(std::abs(steering_angle) / (M_PI / 4), 1.0); // reduce if sharp turn
-            float throttle_value = std::clamp(base_throttle * steering_penalty, 0.2f, 1.0f);
-
-            throttle_msg.data = throttle_value;
+            throttle_msg.data = static_cast<float>(throttle_value);
             throttle_pub_->publish(throttle_msg);
 
             auto [_, __, target_idx, ___] = controller_->calcThetaAndEf({x, y, yaw, velocity}, controller_->getWaypoints());

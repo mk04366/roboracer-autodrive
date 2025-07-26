@@ -53,18 +53,28 @@ std::tuple<double, double, size_t, double> StanleyController::calcThetaAndEf(
     const VehicleState &state,
     const std::vector<Waypoint> &waypoints)
 {
+    // 1. Compute front axle position
     double fx = state.x + wheelbase_ * std::cos(state.heading);
     double fy = state.y + wheelbase_ * std::sin(state.heading);
     std::array<double, 2> front_axle = {fx, fy};
 
+    // 2. Find nearest point on path (should project onto segment!)
     auto [target_index, nearest] = nearestPoint(front_axle, waypoints);
+
+    // 3. Vector from front axle to nearest point
     double dx = front_axle[0] - nearest[0];
     double dy = front_axle[1] - nearest[1];
 
+    // 4. Cross-track error: project vector onto heading rotated by -90 deg
     double perp_heading = state.heading - M_PI_2;
     double ef = dx * std::cos(perp_heading) + dy * std::sin(perp_heading);
+    ef = std::clamp(ef, -1.0, 1.0);
+
+    // 5. Heading error (wrap to [-pi, pi])
     double theta_raceline = waypoints[target_index].heading;
     double theta_e = pi2pi(theta_raceline - state.heading);
+
+    // 6. Target velocity
     double goal_velocity = waypoints[target_index].velocity;
 
     return std::make_tuple(theta_e, ef, target_index, goal_velocity);
@@ -75,12 +85,22 @@ std::pair<double, double> StanleyController::controller(
     const std::vector<Waypoint> &waypoints,
     double k_path)
 {
-    auto max_steering_angle = M_PI / 4;
-    auto [theta_e, ef, _, goal_velocity] = calcThetaAndEf(state, waypoints);
-    double velocity_safe = std::max(0.1, state.velocity); // prevent div by near-zero
-    double cte_term = std::atan2(k_path * ef, velocity_safe);
-    double steering_angle = cte_term + theta_e;
-    steering_angle = clamp(steering_angle, -max_steering_angle, max_steering_angle);
+    const double max_steering_angle = M_PI / 8; // 22.5 degrees limit
+    auto [theta_e, ef, target_index, goal_velocity] = calcThetaAndEf(state, waypoints);
+
+    // 7. Protect against zero or near-zero velocity to avoid division issues
+    double velocity_safe = std::max(0.1, std::abs(state.velocity));
+
+    // 8. Stanley control law: steering = heading error + arctan(k * cross_track_error / velocity)
+    double max_cte_correction = M_PI / 6; // e.g., 30 degrees
+    double cte_term = std::clamp(std::atan2(k_path * ef, velocity_safe),
+                                 -max_cte_correction, max_cte_correction);
+
+    double steering_angle = theta_e + cte_term;
+
+    // 9. Clamp steering angle to physical limits
+    steering_angle = std::clamp(steering_angle, -max_steering_angle, max_steering_angle);
+
     return {steering_angle, goal_velocity};
 }
 

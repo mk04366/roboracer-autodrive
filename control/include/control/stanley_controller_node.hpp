@@ -40,7 +40,7 @@ public:
         double pose_y,
         double pose_theta,
         double velocity,
-        double k_path = 5.0,
+        double k_path = 1.0,
         const std::vector<Waypoint> *override_waypoints = nullptr);
 
     double wheelbase_;
