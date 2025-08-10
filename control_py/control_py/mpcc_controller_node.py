@@ -186,13 +186,13 @@ class MPCCNode(Node):
     def __init__(self):
         super().__init__('mpcc_controller')
         # tuned defaults inspired by reference implementation
-        self.declare_parameter('horizon', 6)
+        self.declare_parameter('horizon', 3)
         self.declare_parameter('dt', 0.2)  
         self.declare_parameter('wheelbase', 0.33)
         self.declare_parameter('delta_max_deg', 25.0)
         self.declare_parameter('a_max', 3.0)
         self.declare_parameter('v_max', 4.0)
-        self.declare_parameter('num_samples', 50)  # much smaller than 400
+        self.declare_parameter('num_samples', 20)  # much smaller than 400
 
         trajectory_path = os.path.join(
             get_package_share_directory('control_py'),
@@ -297,7 +297,7 @@ class MPCCNode(Node):
         self.prev_U = best_U.copy()
         first = best_U[0]
         steer_norm = float(np.clip(first[0], -1.0, 1.0))
-        thr_norm = float(np.clip(first[1], 0.0, 1.0))
+        thr_norm = float(np.clip(first[1], -0.1, 1.0))
 
         msg_s = Float32(); msg_t = Float32()
         msg_s.data = steer_norm; msg_t.data = thr_norm
