@@ -25,28 +25,73 @@ double StanleyController::pi2pi(double angle)
     return angle;
 }
 
+// Modified to find nearest point on path segment
 std::pair<size_t, std::array<double, 2>> StanleyController::nearestPoint(
     const std::array<double, 2> &point,
     const std::vector<Waypoint> &waypoints)
 {
-    size_t index = 0;
-    double min_dist = std::numeric_limits<double>::max();
-    std::array<double, 2> nearest;
+    size_t target_index = 0;
+    double min_dist_sq = std::numeric_limits<double>::max();
+    std::array<double, 2> nearest_on_segment = {0.0, 0.0};
 
-    for (size_t i = 0; i < waypoints.size(); ++i)
+    if (waypoints.empty()) {
+        return {0, {0.0, 0.0}}; // Handle empty waypoints case, though it should be caught earlier
+    }
+
+    for (size_t i = 0; i < waypoints.size() - 1; ++i)
     {
-        double dx = point[0] - waypoints[i].x;
-        double dy = point[1] - waypoints[i].y;
-        double dist = dx * dx + dy * dy;
-        if (dist < min_dist)
+        const Waypoint &p1 = waypoints[i];
+        const Waypoint &p2 = waypoints[i + 1];
+
+        double dx_segment = p2.x - p1.x;
+        double dy_segment = p2.y - p1.y;
+        double len_sq = dx_segment * dx_segment + dy_segment * dy_segment;
+
+        double t = 0.0;
+        if (len_sq > std::numeric_limits<double>::epsilon()) // Avoid division by zero for coincident points
         {
-            min_dist = dist;
-            nearest = {waypoints[i].x, waypoints[i].y};
-            index = i;
+            t = ((point[0] - p1.x) * dx_segment + (point[1] - p1.y) * dy_segment) / len_sq;
+        }
+        
+        double t_clamped = std::clamp(t, 0.0, 1.0);
+
+        double closest_x = p1.x + t_clamped * dx_segment;
+        double closest_y = p1.y + t_clamped * dy_segment;
+
+        double current_dist_sq = (point[0] - closest_x) * (point[0] - closest_x) +
+                                 (point[1] - closest_y) * (point[1] - closest_y);
+
+        if (current_dist_sq < min_dist_sq)
+        {
+            min_dist_sq = current_dist_sq;
+            nearest_on_segment = {closest_x, closest_y};
+            
+            // Determine the target_index based on which end of the segment is closer
+            // If the closest point is on the segment (not an endpoint), we typically use the starting waypoint's index.
+            // If it's an endpoint, we use that endpoint's index.
+            if (t_clamped == 0.0) {
+                target_index = i; 
+            } else if (t_clamped == 1.0) {
+                target_index = i + 1;
+            } else {
+                target_index = i; // Point is within the segment, use the start of the segment
+            }
         }
     }
 
-    return {index, nearest};
+    // Handle the last waypoint if it's the closest point and no segment was found closer
+    if (waypoints.size() > 0) {
+        double dx_last = point[0] - waypoints.back().x;
+        double dy_last = point[1] - waypoints.back().y;
+        double dist_sq_last = dx_last * dx_last + dy_last * dy_last;
+        if (dist_sq_last < min_dist_sq) {
+            min_dist_sq = dist_sq_last;
+            nearest_on_segment = {waypoints.back().x, waypoints.back().y};
+            target_index = waypoints.size() - 1;
+        }
+    }
+
+    return {target_index, nearest_on_segment};
 }
 
 std::tuple<double, double, size_t, double> StanleyController::calcThetaAndEf(
@@ -58,26 +103,49 @@ std::tuple<double, double, size_t, double> StanleyController::calcThetaAndEf(
     double fy = state.y + wheelbase_ * std::sin(state.heading);
     std::array<double, 2> front_axle = {fx, fy};
 
-    // 2. Find nearest point on path (should project onto segment!)
+    // 2. Find nearest point on path segment
     auto [target_index, nearest] = nearestPoint(front_axle, waypoints);
 
-    // 3. Vector from front axle to nearest point
+    // 3. Vector from nearest point on path to front axle
     double dx = front_axle[0] - nearest[0];
     double dy = front_axle[1] - nearest[1];
 
-    // 4. Cross-track error: project vector onto heading rotated by -90 deg
-    double perp_heading = state.heading - M_PI_2;
-    double ef = dx * std::cos(perp_heading) + dy * std::sin(perp_heading);
-    ef = std::clamp(ef, -1.0, 1.0);
+    // 4. Cross-track error (ef):
+    // Calculate the signed cross-track error using the path's orientation at the target point.
+    // A positive ef means the vehicle is to the left of the path.
+    // To ensure this, we use the vector perpendicular to the path heading, pointing left.
+    
+    // Ensure target_index is valid for accessing waypoint heading
+    size_t effective_target_index = target_index;
+    if (waypoints.empty()) {
+        // If waypoints are empty, this case should ideally be prevented earlier or handled as an error.
+        // For now, return zero errors.
+        return std::make_tuple(0.0, 0.0, 0, 0.0);
+    }
+
+    // If target_index is the last waypoint, and the path has at least 2 points,
+    // we can use the heading of the segment leading to it, or just its own heading if available.
+    // For simplicity, we'll use the target_index's heading. If the target_index is the last point, it's fine.
+    
+    double path_heading_at_nearest = waypoints[effective_target_index].heading;
+
+    // Perpendicular vector to path heading, pointing to the left (counter-clockwise from path heading)
+    double path_perp_x = -std::sin(path_heading_at_nearest); // cos(heading + pi/2)
+    double path_perp_y = std::cos(path_heading_at_nearest);  // sin(heading + pi/2)
+
+    double ef = dx * path_perp_x + dy * path_perp_y;
+    
+    // Increased clamping range for ef to allow for larger cross-track errors
+    ef = std::clamp(ef, -5.0, 5.0); 
 
     // 5. Heading error (wrap to [-pi, pi])
-    double theta_raceline = waypoints[target_index].heading;
+    double theta_raceline = waypoints[effective_target_index].heading; // Use heading of the segment's starting point or nearest waypoint
     double theta_e = pi2pi(theta_raceline - state.heading);
 
     // 6. Target velocity
-    double goal_velocity = waypoints[target_index].velocity;
+    double goal_velocity = waypoints[effective_target_index].velocity;
 
-    return std::make_tuple(theta_e, ef, target_index, goal_velocity);
+    return std::make_tuple(theta_e, ef, effective_target_index, goal_velocity);
 }
 
 std::pair<double, double> StanleyController::controller(
