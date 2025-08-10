@@ -14,7 +14,7 @@ public:
     StanleyNode() : Node("stanley_controller_node"),
      velocity_pid_(1.0, 0.1, 0.05)
     {
-        this->declare_parameter<std::string>("waypoints_path", "outputs/map5/traj_race_cl.csv");
+        this->declare_parameter<std::string>("waypoints_path", "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl.csv");
         this->declare_parameter<double>("k_path", 1.0);
         this->declare_parameter<double>("wheelbase", 0.33);
 
@@ -134,7 +134,7 @@ private:
             const auto &wp = controller_->getWaypoints()[i];
 
             visualization_msgs::msg::Marker marker;
-            marker.header.frame_id = "map"; // or "odom" if your CSV is in odometry frame
+            marker.header.frame_id = "map";
             marker.header.stamp = this->get_clock()->now();
             marker.ns = "waypoints";
             marker.id = i;

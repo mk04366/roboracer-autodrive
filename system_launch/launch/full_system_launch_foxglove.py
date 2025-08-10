@@ -13,12 +13,19 @@ def generate_launch_description():
         'simulator_bringup_headless.launch.py'
     )
 
+    # waypoints_loader_launch_path = os.path.join(
+    #     get_package_share_directory('control'),
+    #     'launch',
+    #     'waypoints_loader_launch.py'
+    # )
+
     control_launch_path = os.path.join(
-        get_package_share_directory('control'),
+        get_package_share_directory('control_py'),
         'launch',
         # 'pid_controller_launch.py'
-        'ftg_controller_launch.py'
+        # 'ftg_controller_launch.py'
         # 'stanley_controller_launch.py'
+        'mpcc_launch.py' 
     )
 
     localization_launch_path = os.path.join(
@@ -44,12 +51,15 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(autodrive_launch_path)
         ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(control_launch_path)
-        ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(control_launch_path)
+        # ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(localization_launch_path)
         ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(waypoints_loader_launch_path)
+        # ),
         foxglove_process,
         initial_pose_node
     ])

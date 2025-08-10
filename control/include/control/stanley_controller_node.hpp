@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <tuple>
 #include <limits>
+#include "control/common.hpp"
 
 struct VehicleState
 {
@@ -17,14 +18,6 @@ struct VehicleState
     double y;
     double heading;
     double velocity;
-};
-
-struct Waypoint
-{
-    double x;
-    double y;
-    double velocity;
-    double heading;
 };
 
 class StanleyController

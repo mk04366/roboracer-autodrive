@@ -1,5 +1,4 @@
 #include "control/stanley_controller_node.hpp"
-#include "control/common.hpp"
 
 StanleyController::StanleyController(double wheelbase)
     : wheelbase_(wheelbase)

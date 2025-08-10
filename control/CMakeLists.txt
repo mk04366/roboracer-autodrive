@@ -34,6 +34,9 @@ add_executable(stanley_controller_node
   src/stanley_node.cpp
   src/stanley_controller.cpp
 )
+add_executable(waypoints_loader
+  src/waypoints_loader.cpp
+)
 
 # Link dependencies
 ament_target_dependencies(pid_controller_node
@@ -54,6 +57,10 @@ ament_target_dependencies(stanley_controller_node
   ackermann_msgs
   visualization_msgs
 )
+ament_target_dependencies(waypoints_loader
+  rclcpp
+  visualization_msgs
+)
 
 # Install target
 install(TARGETS pid_controller_node
@@ -63,6 +70,9 @@ install(TARGETS ftg_controller_node
   DESTINATION lib/${PROJECT_NAME}
 )
 install(TARGETS stanley_controller_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS waypoints_loader
   DESTINATION lib/${PROJECT_NAME}
 )
 
