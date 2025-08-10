@@ -14,7 +14,7 @@ public:
     StanleyNode() : Node("stanley_controller_node"),
      velocity_pid_(1.0, 0.1, 0.05)
     {
-        this->declare_parameter<std::string>("waypoints_path", "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl.csv");
+        this->declare_parameter<std::string>("waypoints_path", "outputs/map5/traj_race_cl.csv");
         this->declare_parameter<double>("k_path", 1.0);
         this->declare_parameter<double>("wheelbase", 0.33);
 
