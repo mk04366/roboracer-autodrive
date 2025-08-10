@@ -33,6 +33,7 @@ from sensor_msgs.msg import Imu, LaserScan
 from std_msgs.msg import Float32
 from ament_index_python.packages import get_package_share_directory
 import os
+import csv
 
 import numpy as np
 import csv
@@ -44,19 +45,35 @@ import time
 # Utility: path helpers
 # -------------------------
 
+import csv
+import numpy as np
+
 def load_waypoints_from_csv(path):
     pts = []
     try:
         with open(path, 'r') as fh:
-            rdr = csv.reader(fh)
+            rdr = csv.reader(fh, delimiter=';')
             for row in rdr:
-                if len(row) < 2:
+                # skip empty rows or comment lines
+                if not row or row[0].strip().startswith('#'):
                     continue
-                x = float(row[0]); y = float(row[1])
-                pts.append((x, y))
+                # skip header line if detected (e.g. contains 'x_m')
+                if 'x_m' in row[1]:
+                    continue
+                # strip spaces and parse floats
+                try:
+                    x = float(row[1].strip())
+                    y = float(row[2].strip())
+                    pts.append((x, y))
+                except (ValueError, IndexError):
+                    # skip rows that can't be parsed
+                    continue
     except Exception as e:
         print("Failed to load waypoints:", e)
+    
+    print(f"Loaded {len(pts)} waypoints from {path}")
     return np.array(pts)
+
 
 
 def nearest_point_on_path(traj, x, y):
@@ -193,6 +210,7 @@ def random_shooting_opt(state0, traj, N, dt, L, delta_max, a_max,
     best_U = None
     # sample around warm start if available
     for i in range(num_samples):
+        print(f'Sampling {i+1}/{num_samples}...')
         if prev_U is None:
             # sample each control uniformly in [-1,1]
             U = np.random.uniform(-1.0, 1.0, size=(N,2))
@@ -215,14 +233,13 @@ class MPCCNode(Node):
     def __init__(self):
         super().__init__('mpcc_controller')
         # Parameters (with defaults)
-        self.declare_parameter('control_rate', 10.0)
-        self.declare_parameter('horizon', 8)
-        self.declare_parameter('dt', 0.12)
+        self.declare_parameter('horizon', 6)
+        self.declare_parameter('dt', 0.08)
         self.declare_parameter('wheelbase', 0.33)
-        self.declare_parameter('delta_max_deg', 25.0)
-        self.declare_parameter('a_max', 3.0)
-        self.declare_parameter('v_max', 4.0)
-        self.declare_parameter('num_samples', 400)
+        self.declare_parameter('delta_max_deg', 45.0)
+        self.declare_parameter('a_max', 1.0)
+        self.declare_parameter('v_max', 1.0)
+        self.declare_parameter('num_samples', 1)
 
         trajectory_path = os.path.join(
             get_package_share_directory('control_py'),
@@ -232,7 +249,6 @@ class MPCCNode(Node):
         self.get_logger().info(f'Loading trajectory from: {trajectory_path}')
         self.traj = load_waypoints_from_csv(trajectory_path) if trajectory_path else np.zeros((0,2))
         
-        self.control_rate = float(self.get_parameter('control_rate').get_parameter_value().double_value)
         self.N = int(self.get_parameter('horizon').get_parameter_value().integer_value)
         self.dt = float(self.get_parameter('dt').get_parameter_value().double_value)
         self.L = float(self.get_parameter('wheelbase').get_parameter_value().double_value)
@@ -271,7 +287,7 @@ class MPCCNode(Node):
         self.pub_throttle = self.create_publisher(Float32, '/autodrive/f1tenth_1/throttle_command', 10)
 
         # timer for control loop
-        self.timer = self.create_timer(1.0 / self.control_rate, self.control_loop)
+        self.timer = self.create_timer(0.02, self.control_loop)
         self.get_logger().info('MPCC controller node started')
 
     def ips_cb(self, msg: Point):
@@ -347,7 +363,7 @@ class MPCCNode(Node):
         self.pub_throttle.publish(msg_t)
 
         # debug logging
-        self.get_logger().debug(f'Published steer={steer_norm:.3f}, throttle={throttle_norm:.3f}, cost={best_cost:.2f}')
+        self.get_logger().info(f'Published steer={steer_norm:.3f}, throttle={throttle_norm:.3f}, cost={best_cost:.2f}')
 
 
 def main(args=None):
