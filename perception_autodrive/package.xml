@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>perception</name>
+  <name>perception_autodrive</name>
   <version>0.0.0</version>
   <description>Percetion package for the Roboracer AutoDRIVE project</description>
   <maintainer email="93693983+Lyhoh@users.noreply.github.com">lyh</maintainer>

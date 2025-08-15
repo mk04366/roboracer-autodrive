@@ -23,7 +23,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'read_sensor = perception.read_sensor:main',  # Sensor reading node
+            # 'read_sensor = perception.read_sensor:main',  # Sensor reading node
+            'detector_node = perception_autodrive.detector_node:main',  # Object detection node
         ],
     },
 )

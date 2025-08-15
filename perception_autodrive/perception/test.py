@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
-
+from ultralytics import YOLO
+import json
 
 i = 0
 def bi(img_path):
@@ -32,13 +33,43 @@ def bi(img_path):
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
-img1 = '/home/lyh/ros2_ws/camera_image.jpg'
+def yolov8(img_path):
+    # Load YOLOv8 model
+    model = YOLO('yolov8n.pt')  # n s m l x
+    # model = YOLO('yolov8n-seg.pt')  # Use the segmentation model for better results
+    # Read the image
+    img = cv2.imread(img_path)
+    # Perform inference
+    # results = model(img)
+    results = model(img, conf=0.1)
+    # Process results
+    output = []
+    for r in results:
+        for box in r.boxes:
+            cls = int(box.cls.item())
+            name = model.names[cls]
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            output.append({
+                'id': id(box),
+                'class': name,
+                'bbox': [x1, y1, x2, y2]
+            })
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(img, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    print(json.dumps(output, indent=2))
+    
+    cv2.imshow("YOLO Detection", img)
+    cv2.waitKey(1)
+
+
+img1 = '/home/lyh/ros2_ws/images/camera_image.jpg'
 # img2 = '/home/lyh/ros2_ws/front_camera_image.jpg'
+img3 = '/home/lyh/car.jpeg'
 
-bi(img1)
+# bi(img1)
 # bi(img2)
+yolov8(img1)
 
-# 等待按键并关闭窗口
 cv2.waitKey(0)
 cv2.destroyAllWindows()
     
