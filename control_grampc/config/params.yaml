@@ -1,0 +1,29 @@
+mpcc_controller:
+  ros__parameters:
+    # Timing
+    dt: 0.05 # [s] sampling time
+    horizon: 2.0 # [s] prediction horizon
+    Nhor: 20 # number of discretization steps
+
+    # Vehicle parameters
+    L: 0.33 # wheelbase [m]
+    delta_max: 0.4 # steering limit [rad]
+    a_min: 0.0 # forbid reverse acceleration
+    a_max: 3.0 # max accel [m/s^2]
+    v_max: 3.0 # max speed [m/s]
+    a_lat_max: 4.0 # max lateral accel [m/s^2]
+
+    # Cost weights
+    w_c: 5.0
+    w_l: 0.1
+    w_v: 1.0
+    w_u: 0.1
+    w_du: 0.1
+    w_term: 10.0
+
+    # Track parameters
+    kappa_gain: 0.5
+
+    # GRAMPC options
+    max_grad_iter: 20
+    tol_cost: 1e-3
