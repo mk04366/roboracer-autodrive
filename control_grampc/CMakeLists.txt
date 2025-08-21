@@ -11,6 +11,8 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ackermann_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 # === Link GRAMPC ===
 set(GRAMPC_DIR "/home/ammar/ros2_ws/GRAMPC_v2.2")
@@ -22,6 +24,11 @@ set(GRAMPC_LIB "${GRAMPC_DIR}/libs/libgrampc.a")
 include_directories(
   include
   ${GRAMPC_INCLUDE_DIR}
+)
+
+include_directories(
+  include
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 # === Libraries ===
@@ -41,18 +48,22 @@ add_executable(mpcc_grampc_node
 )
 
 target_link_libraries(mpcc_grampc_node
+  ${GRAMPC_LIB}
   mpcc_model
   path_utils
-  ${GRAMPC_LIB}
 )
 
 ament_target_dependencies(mpcc_grampc_node
   rclcpp
   std_msgs
+  nav_msgs
   geometry_msgs
+  ament_index_cpp
   sensor_msgs
   ackermann_msgs
 )
+
+ament_target_dependencies(path_utils Eigen3)
 
 # === Install ===
 install(TARGETS

@@ -1,207 +1,180 @@
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/laser_scan.hpp>
-#include <sensor_msgs/msg/imu.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <std_msgs/msg/float32.hpp>
-#include <ackermann_msgs/msg/ackermann_drive_stamped.hpp>
+#include "nav_msgs/msg/odometry.hpp"
+#include "ackermann_msgs/msg/ackermann_drive_stamped.hpp"
+#include "std_msgs/msg/float32.hpp"
 
-#include "grampc.h"
+#include "control_grampc/path_utils.hpp"
 #include "control_grampc/mpcc_model.h"
+extern "C" {
+#include "grampc.h"
+}
+#include "rclcpp/rclcpp.hpp"
 
-#include <vector>
-#include <cmath>
 #include <memory>
+#include <Eigen/Dense>
+#include <vector>
 #include <algorithm>
 
-// ---------- Reference context and interpolation ----------
-struct ReferenceContext
-{
-    std::vector<double> xs, ys, thetas, kappas, ss;
-};
+using std::placeholders::_1;
 
-// linear interpolation along arc length s
-static void ref_interp_bridge(double s, double *xr, double *yr, double *thr,
-                              double *kappa, void *ctx)
-{
-    auto *ref = reinterpret_cast<ReferenceContext *>(ctx);
-    if (ref->ss.empty())
-    {
-        *xr = 0;
-        *yr = 0;
-        *thr = 0;
-        *kappa = 0;
-        return;
-    }
-    if (s <= ref->ss.front())
-    {
-        *xr = ref->xs.front();
-        *yr = ref->ys.front();
-        *thr = ref->thetas.front();
-        *kappa = ref->kappas.front();
-        return;
-    }
-    if (s >= ref->ss.back())
-    {
-        *xr = ref->xs.back();
-        *yr = ref->ys.back();
-        *thr = ref->thetas.back();
-        *kappa = ref->kappas.back();
-        return;
-    }
-
-    // find segment
-    auto it = std::lower_bound(ref->ss.begin(), ref->ss.end(), s);
-    size_t idx = std::max<size_t>(1, it - ref->ss.begin()) - 1;
-    double s0 = ref->ss[idx], s1 = ref->ss[idx + 1];
-    double tau = (s - s0) / (s1 - s0);
-
-    *xr = (1 - tau) * ref->xs[idx] + tau * ref->xs[idx + 1];
-    *yr = (1 - tau) * ref->ys[idx] + tau * ref->ys[idx + 1];
-    *thr = (1 - tau) * ref->thetas[idx] + tau * ref->thetas[idx + 1];
-    *kappa = (1 - tau) * ref->kappas[idx] + tau * ref->kappas[idx + 1];
-}
-
-// ---------- Node ----------
 class MPCCGrampcNode : public rclcpp::Node
 {
 public:
-    MPCCGrampcNode() : Node("mpcc_controller")
+    MPCCGrampcNode()
+        : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), yaw_(0.0), v_(0.0), s_(0.0),
+          prev_steer_(0.0), prev_throttle_(0.0)
     {
-        // Publishers / Subscribers
-        sub_pose_ = create_subscription<geometry_msgs::msg::PoseStamped>(
-            "/autodrive/f1tenth_1/ips", 1,
-            std::bind(&MPCCGrampcNode::pose_cb, this, std::placeholders::_1));
-        sub_speed_ = create_subscription<std_msgs::msg::Float32>(
-            "/autodrive/f1tenth_1/speed", 1,
-            std::bind(&MPCCGrampcNode::speed_cb, this, std::placeholders::_1));
-        pub_drive_ = create_publisher<ackermann_msgs::msg::AckermannDriveStamped>(
-            "/autodrive/f1tenth_1/drive", 1);
+        // Load path from CSV
+        std::string csv_file = this->declare_parameter<std::string>("path_csv", "path.csv");
+        path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
 
-        // Fill reference track (dummy straight line for now)
-        for (int i = 0; i < 200; i++)
-        {
-            double s = 0.1 * i;
-            ref_ctx_.ss.push_back(s);
-            ref_ctx_.xs.push_back(s);
-            ref_ctx_.ys.push_back(0.0);
-            ref_ctx_.thetas.push_back(0.0);
-            ref_ctx_.kappas.push_back(0.0);
-        }
+        // ROS interfaces
+        odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            "/autodrive/f1tenth_1/odom", 10, std::bind(&MPCCGrampcNode::odomCallback, this, _1));
 
-        // Context
+        drive_pub_ = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>("/drive", 10);
+        throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
+        steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
+
+        timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(50), std::bind(&MPCCGrampcNode::controlLoop, this));
+
+        // GRAMPC setup (v2.2 API) with user context
         ctx_.L = 0.33;
-        ctx_.delta_max = 0.4;
-        ctx_.a_min = 0.0; // forbid reverse
-        ctx_.a_max = 3.0;
-        ctx_.v_max = 3.0;
-        ctx_.a_lat_max = 4.0;
-        ctx_.w_c = 5.0;
-        ctx_.w_l = 0.1;
-        ctx_.w_v = 1.0;
-        ctx_.w_u = 0.1;
-        ctx_.w_du = 0.1;
-        ctx_.w_term = 10.0;
-        ctx_.kappa_gain = 0.5;
-        ctx_.ref_interp = ref_interp_bridge;
-        ctx_.ref_ctx = &ref_ctx_;
-        ctx_.u_prev[0] = ctx_.u_prev[1] = 0.0;
+        ctx_.delta_max = 0.8;      // ~45.8 deg steering (increase authority)
+        ctx_.a_min = 0.0;          // avoid reverse accel
+        ctx_.a_max = 2.5;          // limit longitudinal accel
+        ctx_.v_max = 2.5;          // cap speed
+        ctx_.a_lat_max = 2.0;      // lateral accel cap
+        ctx_.w_xy = 80.0;          // position weight
+        ctx_.w_yaw = 8.0;          // heading weight
+        ctx_.w_v = 2.0;            // speed tracking weight
+        ctx_.w_u = 0.15;           // input magnitude
+        ctx_.w_du = 1.0;           // input rate
+        ctx_.w_term = 50.0;        // terminal weight
+        ctx_.u_prev[0] = 0.0; ctx_.u_prev[1] = 0.0;
 
-        // Initial state [x,y,theta,v,s]
-        std::vector<double> x0 = {0, 0, 0, 0, 0};
+        grampc_ = nullptr;
+        grampc_init(&grampc_, (void*)&ctx_);
 
-        // GRAMPC setup
-        opt_ = grampc_init();
-        grampc_setparam_double(opt_, "Thor", 2.0); // horizon [s]
-        grampc_setparam_int(opt_, "Nhor", 20);
-        grampc_setparam_double(opt_, "dt", 0.05); // sampling time
-        grampc_setparam_double(opt_, "MaxGradIter", 20);
-        grampc_setparam_double(opt_, "TolCost", 1e-3);
+        grampc_->param->Nx = 4;  // [x, y, yaw, v]
+        grampc_->param->Nu = 2;  // [steer, throttle]
 
-        // Dimensions: nx=5, nu=2
-        grampc_alloc_structure(opt_, 5, 2, 0, 0, 0, 0);
-        grampc_setfct_ptrs(opt_, mpcc_dynamics,
-                           mpcc_stage_cost,
-                           mpcc_terminal_cost);
+        // Horizon and step sizes
+        grampc_->param->Thor = 0.6;   // shorter horizon -> faster solve
+        grampc_->param->dt = 0.05;
 
-        // Set bounds
+        // Initial guess and fast options
+        grampc_->opt->Nhor = 8;        // fewer shooting intervals
+        grampc_->opt->MaxGradIter = 4; // fewer gradient iterations per tick
+        grampc_->opt->Integrator = 0;  // Euler (fastest)
+        grampc_->opt->LineSearchType = 0; // explicit line search
+        grampc_->opt->TimeDiscretization = 0; // equidistant
+
+        // Input bounds via API
         double umin[2] = {-ctx_.delta_max, ctx_.a_min};
-        double umax[2] = {ctx_.delta_max, ctx_.a_max};
-        grampc_setparam_doublearray(opt_, "umin", umin, 2);
-        grampc_setparam_doublearray(opt_, "umax", umax, 2);
-
-        // Set initial state
-        grampc_setstate(opt_, x0.data());
-
-        // Attach user context
-        grampc_set_userparam(opt_, &ctx_);
-
-        // Timer for control loop
-        timer_ = create_wall_timer(
-            std::chrono::milliseconds(50),
-            std::bind(&MPCCGrampcNode::control_loop, this));
+        double umax[2] = { ctx_.delta_max, 0.30}; // slightly lower throttle cap
+        grampc_setparam_real_vector(grampc_, "umin", umin);
+        grampc_setparam_real_vector(grampc_, "umax", umax);
     }
 
 private:
-    void pose_cb(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+    void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
-        pose_ = *msg;
-        pose_received_ = true;
-    }
-    void speed_cb(const std_msgs::msg::Float32::SharedPtr msg)
-    {
-        speed_ = msg->data;
+        x_ = msg->pose.pose.position.x;
+        y_ = msg->pose.pose.position.y;
+
+        double qw = msg->pose.pose.orientation.w;
+        double qx = msg->pose.pose.orientation.x;
+        double qy = msg->pose.pose.orientation.y;
+        double qz = msg->pose.pose.orientation.z;
+        yaw_ = std::atan2(2.0 * (qw * qz + qx * qy),
+                          1.0 - 2.0 * (qy * qy + qz * qz));
+
+        v_ = std::sqrt(std::pow(msg->twist.twist.linear.x, 2) +
+                       std::pow(msg->twist.twist.linear.y, 2));
     }
 
-    void control_loop()
+    void controlLoop()
     {
-        if (!pose_received_)
+        if (!path_ || path_->total_length() < 1e-3)
             return;
 
-        // current state
-        double x[5];
-        x[0] = pose_.pose.position.x;
-        x[1] = pose_.pose.position.y;
-        double yaw = 2 * atan2(pose_.pose.orientation.z,
-                               pose_.pose.orientation.w);
-        x[2] = yaw;
-        x[3] = speed_;
-        x[4] += speed_ * 0.05; // progress (naive)
+        // Find target point along path
+        double lookahead = 2.0;
+        double s_target = std::min(s_ + lookahead, path_->total_length());
 
-        grampc_setstate(opt_, x);
+        Eigen::Vector2d xy = path_->interpolate(s_target);
+        double yaw_ref = path_->heading(s_target);
+        double kappa = path_->curvature(s_target);
 
-        // Run solver
-        grampc_run(opt_);
+        // Prepare state vector
+        std::vector<double> x0 = {x_, y_, yaw_, v_};
+        std::vector<double> u0 = {0.0, 0.0};
 
-        // get u0
-        double u[2];
-        grampc_getinput(opt_, u);
-        ctx_.u_prev[0] = u[0];
-        ctx_.u_prev[1] = u[1];
+        grampc_setparam_real_vector(grampc_, "x0", x0.data());
+        grampc_setparam_real_vector(grampc_, "u0", u0.data());
 
-        // publish
-        ackermann_msgs::msg::AckermannDriveStamped cmd;
-        cmd.header.stamp = now();
-        cmd.drive.steering_angle = u[0];
-        cmd.drive.acceleration = u[1];
-        pub_drive_->publish(cmd);
+        // Reference (goal point, yaw, and curvature-based speed)
+        double v_curve = std::sqrt(std::max(0.0, ctx_.a_lat_max / std::max(std::abs(kappa), 1e-3)));
+        double v_ref = std::clamp(v_curve * 0.9, 0.6, ctx_.v_max);
+        std::vector<double> xref = {xy.x(), xy.y(), yaw_ref, v_ref};
+        grampc_setparam_real_vector(grampc_, "xdes", xref.data());
+
+        // Run MPC step
+        grampc_run(grampc_);
+
+        double steer_cmd = grampc_->sol->unext[0];
+        double throttle_cmd = grampc_->sol->unext[1];
+
+        // Post-saturation for safety and requested behavior
+        steer_cmd = std::clamp(steer_cmd, -0.6, 0.6);
+        throttle_cmd = std::clamp(throttle_cmd, 0.0, 0.4);
+        // Slightly reduce throttle overall
+        throttle_cmd *= 0.85;
+
+        // Update previous control for rate penalty
+        ctx_.u_prev[0] = prev_steer_ = steer_cmd;
+        ctx_.u_prev[1] = prev_throttle_ = throttle_cmd;
+
+        // Publish commands
+        auto drive_msg = ackermann_msgs::msg::AckermannDriveStamped();
+        drive_msg.header.stamp = this->now();
+        drive_msg.drive.steering_angle = steer_cmd;
+        drive_msg.drive.speed = throttle_cmd;
+        drive_pub_->publish(drive_msg);
+
+        auto s_msg = std_msgs::msg::Float32();
+        s_msg.data = static_cast<float>(steer_cmd);
+        steering_pub_->publish(s_msg);
+
+        auto t_msg = std_msgs::msg::Float32();
+        t_msg.data = static_cast<float>(throttle_cmd);
+        throttle_pub_->publish(t_msg);
+
+        // Update arc length (progress along path)
+        s_ = std::min(s_target, path_->total_length());
     }
 
     // ROS
-    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_pose_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_speed_;
-    rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr pub_drive_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+    rclcpp::Publisher<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr drive_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
 
-    // state
-    geometry_msgs::msg::PoseStamped pose_;
-    bool pose_received_ = false;
-    double speed_ = 0.0;
+    // State
+    double x_, y_, yaw_, v_, s_;
+
+    // Path
+    std::shared_ptr<mpcc::Path> path_;
 
     // GRAMPC
-    typeGRAMPC *opt_;
+    typeGRAMPC *grampc_;
+
+    // User context and previous control for rate penalties
     mpcc_ctx_t ctx_;
-    ReferenceContext ref_ctx_;
-    double last_s_ = 0.0;
+    double prev_steer_;
+    double prev_throttle_;
 };
 
 int main(int argc, char **argv)

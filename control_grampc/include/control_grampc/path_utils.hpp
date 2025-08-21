@@ -1,21 +1,27 @@
 #pragma once
 #include <vector>
+#include <Eigen/Dense>
 #include <string>
 
-namespace path {
-struct RefPoint {
-  double s;   // arc length [m]
-  double x;   // [m]
-  double y;   // [m]
-  double th;  // tangent heading [rad]
-  double k;   // curvature [1/m]
+namespace mpcc
+{
+
+class Path
+{
+public:
+    Path(const std::vector<Eigen::Vector2d> &waypoints);
+
+    Eigen::Vector2d interpolate(double s) const;
+    double curvature(double s) const;
+    double heading(double s) const;
+    double total_length() const;
+
+private:
+    std::vector<Eigen::Vector2d> waypoints_;
+    double total_length_;
 };
 
-// Load CSV with columns: x,y (centerline). Builds arc-length and finite-diff theta/curvature.
-std::vector<RefPoint> load_centerline_csv(const std::string& csv_path);
+// Utility: load waypoints from CSV file
+Path load_path_from_csv(const std::string &filename);
 
-// Linear interpolation lookup. Assumes s within [0, s_end]. If closed track, wrap.
-void interp(const std::vector<RefPoint>& ref, double s, double& xr, double& yr, double& thr, double& kappa);
-
-double wrap_angle(double a);
-}
+} // namespace mpcc

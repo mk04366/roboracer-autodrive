@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, ExecuteProcess
+from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
@@ -20,12 +20,13 @@ def generate_launch_description():
     )
 
     control_launch_path = os.path.join(
-        get_package_share_directory('control_py'),
+        get_package_share_directory('control_grampc'),
         'launch',
         # 'pid_controller_launch.py'
         # 'ftg_controller_launch.py'
         # 'stanley_controller_launch.py'
-        'mpcc_launch.py' 
+        # 'mpcc_launch.py' 
+        'mpcc_grampc.launch.py'
     )
 
     localization_launch_path = os.path.join(
@@ -34,10 +35,15 @@ def generate_launch_description():
         'amcl_launch.py'
     )
 
-    # Run the XML launch file via shell command
-    foxglove_process = ExecuteProcess(
-        cmd=['ros2', 'launch', 'foxglove_bridge', 'foxglove_bridge_launch.xml', 'port:=8765'],
-        output='screen'
+    # Include foxglove_bridge launch directly
+    foxglove_launch_path = os.path.join(
+        get_package_share_directory('foxglove_bridge'),
+        'launch',
+        'foxglove_bridge.launch.py'
+    )
+    foxglove_include = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(foxglove_launch_path),
+        launch_arguments={'port': '8765'}.items()
     )
 
     initial_pose_node = Node(
@@ -60,7 +66,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(waypoints_loader_launch_path)
         ),
-        foxglove_process,
+        foxglove_include,
         initial_pose_node
     ])
 
