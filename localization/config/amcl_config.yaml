@@ -1,0 +1,19 @@
+amcl:
+  ros__parameters:
+    use_sim_time: true
+    alpha1: 0.02 # rot_noise_from_rot
+    alpha2: 0.02 # rot_noise_from_trans
+    alpha3: 0.05 # trans_noise_from_trans
+    alpha4: 0.02 # trans_noise_from_rot
+    update_min_d: 0.05
+    update_min_a: 0.10
+    min_particles: 100
+    max_particles: 2000
+    kld_err: 0.05
+    laser_min_range: 0.15
+    laser_max_range: 12.0
+    base_frame_id: "f1tenth_1"
+    odom_frame_id: "odom"
+    global_frame_id: "map"
+    scan_topic: "/autodrive/f1tenth_1/lidar"
+    tf_broadcast: true

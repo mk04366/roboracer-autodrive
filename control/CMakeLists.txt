@@ -14,6 +14,9 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(ackermann_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # Include the include/ directory
 include_directories(include)
@@ -23,6 +26,15 @@ add_executable(pid_controller_node
   src/pid_controller_node.cpp
 )
 
+add_executable(ftg_controller_node
+  src/ftg_controller_node.cpp
+)
+
+add_executable(stanley_controller_node
+  src/stanley_node.cpp
+  src/stanley_controller.cpp
+)
+
 # Link dependencies
 ament_target_dependencies(pid_controller_node
   rclcpp
@@ -30,8 +42,27 @@ ament_target_dependencies(pid_controller_node
   sensor_msgs
 )
 
+ament_target_dependencies(ftg_controller_node
+  rclcpp
+  std_msgs
+  sensor_msgs
+)
+
+ament_target_dependencies(stanley_controller_node
+  rclcpp
+  nav_msgs
+  ackermann_msgs
+  visualization_msgs
+)
+
 # Install target
 install(TARGETS pid_controller_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS ftg_controller_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS stanley_controller_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

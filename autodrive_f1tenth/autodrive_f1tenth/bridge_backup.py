@@ -256,40 +256,73 @@ def connect(sid, environ):
     print("Connected!")
 
 # Registering "Bridge" event handler for the server
+frame_counter = 0
+missing_count = {}
 @sio.on('Bridge')
+
 def bridge(sid, data):
+
     # Global declarations
     global autodrive, autodrive_bridge, cv_bridge, publishers, transform_broadcaster
-
+    global frame_counter, missing_count
+    
     # Wait for data to become available
     if data:
+        # 打印所有字段名和字段值（前30字符）
+        expected_keys = [
+                "V1 Throttle", "V1 Steering", "V1 Speed", "V1 Encoder Angles", "V1 Position",
+                "V1 Orientation Quaternion", "V1 Angular Velocity", "V1 Linear Acceleration",
+                "V1 LIDAR Scan Rate", "V1 LIDAR Range Array", "V1 Front Camera Image",
+                "V1 Lap Count", "V1 Lap Time", "V1 Last Lap Time", "V1 Best Lap Time", "V1 Collisions"
+            ]
+
+        missing_keys = [key for key in expected_keys if key not in data]
+        for key in missing_keys:
+            missing_count[key] = missing_count.get(key, 0) + 1
+
+        frame_counter += 1
+        if frame_counter % 100 == 0:
+            print("[debug] Missing count per 100 frames:", missing_count)
+            missing_count = {}
         ########################################################################
         # INCOMMING DATA
         ########################################################################
         # Actuator feedbacks
-        autodrive.throttle = float(data["V1 Throttle"])
-        autodrive.steering = float(data["V1 Steering"])
+        autodrive.throttle = float(data.get("V1 Throttle",0.0))
+        autodrive.steering = float(data.get("V1 Steering",0.0))
         # Speed
-        autodrive.speed = float(data["V1 Speed"])
+        autodrive.speed = float(data.get("V1 Speed",0.0))
         # Wheel encoders
-        autodrive.encoder_angles = np.fromstring(data["V1 Encoder Angles"], dtype=float, sep=' ')
+        autodrive.encoder_angles = np.fromstring(data.get("V1 Encoder Angles",""), dtype=float, sep=' ')
         # IPS
-        autodrive.position = np.fromstring(data["V1 Position"], dtype=float, sep=' ')
+        autodrive.position = np.fromstring(data.get("V1 Position",""), dtype=float, sep=' ')
         # IMU
-        autodrive.orientation_quaternion = np.fromstring(data["V1 Orientation Quaternion"], dtype=float, sep=' ')
-        autodrive.angular_velocity = np.fromstring(data["V1 Angular Velocity"], dtype=float, sep=' ')
-        autodrive.linear_acceleration = np.fromstring(data["V1 Linear Acceleration"], dtype=float, sep=' ')
+        autodrive.orientation_quaternion = np.fromstring(data.get("V1 Orientation Quaternion",""), dtype=float, sep=' ')
+        autodrive.angular_velocity = np.fromstring(data.get("V1 Angular Velocity",""), dtype=float, sep=' ')
+        autodrive.linear_acceleration = np.fromstring(data.get("V1 Linear Acceleration",""), dtype=float, sep=' ')
+       
+
         # LIDAR
-        autodrive.lidar_scan_rate = float(data["V1 LIDAR Scan Rate"])
-        autodrive.lidar_range_array = np.fromstring(gzip.decompress(base64.b64decode(data["V1 LIDAR Range Array"])).decode('utf-8'), sep='\n')
+        autodrive.lidar_scan_rate = float(data.get("V1 LIDAR Scan Rate", 0.0))
+
+        lidar_raw = data.get("V1 LIDAR Range Array", "")
+        try:
+            if lidar_raw:
+                #print("[debug] Raw lidar data preview:", repr(lidar_raw[:80]))
+                autodrive.lidar_range_array = np.fromstring(lidar_raw, dtype=float, sep=' ')
+            else:
+                autodrive.lidar_range_array = np.zeros(1080)
+        except Exception as e:
+            #print("[autodrive_bridge] LIDAR parse error:", e)
+            autodrive.lidar_range_array = np.zeros(1080)
         # Cameras
-        autodrive.front_camera_image = np.asarray(Image.open(BytesIO(base64.b64decode(data["V1 Front Camera Image"]))))
+        autodrive.front_camera_image = np.asarray(Image.open(BytesIO(base64.b64decode(data.get("V1 Front Camera Image","")))))
         # Lap data
-        autodrive.lap_count = int(float(data["V1 Lap Count"]))
-        autodrive.lap_time = float(data["V1 Lap Time"])
-        autodrive.last_lap_time = float(data["V1 Last Lap Time"])
-        autodrive.best_lap_time = float(data["V1 Best Lap Time"])
-        autodrive.collision_count = int(float(data["V1 Collisions"]))
+        autodrive.lap_count = int(float(data.get("V1 Lap Count",0)))
+        autodrive.lap_time = float(data.get("V1 Lap Time",0.0))
+        autodrive.last_lap_time = float(data.get("V1 Last Lap Time",0.0))
+        autodrive.best_lap_time = float(data.get("V1 Best Lap Time",0.0))
+        autodrive.collision_count = int(float(data.get("V1 Collisions",0)))
 
         # Actuator feedbacks
         publish_actuator_feedbacks(autodrive.throttle, autodrive.steering)
@@ -302,9 +335,7 @@ def bridge(sid, data):
         # IMU
         publish_imu_data(autodrive.orientation_quaternion, autodrive.angular_velocity, autodrive.linear_acceleration)
         # Cooordinate transforms
-        # Coordinate transforms
-        broadcast_transform(msg_transform, transform_broadcaster, "odom", "map", autodrive.position, autodrive.orientation_quaternion)
-        broadcast_transform(msg_transform, transform_broadcaster, "f1tenth_1", "odom", np.zeros(3), np.array([0.0, 0.0, 0.0, 1.0]))
+        broadcast_transform(msg_transform, transform_broadcaster, "f1tenth_1", "map", autodrive.position, autodrive.orientation_quaternion) # Vehicle frame defined at center of rear axle
         broadcast_transform(msg_transform, transform_broadcaster, "left_encoder", "f1tenth_1", np.asarray([0.0, 0.12, 0.0]), quaternion_from_euler(0.0, 120*autodrive.encoder_angles[0]%6.283, 0.0))
         broadcast_transform(msg_transform, transform_broadcaster, "right_encoder", "f1tenth_1", np.asarray([0.0, -0.12, 0.0]), quaternion_from_euler(0.0, 120*autodrive.encoder_angles[1]%6.283, 0.0))
         broadcast_transform(msg_transform, transform_broadcaster, "ips", "f1tenth_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
@@ -386,7 +417,7 @@ def main():
         durability=QoSDurabilityPolicy.VOLATILE, # Volatile durability with no attempt made to persist samples
         reliability=QoSReliabilityPolicy.RELIABLE, # Reliable (not best effort) communication to guarantee that samples are delivered
         history=QoSHistoryPolicy.KEEP_LAST, # Keep/store only up to last N samples
-        depth=1 # Queue (buffer) size/depth (only honored if the “history” policy was set to “keep last”)
+        depth=1 # Queue (buffer) size/depth (only honored if the \u201chistory\u201d policy was set to \u201ckeep last\u201d)
         )
     cv_bridge = CvBridge() # ROS bridge object for opencv library to handle image data
     transform_broadcaster = tf2_ros.TransformBroadcaster(autodrive_bridge) # Initialize transform broadcaster
