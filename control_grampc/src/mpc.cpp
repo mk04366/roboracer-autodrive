@@ -155,23 +155,14 @@ namespace control_grampc
         // Adjust horizon only through exposed fields (GRAMPC has no setter for Nhor); safe to modify opt->Nhor before first
         // run
 
-        // TEST: Try reduced horizon to see if it stabilizes
-        static int horizon_test_counter = 0;
-        horizon_test_counter++;
-        bool use_short_horizon = (horizon_test_counter % 100 < 20); // Use short horizon every 100 calls for 20 iterations
-
-        int test_horizon = use_short_horizon ? 10 : horizon_;
-        grampc_->opt->Nhor = 10;
-        grampc_->param->Thor = 10 * dt_;
+        // Use reduced horizon for better convergence - TEST
+        int test_horizon = 10;  // Much shorter horizon to test if that helps
+        grampc_->opt->Nhor = test_horizon;
+        grampc_->param->Thor = test_horizon * dt_;
         grampc_->param->dt = dt_;
 
-        if (use_short_horizon && node_)
-        {
-            RCLCPP_WARN(node_->get_logger(), "TESTING: Using reduced horizon Nhor=%d (normal=%d)", test_horizon, horizon_);
-        }
-
         if (node_)
-            RCLCPP_INFO(node_->get_logger(), "Post-init dims Nx=%d Nu=%d Nhor=%d", Nx, Nu, grampc_->opt->Nhor);
+            RCLCPP_WARN(node_->get_logger(), "TESTING: Using short horizon Nhor=%d for better convergence", test_horizon);
 
         // Bounds & initial values
         double umin[2] = {0.0, -0.4};
@@ -186,22 +177,23 @@ namespace control_grampc
         grampc_setparam_real_vector(grampc_, "u0", u0);
         grampc_setparam_real_vector(grampc_, "xdes", xdes);
 
-        // Set more robust solver settings for convergence
-        grampc_setopt_real(grampc_, "LineSearchMin", 1e-8); // Very small minimum step
-        grampc_setopt_string(grampc_, "ShiftControl", "on");
-        grampc_setopt_int(grampc_, "MaxGradIter", 100);                 // Many more gradient iterations
-        grampc_setopt_int(grampc_, "MaxMultIter", 1);                   // Minimal multiplier iterations
-        grampc_setopt_real(grampc_, "ConvergenceGradientRelTol", 1e-2); // Very relaxed convergence
-        grampc_setopt_real(grampc_, "MultiplierMax", 1e3);              // Higher multiplier limit
-
-        grampc_setopt_real(grampc_, "LineSearchMax", 2.0);
-        grampc_setopt_real(grampc_, "LineSearchInit", 0.1);
+        // Set more conservative solver settings to avoid status 4
+        grampc_setopt_real(grampc_, "LineSearchMin", 1e-12);            // Much smaller minimum step
+        grampc_setopt_real(grampc_, "LineSearchMax", 0.1);              // Much smaller maximum step
+        grampc_setopt_real(grampc_, "LineSearchInit", 0.01);            // Very small initial step
         grampc_setopt_string(grampc_, "LineSearchExpAutoFallback", "on");
+        grampc_setopt_string(grampc_, "ShiftControl", "on");
+        
+        grampc_setopt_int(grampc_, "MaxGradIter", 5);                   // Fewer gradient iterations
+        grampc_setopt_int(grampc_, "MaxMultIter", 1);                   // Minimal multiplier iterations
+        grampc_setopt_real(grampc_, "ConvergenceGradientRelTol", 1e-1); // Very relaxed convergence
+        grampc_setopt_real(grampc_, "MultiplierMax", 10.0);             // Lower multiplier limit
 
-        // Penalty tuning
-        grampc_setopt_real(grampc_, "PenaltyMin", 1e-4);
-        grampc_setopt_real(grampc_, "PenaltyMax", 1e3);
-        grampc_setopt_real(grampc_, "PenaltyIncreaseFactor", 2.0);
+        // Very conservative penalty tuning to avoid numerical issues
+        grampc_setopt_real(grampc_, "PenaltyMin", 1e-1);
+        grampc_setopt_real(grampc_, "PenaltyMax", 10.0);
+        grampc_setopt_real(grampc_, "PenaltyIncreaseFactor", 1.1);
+        
         solver_initialized_ = true;
         if (node_)
             RCLCPP_INFO(node_->get_logger(), "GRAMPC init OK Nx=%d Nu=%d Nhor=%d Thor=%.3f dt=%.3f", Nx, Nu, grampc_->opt->Nhor,
@@ -240,24 +232,21 @@ namespace control_grampc
 
         grampc_setparam_real_vector(grampc_, "x0", x0.data());
 
-        // Improved reference: average a window ahead within lookahead time
+        // Improved reference: use lookahead for better tracking
         if (!reference_trajectory.empty())
         {
-            // TEST: Try trivial reference (same as current state) to debug solver
-            static int test_counter = 0;
-            test_counter++;
-            bool use_trivial_ref = (test_counter % 50 < 10); // Use trivial ref every 50 calls for 10 iterations
-
-            if (use_trivial_ref)
-            {
-                // Trivial reference: same as current state but move forward
-                double xdes_trivial[4] = {current_state.x(), current_state.y(), current_state.theta(), 1.0};
+            // TEST: Try trivial reference to isolate GRAMPC issues
+            static int debug_counter = 0;
+            debug_counter++;
+            bool use_trivial = (debug_counter % 20 < 5); // Use trivial reference 25% of the time for testing
+            
+            if (use_trivial) {
+                // Trivial reference: just maintain current state with slight forward motion
+                double xdes_trivial[4] = {current_state.x() + 0.1, current_state.y(), current_state.theta(), 1.0};
                 grampc_setparam_real_vector(grampc_, "xdes", xdes_trivial);
-                RCLCPP_WARN(node_->get_logger(), "TESTING: Using trivial reference (same position, v=1.0)");
-            }
-            else
-            {
-                // Use a single lookahead state instead of averaging (provides curvature-induced heading error)
+                RCLCPP_WARN(node_->get_logger(), "DEBUG: Using trivial reference - should easily converge");
+            } else {
+                // Use a single lookahead state for proper curvature tracking
                 int look_idx = static_cast<int>(ref_lookahead_sec_ / dt_);
                 if (look_idx >= static_cast<int>(reference_trajectory.size()))
                 {
@@ -270,9 +259,8 @@ namespace control_grampc
                 grampc_setparam_real_vector(grampc_, "xdes", xdes_arr);
             }
 
-            // Provide better initial control guess when far from reference (only for normal references)
-            if (!use_trivial_ref && !reference_trajectory.empty())
-            {
+            // Provide better initial control guess when far from reference
+            if (!use_trivial) {
                 int look_idx = static_cast<int>(ref_lookahead_sec_ / dt_);
                 if (look_idx >= static_cast<int>(reference_trajectory.size()))
                 {
@@ -281,27 +269,35 @@ namespace control_grampc
                 if (look_idx < 0)
                     look_idx = 0;
                 const State &r = reference_trajectory[look_idx];
-
+                
                 double dx = r.x() - current_state.x();
                 double dy = r.y() - current_state.y();
                 double dist_error = std::sqrt(dx * dx + dy * dy);
 
-                if (dist_error > 2.0)
+                if (dist_error > 1.5)
                 {
                     // Calculate desired heading and provide steering hint
                     double desired_heading = std::atan2(dy, dx);
                     double heading_error = std::atan2(std::sin(desired_heading - current_state.theta()),
                                                       std::cos(desired_heading - current_state.theta()));
 
-                    double vel_hint = std::min(3.0, std::max(1.0, dist_error * 0.5));
+                    double vel_hint = std::min(3.0, std::max(1.0, r.v()));
                     double steer_hint = std::max(-0.3, std::min(0.3, heading_error * 0.5));
 
                     double u0_hint[2] = {vel_hint, steer_hint};
                     grampc_setparam_real_vector(grampc_, "u0", u0_hint);
 
-                    RCLCPP_DEBUG(node_->get_logger(), "Far from reference (%.2fm), using control hint: v=%.2f, steer=%.2f",
-                                 dist_error, vel_hint, steer_hint);
+                    RCLCPP_DEBUG(node_->get_logger(), "Using control hint: v=%.2f, steer=%.2f", vel_hint, steer_hint);
+                } else if (!solved_trajectory_.empty()) {
+                    // Use previous solution as warm start
+                    double u0_warm[2] = {solved_trajectory_[0].velocity(), solved_trajectory_[0].steeringAngle()};
+                    grampc_setparam_real_vector(grampc_, "u0", u0_warm);
+                    RCLCPP_DEBUG(node_->get_logger(), "Using warm start from previous solution");
                 }
+            } else {
+                // For trivial reference, use simple control guess
+                double u0_simple[2] = {1.0, 0.0};
+                grampc_setparam_real_vector(grampc_, "u0", u0_simple);
             }
         }
         else
@@ -314,12 +310,6 @@ namespace control_grampc
         // Solve MPC problem
         RCLCPP_DEBUG(node_->get_logger(), "Running GRAMPC solver...");
         grampc_run(grampc_);
-
-        RCLCPP_WARN(node_->get_logger(), "GRAMPC: status=%d, iter=%d, cfct=%.3e, J=%.3f", grampc_->sol->status,
-                    grampc_->sol->iter, grampc_->sol->cfct, grampc_->sol->J);
-
-        // Check solver status
-        RCLCPP_DEBUG(node_->get_logger(), "GRAMPC solver status: %d", grampc_->sol->status);
 
         // Calculate distance to reference for debugging
         double dist_error = 0.0;
@@ -335,132 +325,110 @@ namespace control_grampc
         {
             has_solution_ = true;
             extractSolution();
-            RCLCPP_INFO(node_->get_logger(), "GRAMPC SUCCESS: dist=%.2fm, status=%d, iter=%d, cfct=%.6f", dist_error,
-                        grampc_->sol->status, *(grampc_->sol->iter), grampc_->sol->cfct);
+            RCLCPP_INFO(node_->get_logger(), "GRAMPC SUCCESS: status=%d, iter=%d, cfct=%.2e, J=%.3f, dist=%.2fm", 
+                       grampc_->sol->status, *(grampc_->sol->iter), grampc_->sol->cfct, *(grampc_->sol->J), dist_error);
         }
         else
         {
             has_solution_ = false;
-
-            // Comprehensive debug information
-            RCLCPP_ERROR(node_->get_logger(), "GRAMPC DEBUG: status=%d, iter=%d, cfct=%.6f, dist=%.2fm", grampc_->sol->status,
-                         *(grampc_->sol->iter), grampc_->sol->cfct, dist_error);
-
-            // Decode status for better understanding
+            
+            // COMPREHENSIVE DEBUG OUTPUT as requested
+            RCLCPP_ERROR(node_->get_logger(), "GRAMPC FAILURE ANALYSIS:");
+            RCLCPP_ERROR(node_->get_logger(), "  status=%d, iter=%d, cfct=%.6e, J=%.6f", 
+                        grampc_->sol->status, *(grampc_->sol->iter), grampc_->sol->cfct, *(grampc_->sol->J));
+            RCLCPP_ERROR(node_->get_logger(), "  dist_to_ref=%.3fm", dist_error);
+            
+            // Decode status meaning
             std::string status_meaning;
-            switch (grampc_->sol->status)
-            {
-            case 4:
-                status_meaning = "STATUS_LINESEARCH_MIN (line search hit minimum step)";
-                break;
-            case 8:
-                status_meaning = "STATUS_LINESEARCH_MAX (line search hit maximum step)";
-                break;
-            case 12:
-                status_meaning = "STATUS_LINESEARCH_MIN + STATUS_LINESEARCH_MAX";
-                break;
-            case 1:
-                status_meaning = "STATUS_MAXITER (max iterations reached)";
-                break;
-            case 2:
-                status_meaning = "STATUS_CONVERGED (converged)";
-                break;
-            default:
-                status_meaning = "Unknown status";
-                break;
+            switch(grampc_->sol->status) {
+                case 1: status_meaning = "MAX_ITERATIONS_REACHED"; break;
+                case 2: status_meaning = "CONVERGED"; break;
+                case 4: status_meaning = "LINE_SEARCH_MIN (optimization stuck at minimum step)"; break;
+                case 8: status_meaning = "LINE_SEARCH_MAX (optimization hit maximum step)"; break;
+                case 12: status_meaning = "LINE_SEARCH_MIN+MAX (both limits hit)"; break;
+                default: status_meaning = "UNKNOWN_STATUS"; break;
+            }
+            RCLCPP_ERROR(node_->get_logger(), "  Status meaning: %s", status_meaning.c_str());
+            
+            // Print current state and reference for analysis
+            RCLCPP_ERROR(node_->get_logger(), "  Current: [x=%.3f, y=%.3f, θ=%.3f, v=%.3f]", 
+                        x0[0], x0[1], x0[2], x0[3]);
+            if (!reference_trajectory.empty()) {
+                const State& ref = reference_trajectory[0];
+                RCLCPP_ERROR(node_->get_logger(), "  Reference: [x=%.3f, y=%.3f, θ=%.3f, v=%.3f]", 
+                           ref.x(), ref.y(), ref.theta(), ref.v());
+                double dx = ref.x() - x0[0];
+                double dy = ref.y() - x0[1];
+                double dtheta = ref.theta() - x0[2];
+                double dv = ref.v() - x0[3];
+                RCLCPP_ERROR(node_->get_logger(), "  Error: [Δx=%.3f, Δy=%.3f, Δθ=%.3f, Δv=%.3f]", 
+                           dx, dy, dtheta, dv);
             }
 
-            RCLCPP_ERROR(node_->get_logger(), "Status meaning: %s", status_meaning.c_str());
-
-            // Different logging based on distance
-            if (dist_error < 1.0)
-            {
-                RCLCPP_ERROR(node_->get_logger(), "GRAMPC FAILS even when CLOSE: dist=%.2fm", dist_error);
-            }
-            else
-            {
-                RCLCPP_WARN(node_->get_logger(), "GRAMPC fails when far from reference: dist=%.2fm", dist_error);
-            }
-
-            // Print additional debug information
-            RCLCPP_WARN(node_->get_logger(), "Current state: [%.3f, %.3f, %.3f, %.3f]", x0[0], x0[1], x0[2], x0[3]);
-            if (!reference_trajectory.empty())
-            {
-                const State &ref = reference_trajectory[0];
-                RCLCPP_WARN(node_->get_logger(), "Reference: [%.3f, %.3f, %.3f, %.3f]", ref.x(), ref.y(), ref.theta(), ref.v());
-            }
-
-            // Special case: if very close to reference, use pure pursuit
-            if (!reference_trajectory.empty() && dist_error < 0.3)
-            {
-                const State &ref = reference_trajectory[0];
-                double vel_cmd = ref.v() * 0.8; // Slightly slower than reference
-                double steer_cmd = 0.0;         // No steering correction needed when very close
-
-                solved_trajectory_.clear();
-                solved_trajectory_.emplace_back(vel_cmd, steer_cmd);
-
-                RCLCPP_INFO(node_->get_logger(), "Pure pursuit (very close): vel=%.2f, steer=%.3f", vel_cmd, steer_cmd);
-                return;
-            }
-
-            // Provide intelligent fallback solution based on position error
+            // Provide intelligent fallback solution - Pure Pursuit Controller
             solved_trajectory_.clear();
 
             if (!reference_trajectory.empty())
             {
                 const State &ref = reference_trajectory[0];
-                // Calculate position error
                 double dx = ref.x() - current_state.x();
                 double dy = ref.y() - current_state.y();
                 double dist_error = std::sqrt(dx * dx + dy * dy);
 
-                // Calculate desired heading to reference point
+                // Pure pursuit control law
                 double desired_heading = std::atan2(dy, dx);
                 double heading_error = std::atan2(std::sin(desired_heading - current_state.theta()),
                                                   std::cos(desired_heading - current_state.theta()));
 
-                double vel_cmd, steer_cmd;
-
-                if (dist_error < 0.5)
-                {
-                    // Very close: use reference velocity and gentle steering
+                // Velocity control: slower when far from path, match reference when close
+                double vel_cmd;
+                if (dist_error > 2.0) {
+                    vel_cmd = std::min(2.0, std::max(0.5, ref.v() * 0.6));
+                } else if (dist_error > 0.5) {
+                    vel_cmd = std::min(ref.v() * 1.1, std::max(1.0, ref.v() * 0.8));
+                } else {
                     vel_cmd = ref.v();
-                    steer_cmd = std::max(-0.1, std::min(0.1, heading_error * 0.3));
-                    RCLCPP_INFO(node_->get_logger(), "Close fallback: dist=%.2f, vel=%.2f, steer=%.3f", dist_error, vel_cmd,
-                                steer_cmd);
-                }
-                else if (dist_error < 1.0)
-                {
-                    // Close: use proportional control
-                    vel_cmd = std::max(1.0, std::min(ref.v(), 2.0));
-                    steer_cmd = std::max(-0.2, std::min(0.2, heading_error * 0.5));
-                    RCLCPP_INFO(node_->get_logger(), "Near fallback: dist=%.2f, vel=%.2f, steer=%.3f", dist_error, vel_cmd,
-                                steer_cmd);
-                }
-                else if (dist_error < 2.0)
-                {
-                    // Medium distance: moderate control
-                    vel_cmd = std::max(0.8, std::min(2.0, dist_error * 0.6));
-                    steer_cmd = std::max(-0.3, std::min(0.3, heading_error * 0.8));
-                    RCLCPP_INFO(node_->get_logger(), "Medium fallback: dist=%.2f, vel=%.2f, steer=%.3f", dist_error, vel_cmd,
-                                steer_cmd);
-                }
-                else
-                {
-                    // Far from path: aggressive control
-                    vel_cmd = std::max(1.0, std::min(3.0, dist_error * 0.4));
-                    steer_cmd = std::max(-0.4, std::min(0.4, heading_error * 1.0));
-                    RCLCPP_INFO(node_->get_logger(), "Far fallback: dist=%.2f, vel=%.2f, steer=%.3f", dist_error, vel_cmd,
-                                steer_cmd);
                 }
 
-                solved_trajectory_.emplace_back(vel_cmd, steer_cmd);
+                // Steering control with lookahead
+                double L = 0.33; // wheelbase
+                double lookahead_dist = std::max(1.0, vel_cmd * 0.5); // adaptive lookahead
+                
+                // Find lookahead point
+                int lookahead_idx = 0;
+                for (size_t i = 0; i < reference_trajectory.size(); ++i) {
+                    double dist_to_point = std::sqrt(
+                        std::pow(reference_trajectory[i].x() - current_state.x(), 2) +
+                        std::pow(reference_trajectory[i].y() - current_state.y(), 2)
+                    );
+                    if (dist_to_point >= lookahead_dist) {
+                        lookahead_idx = i;
+                        break;
+                    }
+                }
+                
+                if (lookahead_idx < reference_trajectory.size()) {
+                    const State& lookahead_point = reference_trajectory[lookahead_idx];
+                    double ld_x = lookahead_point.x() - current_state.x();
+                    double ld_y = lookahead_point.y() - current_state.y();
+                    double alpha = std::atan2(ld_y, ld_x) - current_state.theta();
+                    double steer_cmd = std::atan2(2.0 * L * std::sin(alpha), lookahead_dist);
+                    steer_cmd = std::max(-0.4, std::min(0.4, steer_cmd)); // Clamp to limits
+                    
+                    solved_trajectory_.emplace_back(vel_cmd, steer_cmd);
+                    RCLCPP_DEBUG(node_->get_logger(), "Pure pursuit: vel=%.2f, steer=%.3f, dist=%.2f", 
+                               vel_cmd, steer_cmd, dist_error);
+                } else {
+                    // Simple proportional control if lookahead fails
+                    double steer_cmd = std::max(-0.3, std::min(0.3, heading_error * 2.0));
+                    solved_trajectory_.emplace_back(vel_cmd, steer_cmd);
+                }
             }
             else
             {
                 solved_trajectory_.emplace_back(1.0, 0.0); // Default: move forward, no steering
-                RCLCPP_WARN(node_->get_logger(), "No reference trajectory available");
+                RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, 
+                                    "No reference trajectory available");
             }
         }
     }
