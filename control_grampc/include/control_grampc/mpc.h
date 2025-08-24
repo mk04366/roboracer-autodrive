@@ -14,6 +14,7 @@
 
 extern "C" {
 #include "grampc.h"
+#include "grampc_setopt.h"
 }
 
 namespace control_grampc {
@@ -47,6 +48,12 @@ public:
     
     // Initialize GRAMPC solver
     void initializeGrampc();
+    
+    // Setter for reference lookahead
+    void setRefLookahead(double sec) { ref_lookahead_sec_ = sec; }
+    
+    // Getter for reference lookahead
+    double refLookahead() const { return ref_lookahead_sec_; }
 
 private:
     // GRAMPC solver
@@ -60,7 +67,7 @@ private:
     double dt_;
     bool solver_initialized_;
     bool has_solution_;
-    double ref_lookahead_sec_ = 0.5; // time ahead for reference selection
+    double ref_lookahead_sec_ = 0.5; // time ahead for reference selection (single point)
     
     // Cost and constraints
     Cost cost_;

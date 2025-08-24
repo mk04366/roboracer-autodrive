@@ -64,6 +64,7 @@ private:
     // Timing and control
     bool first_scan_received_;
     std::chrono::steady_clock::time_point last_control_time_;
+    int control_counter_;
     
     // Thread safety
     std::mutex state_mutex_;

@@ -39,12 +39,13 @@ double mpcc_stage_cost(double t, const double *x, const double *u, const double 
     (void)t;
     mpcc_ctx_t *C = (mpcc_ctx_t *)user;
 
-    // MPC tracking weights
-    double w_x = 10.0;    // x position tracking
-    double w_y = 10.0;    // y position tracking
-    double w_theta = 1.0; // heading tracking
-    double w_v = 1.0;     // velocity tracking
-    double w_u = 0.1;     // control effort
+    // MPC tracking weights - adjusted for better steering
+    double w_x = 5.0;      // x position tracking (reduced)
+    double w_y = 5.0;      // y position tracking (reduced)
+    double w_theta = 10.0; // heading tracking (increased)
+    double w_v = 1.0;      // velocity tracking
+    double w_v_cmd = 0.1;  // velocity command effort
+    double w_delta = 0.05; // steering effort (much lower)
 
     // 4D state: [x, y, theta, v]
     double vehicle_x = x[0], vehicle_y = x[1], vehicle_theta = x[2], vehicle_v = x[3];
@@ -59,6 +60,22 @@ double mpcc_stage_cost(double t, const double *x, const double *u, const double 
     double v_cmd = u[0];
     double delta = u[1];
 
+    // Add curvature-based feedforward steering
+    double delta_ff = 0.0;
+    if (C && xdes)
+    {
+        // Simple feedforward based on reference heading
+        double heading_error = ref_theta - vehicle_theta;
+        // Wrap angle
+        while (heading_error > M_PI)
+            heading_error -= 2.0 * M_PI;
+        while (heading_error < -M_PI)
+            heading_error += 2.0 * M_PI;
+
+        delta_ff = 0.5 * heading_error; // Simple proportional feedforward
+        delta_ff = clamp(delta_ff, -0.4, 0.4);
+    }
+
     // MPC tracking cost
     double J = 0.0;
 
@@ -66,14 +83,15 @@ double mpcc_stage_cost(double t, const double *x, const double *u, const double 
     J += w_x * sq(vehicle_x - ref_x);
     J += w_y * sq(vehicle_y - ref_y);
 
-    // Heading tracking
+    // Heading tracking (more important)
     J += w_theta * sq(wrap_angle(vehicle_theta - ref_theta));
 
     // Velocity tracking
     J += w_v * sq(vehicle_v - ref_v);
 
-    // Control effort
-    J += w_u * (sq(v_cmd - ref_v) + sq(delta));
+    // Control effort - separate weights and feedforward steering
+    J += w_v_cmd * sq(v_cmd - ref_v);
+    J += w_delta * sq(delta - delta_ff); // Penalize deviation from feedforward, not absolute steering
 
     return J;
 }
@@ -192,10 +210,10 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     (void)udes;
     (void)userparam;
 
-    // MPC tracking weights
-    double w_x = 10.0;
-    double w_y = 10.0;
-    double w_theta = 1.0;
+    // MPC tracking weights - match the stage cost
+    double w_x = 5.0;
+    double w_y = 5.0;
+    double w_theta = 10.0;
     double w_v = 1.0;
 
     // Reference values
@@ -218,16 +236,35 @@ void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     (void)x;
     (void)p;
     (void)udes;
-    (void)userparam;
 
-    double w_u = 0.1; // Control effort weight
+    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
+    double w_v = 0.1;      // Velocity effort weight
+    double w_delta = 0.05; // Much lower steering penalty to allow larger steering
 
     // Reference velocity for control effort calculation
     double ref_v = xdes ? xdes[3] : 1.0;
 
+    // Add curvature-based feedforward steering
+    double delta_ff = 0.0;
+    if (ctx && xdes)
+    {
+        // Simple feedforward based on reference heading change
+        double ref_theta = xdes[2];
+        double current_theta = x[2];
+        double heading_error = ref_theta - current_theta;
+        // Wrap angle
+        while (heading_error > M_PI)
+            heading_error -= 2.0 * M_PI;
+        while (heading_error < -M_PI)
+            heading_error += 2.0 * M_PI;
+
+        delta_ff = 0.5 * heading_error; // Simple proportional feedforward
+        delta_ff = clamp(delta_ff, -0.4, 0.4);
+    }
+
     // Control effort penalty gradients
-    out[0] = 2.0 * w_u * (u[0] - ref_v); // d/d(v_cmd) - penalize deviation from reference velocity
-    out[1] = 2.0 * w_u * u[1];           // d/d(delta) - penalize steering effort
+    out[0] = 2.0 * w_v * (u[0] - ref_v);        // d/d(v_cmd) - penalize deviation from reference velocity
+    out[1] = 2.0 * w_delta * (u[1] - delta_ff); // d/d(delta) - penalize deviation from feedforward steering
 }
 
 void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)

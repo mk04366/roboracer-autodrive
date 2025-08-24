@@ -10,7 +10,8 @@ MPCNode::MPCNode()
     , last_x_(0.0), last_y_(0.0), last_time_(0.0)
     , has_prev_fix_(false)
     , input_index_(0)
-    , first_scan_received_(false) {
+    , first_scan_received_(false)
+    , control_counter_(0) {
     
     // Declare parameters
     path_file_ = this->declare_parameter<std::string>("path_file", 
@@ -18,6 +19,7 @@ MPCNode::MPCNode()
     control_frequency_ = this->declare_parameter<double>("control_frequency", 20.0);
     lookahead_distance_ = this->declare_parameter<double>("lookahead_distance", 2.0);
     target_velocity_ = this->declare_parameter<double>("target_velocity", 2.0);
+    double ref_lookahead = this->declare_parameter<double>("mpc.ref_lookahead_sec", 0.5);
     
     // Load path
     try {
@@ -34,6 +36,7 @@ MPCNode::MPCNode()
     
     // Initialize MPC without node pointer first
     mpc_ = std::make_unique<MPC>();
+    mpc_->setRefLookahead(ref_lookahead);
     
     // Set up ROS2 interfaces
     ips_sub_ = this->create_subscription<geometry_msgs::msg::Point>(
@@ -95,9 +98,9 @@ void MPCNode::ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg) {
         // Estimate velocity
         const double speed = std::sqrt(dx * dx + dy * dy) / dt;
         v_ = 0.8 * v_ + 0.2 * speed;  // Low-pass filter
-    } else {
-        has_prev_fix_ = true;
     }
+    
+    has_prev_fix_ = true;
     
     last_x_ = x_;
     last_y_ = y_;
@@ -178,6 +181,12 @@ void MPCNode::generateReferenceTrajectory() {
     const int horizon = mpc_->horizon();
     const double dt = mpc_->dt();
     
+    // Debug information
+    if (control_counter_ % 20 == 0) {  // Log every second at 20Hz
+        RCLCPP_INFO(this->get_logger(), "Path following: vehicle=[%.3f, %.3f], s_=%.3f, path_length=%.3f", 
+                   x_, y_, s_, path_->total_length());
+    }
+    
     for (int i = 0; i < horizon; ++i) {
         // Project future position along path
         const double future_s = s_ + i * dt * target_velocity_;
@@ -197,16 +206,22 @@ void MPCNode::generateReferenceTrajectory() {
         }
         
         reference_trajectory_.emplace_back(ref_pos.x(), ref_pos.y(), ref_theta, target_velocity_);
+        
+        // Debug first reference point
+        if (i == 0 && control_counter_ % 20 == 0) {
+            RCLCPP_INFO(this->get_logger(), "First ref point: [%.3f, %.3f] at s=%.3f", 
+                       ref_pos.x(), ref_pos.y(), clamped_s);
+        }
     }
 }
 
 void MPCNode::controlLoop() {
-    static int control_counter = 0;
+    control_counter_++;
     
     if (!has_prev_fix_ || !first_scan_received_ || !path_ || !mpc_) {
         // Publish safe defaults
         publishControl(Input(0.0, 0.0));
-        if (++control_counter % 100 == 0) {  // Log every 100 calls
+        if (control_counter_ % 100 == 0) {  // Log every 100 calls
             RCLCPP_WARN(this->get_logger(), "Control loop waiting for initialization: fix=%d, scan=%d, path=%d, mpc=%d", 
                        has_prev_fix_, first_scan_received_, path_ != nullptr, mpc_ != nullptr);
         }
@@ -224,7 +239,7 @@ void MPCNode::controlLoop() {
         return;
     }
     
-    if (++control_counter % 100 == 0) {  // Log every 100 calls
+    if (control_counter_ % 100 == 0) {  // Log every 100 calls
         RCLCPP_INFO(this->get_logger(), "Control loop running, ref_traj_size=%zu", reference_trajectory_.size());
     }
     
@@ -280,14 +295,21 @@ void MPCNode::publishControl(const Input& input) {
     auto steering_msg = std_msgs::msg::Float32();
     
     // Convert velocity to throttle (simple mapping)
-    throttle_msg.data = static_cast<float>(input.velocity() / 5.0);  // Normalize to [0,1]
-    steering_msg.data = static_cast<float>(input.steeringAngle());
+    throttle_msg.data = static_cast<float>(input.velocity() / 5.0);
+    // Scale steering to normalized range expected downstream (assuming delta_max=0.4 rad)
+    const double delta_max = 0.4;
+    double steer_norm = std::clamp(input.steeringAngle() / delta_max, -1.0, 1.0);
+    steering_msg.data = static_cast<float>(steer_norm);
     
     throttle_pub_->publish(throttle_msg);
     steering_pub_->publish(steering_msg);
     
-    RCLCPP_DEBUG(this->get_logger(), "Published control: throttle=%.3f, steering=%.3f", 
-                 throttle_msg.data, steering_msg.data);
+    // Log steering values for debugging
+    static int log_counter = 0;
+    if (++log_counter % 20 == 0) {  // Log every 20 calls
+        RCLCPP_INFO(this->get_logger(), "Control: throttle=%.3f, steer_norm=%.3f, steer_rad=%.3f", 
+                     throttle_msg.data, steering_msg.data, input.steeringAngle());
+    }
 }
 
 } // namespace control_grampc
