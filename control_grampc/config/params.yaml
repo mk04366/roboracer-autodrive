@@ -1,29 +1,30 @@
 mpcc_controller:
   ros__parameters:
+    # Path file
+    path_csv: "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl.csv"
+    
     # Timing
-    dt: 0.05 # [s] sampling time
-    horizon: 2.0 # [s] prediction horizon
+    dt: 0.075 # [s] sampling time - matches GRAMPC dt
+    horizon: 1.5 # [s] prediction horizon - matches GRAMPC Thor
     Nhor: 20 # number of discretization steps
 
-    # Vehicle parameters
+    # Vehicle parameters - consistent with ctx_ values in code
     L: 0.33 # wheelbase [m]
-    delta_max: 0.4 # steering limit [rad]
+    delta_max: 0.4 # steering limit [rad] - increased for better maneuverability
     a_min: 0.0 # forbid reverse acceleration
-    a_max: 3.0 # max accel [m/s^2]
+    a_max: 1.0 # max accel [m/s^2] - increased for better acceleration
     v_max: 3.0 # max speed [m/s]
-    a_lat_max: 4.0 # max lateral accel [m/s^2]
+    a_lat_max: 1.2 # max lateral accel [m/s^2] - increased for better cornering
 
-    # Cost weights
-    w_c: 5.0
-    w_l: 0.1
-    w_v: 1.0
-    w_u: 0.1
-    w_du: 0.1
-    w_term: 10.0
-
-    # Track parameters
-    kappa_gain: 0.5
+    # Cost weights - tuned for pure MPC (no Stanley interference)
+    w_xy: 50.0 # position weight - increased for better tracking
+    w_yaw: 20.0 # heading weight - balanced
+    w_v: 5.0 # speed tracking weight - moderate
+    w_u: 0.5 # input magnitude - reduced for more aggressive control
+    w_du: 1.0 # input rate - reduced to make controls less sluggish
+    w_term: 100.0 # terminal weight - increased for better final positioning
 
     # GRAMPC options
-    max_grad_iter: 20
+    max_grad_iter: 8 # balanced iterations for speed vs quality
+    max_mult_iter: 3 # balanced multiplier iterations
     tol_cost: 1e-3

@@ -12,13 +12,12 @@
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>visualization_msgs</depend>
   <depend>ackermann_msgs</depend>
+  <depend>nav_msgs</depend>
 
   <!-- For YAML params & filesystem helpers -->
   <depend>ament_index_cpp</depend>
-
-  <!-- If you visualize nav_msgs/Path later -->
-  <!-- <depend>nav_msgs</depend> -->
 
   <export>
     <build_type>ament_cmake</build_type>

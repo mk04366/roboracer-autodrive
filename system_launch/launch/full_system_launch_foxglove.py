@@ -26,7 +26,7 @@ def generate_launch_description():
         # 'ftg_controller_launch.py'
         # 'stanley_controller_launch.py'
         # 'mpcc_launch.py' 
-        'mpcc_grampc.launch.py'
+        'mpc_control.launch.py'
     )
 
     localization_launch_path = os.path.join(
@@ -35,15 +35,14 @@ def generate_launch_description():
         'amcl_launch.py'
     )
 
-    # Include foxglove_bridge launch directly
-    foxglove_launch_path = os.path.join(
-        get_package_share_directory('foxglove_bridge'),
-        'launch',
-        'foxglove_bridge.launch.py'
-    )
-    foxglove_include = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(foxglove_launch_path),
-        launch_arguments={'port': '8765'}.items()
+    foxglove_node = Node(
+        package="foxglove_bridge",
+        executable="foxglove_bridge",
+        name="foxglove_bridge",
+        output="screen",
+        parameters=[{
+            "port": 8765
+        }]
     )
 
     initial_pose_node = Node(
@@ -66,7 +65,6 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(waypoints_loader_launch_path)
         ),
-        foxglove_include,
+        foxglove_node,
         initial_pose_node
     ])
-
