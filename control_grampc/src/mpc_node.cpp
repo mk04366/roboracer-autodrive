@@ -246,8 +246,16 @@ void MPCNode::controlLoop() {
     // Update MPC
     mpc_->update(current_state_, current_input_, reference_trajectory_);
     
-    // Get control input
+    // Get control input - no fallback, pure GRAMPC only
     Input control_input = getNextInput();
+    
+    // Log when GRAMPC fails
+    if (!mpc_->hasSolution()) {
+        static int failure_log_counter = 0;
+        if (++failure_log_counter % 20 == 0) {  // Throttle logging
+            RCLCPP_WARN(this->get_logger(), "GRAMPC failed - publishing zero controls (failure #%d)", failure_log_counter);
+        }
+    }
     
     // Publish control
     publishControl(control_input);
@@ -263,22 +271,31 @@ void MPCNode::controlLoop() {
 
 Input MPCNode::getNextInput() {
     if (!mpc_ || !mpc_->hasSolution()) {
-        // Return safe default
-        return Input(std::min(1.0, target_velocity_), 0.0);
+        // No fallback - return zero control when GRAMPC fails
+        return Input(0.0, 0.0);
     }
+    
+    // Try direct GRAMPC solution access first
+    Input direct_solution = mpc_->getDirectSolution();
     
     const auto& trajectory = mpc_->getSolvedTrajectory();
     
-    if (input_index_ >= trajectory.size()) {
-        RCLCPP_WARN(this->get_logger(), "Input index out of bounds, using first input");
-        input_index_ = 0;
-    }
-    
     if (trajectory.empty()) {
-        return Input(std::min(1.0, target_velocity_), 0.0);
+        RCLCPP_WARN(this->get_logger(), "Extracted trajectory empty, using direct solution: v=%.3f, steer=%.3f", 
+                   direct_solution.velocity(), direct_solution.steeringAngle());
+        return direct_solution;
     }
     
     Input input = trajectory[0];  // Always use first input (receding horizon)
+    
+    // Compare extracted vs direct solution
+    static int debug_counter = 0;
+    if (++debug_counter % 20 == 0) {
+        RCLCPP_INFO(this->get_logger(), 
+                   "Solution comparison - Direct: [v=%.3f, steer=%.3f], Extracted: [v=%.3f, steer=%.3f]",
+                   direct_solution.velocity(), direct_solution.steeringAngle(),
+                   input.velocity(), input.steeringAngle());
+    }
     
     // Apply safety limits
     const double max_steering = 0.4;

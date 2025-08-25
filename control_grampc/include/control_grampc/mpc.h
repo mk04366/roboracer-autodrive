@@ -49,6 +49,14 @@ public:
     // Initialize GRAMPC solver
     void initializeGrampc();
     
+    // Getter for direct GRAMPC solution (for debugging)
+    Input getDirectSolution() const {
+        if (grampc_ && grampc_->sol && grampc_->sol->unext && has_solution_) {
+            return Input(grampc_->sol->unext[0], grampc_->sol->unext[1]);
+        }
+        return Input(0.0, 0.0);
+    }
+    
     // Setter for reference lookahead
     void setRefLookahead(double sec) { ref_lookahead_sec_ = sec; }
     
@@ -68,6 +76,10 @@ private:
     bool solver_initialized_;
     bool has_solution_;
     double ref_lookahead_sec_ = 0.5; // time ahead for reference selection (single point)
+    
+    // Solver stability tracking
+    int failure_count_;
+    double last_cost_;
     
     // Cost and constraints
     Cost cost_;

@@ -25,8 +25,8 @@ def generate_launch_description():
         # 'pid_controller_launch.py'
         # 'ftg_controller_launch.py'
         # 'stanley_controller_launch.py'
-        # 'mpcc_launch.py' 
-        'mpc_control.launch.py'
+        'mpcc_grampc.launch.py' 
+        # 'mpc_control.launch.py'
     )
 
     localization_launch_path = os.path.join(

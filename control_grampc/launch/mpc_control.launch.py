@@ -23,7 +23,7 @@ def generate_launch_description():
     
     control_frequency_arg = DeclareLaunchArgument(
         'control_frequency',
-        default_value='20.0',
+        default_value='30.0',
         description='Control loop frequency in Hz'
     )
     
@@ -58,16 +58,9 @@ def generate_launch_description():
             'mpc.q1': 10.0,  # y position weight  
             'mpc.q2': 1.0,   # heading weight
             'mpc.q3': 1.0,   # velocity weight
-            'mpc.r0': 0.1,   # velocity input weight
+            'mpc.r0': 1.0,   # velocity input weight
             'mpc.r1': 1.0,   # steering input weight
         }],
-        remappings=[
-            # Map topics to AutoDRIVE simulator topics
-            ('/autodrive/f1tenth_1/ips', '/autodrive/f1tenth_1/ips'),
-            ('/autodrive/f1tenth_1/lidar', '/autodrive/f1tenth_1/lidar'),
-            ('/autodrive/f1tenth_1/throttle_command', '/autodrive/f1tenth_1/throttle_command'),
-            ('/autodrive/f1tenth_1/steering_command', '/autodrive/f1tenth_1/steering_command'),
-        ]
     )
     
     return LaunchDescription([

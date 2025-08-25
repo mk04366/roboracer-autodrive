@@ -12,9 +12,6 @@ public:
     Model();
     virtual ~Model() = default;
 
-    // Linearize dynamics around operating point
-    void linearize(const State& state, const Input& input, double dt);
-    
     // Simulate dynamics (nonlinear forward simulation)
     void simulateDynamics(const State& state, const Input& input, double dt, State& new_state);
     

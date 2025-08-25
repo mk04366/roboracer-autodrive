@@ -81,11 +81,30 @@ Path load_path_from_csv(const std::string &filename)
 
     while (std::getline(file, line))
     {
+        // Skip comment lines
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        
+        // Parse CSV with semicolon separators
+        // Format: s_m; x_m; y_m; psi_rad; kappa_radpm; vx_mps; ax_mps2
         std::stringstream ss(line);
-        double x, y;
-        if (ss >> x && ss.ignore(1, ',') && ss >> y)
-        {
-            waypoints.emplace_back(x, y);
+        std::string token;
+        std::vector<std::string> tokens;
+        
+        while (std::getline(ss, token, ';')) {
+            tokens.push_back(token);
+        }
+        
+        if (tokens.size() >= 3) {
+            try {
+                double s = std::stod(tokens[0]);   // arc length (not used directly)
+                double x = std::stod(tokens[1]);   // x coordinate 
+                double y = std::stod(tokens[2]);   // y coordinate
+                waypoints.emplace_back(x, y);
+            } catch (const std::exception& e) {
+                std::cerr << "Error parsing line: " << line << " - " << e.what() << std::endl;
+            }
         }
     }
 
