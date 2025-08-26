@@ -2,50 +2,84 @@
 #include <math.h>
 #include <stddef.h>
 
-static inline double sq(double a) { return a * a; }
+// Use GRAMPC standard definitions for consistency
+#if USE_typeRNum == USE_FLOAT
+#define SIN(a) sinf(a)
+#define COS(a) cosf(a)
+#define TAN(a) tanf(a)
+#else
+#define SIN(a) sin(a)
+#define COS(a) cos(a)
+#define TAN(a) tan(a)
+#endif
+
+// Square macro following GRAMPC convention
+#define POW2(a) ((a) * (a))
+
 static inline double clamp(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
 static inline double wrap_angle(double a)
 {
-    while (a > M_PI)
-        a -= 2.0 * M_PI;
-    while (a < -M_PI)
-        a += 2.0 * M_PI;
+    while (a > 3.14159265358979323846)
+        a -= 2.0 * 3.14159265358979323846;
+    while (a < -3.14159265358979323846)
+        a += 2.0 * 3.14159265358979323846;
     return a;
 }
 
 void mpcc_dynamics(double t, const double *x, const double *u, double *xdot, void *user)
 {
     (void)t;
+
+    // Safety checks
+    if (!x || !u || !xdot)
+    {
+        if (xdot)
+        {
+            xdot[0] = xdot[1] = xdot[2] = xdot[3] = 0.0;
+        }
+        return;
+    }
+
     mpcc_ctx_t *C = (mpcc_ctx_t *)user;
-    // Defaults if no user context provided
+
+    // Vehicle parameters with proper defaults
     double L = (C ? C->L : 0.33);
     double delta_max = (C ? C->delta_max : 0.4);
     double v_cmd_max = (C ? C->v_max : 5.0);
+    double tau_v = 0.1; // velocity time constant
 
     // 4D state: [x, y, theta, v]
     double X = x[0], Y = x[1], THETA = x[2], V = x[3];
     double v_cmd = clamp(u[0], 0.0, v_cmd_max);        // velocity command
     double delta = clamp(u[1], -delta_max, delta_max); // steering angle
 
-    // Bicycle model dynamics with velocity control
-    xdot[0] = V * cos(THETA);       // x_dot
-    xdot[1] = V * sin(THETA);       // y_dot
-    xdot[2] = (V / L) * tan(delta); // theta_dot
-    xdot[3] = (v_cmd - V) / 0.1;    // v_dot (first-order velocity tracking)
+    // Bicycle model dynamics - following GRAMPC Vehicle example structure
+    xdot[0] = V * COS(THETA);       // x_dot = v*cos(theta)
+    xdot[1] = V * SIN(THETA);       // y_dot = v*sin(theta)
+    xdot[2] = (V / L) * TAN(delta); // theta_dot = (v/L)*tan(delta)
+    xdot[3] = (v_cmd - V) / tau_v;  // v_dot = (v_cmd - v)/tau (first-order velocity tracking)
 }
 
 double mpcc_stage_cost(double t, const double *x, const double *u, const double *xdes, void *user)
 {
     (void)t;
+
+    // Safety checks
+    if (!x || !u)
+    {
+        return 0.0;
+    }
+
     mpcc_ctx_t *C = (mpcc_ctx_t *)user;
 
-    // MPC tracking weights - adjusted for better steering
-    double w_x = 5.0;      // x position tracking (reduced)
-    double w_y = 5.0;      // y position tracking (reduced)
-    double w_theta = 10.0; // heading tracking (increased)
+    // Cost weights - following GRAMPC parameter structure
+    // These should match the gradients exactly
+    double w_x = 5.0;      // x position tracking
+    double w_y = 5.0;      // y position tracking
+    double w_theta = 10.0; // heading tracking
     double w_v = 1.0;      // velocity tracking
     double w_v_cmd = 0.1;  // velocity command effort
-    double w_delta = 0.05; // steering effort (much lower)
+    double w_delta = 0.05; // steering effort
 
     // 4D state: [x, y, theta, v]
     double vehicle_x = x[0], vehicle_y = x[1], vehicle_theta = x[2], vehicle_v = x[3];
@@ -60,38 +94,28 @@ double mpcc_stage_cost(double t, const double *x, const double *u, const double 
     double v_cmd = u[0];
     double delta = u[1];
 
-    // Add curvature-based feedforward steering
+    // Calculate curvature-based feedforward steering (for control effort reference)
     double delta_ff = 0.0;
     if (C && xdes)
     {
-        // Simple feedforward based on reference heading
-        double heading_error = ref_theta - vehicle_theta;
-        // Wrap angle
-        while (heading_error > M_PI)
-            heading_error -= 2.0 * M_PI;
-        while (heading_error < -M_PI)
-            heading_error += 2.0 * M_PI;
-
-        delta_ff = 0.5 * heading_error; // Simple proportional feedforward
+        // Simple feedforward based on reference heading error
+        double heading_error = wrap_angle(ref_theta - vehicle_theta);
+        delta_ff = 0.5 * heading_error; // Proportional feedforward
         delta_ff = clamp(delta_ff, -0.4, 0.4);
     }
 
-    // MPC tracking cost
+    // GRAMPC-style quadratic cost using POW2 macro
     double J = 0.0;
 
-    // Position tracking
-    J += w_x * sq(vehicle_x - ref_x);
-    J += w_y * sq(vehicle_y - ref_y);
+    // State tracking costs
+    J += w_x * POW2(vehicle_x - ref_x);
+    J += w_y * POW2(vehicle_y - ref_y);
+    J += w_theta * POW2(wrap_angle(vehicle_theta - ref_theta));
+    J += w_v * POW2(vehicle_v - ref_v);
 
-    // Heading tracking (more important)
-    J += w_theta * sq(wrap_angle(vehicle_theta - ref_theta));
-
-    // Velocity tracking
-    J += w_v * sq(vehicle_v - ref_v);
-
-    // Control effort - separate weights and feedforward steering
-    J += w_v_cmd * sq(v_cmd - ref_v);
-    J += w_delta * sq(delta - delta_ff); // Penalize deviation from feedforward, not absolute steering
+    // Control effort costs
+    J += w_v_cmd * POW2(v_cmd - ref_v);    // penalize deviation from reference velocity
+    J += w_delta * POW2(delta - delta_ff); // penalize deviation from feedforward steering
 
     return J;
 }
@@ -100,21 +124,23 @@ double mpcc_terminal_cost(const double *x, const double *xdes, void *user)
 {
     (void)user;
 
-    // Terminal cost: track reference state more strongly
+    // Terminal cost weights - higher than stage cost for terminal constraint
+    double w_x_T = 10.0;
+    double w_y_T = 10.0;
+    double w_theta_T = 5.0; // reduced weight for terminal heading
+    double w_v_T = 1.0;
+
+    // Reference values
     double ref_x = xdes ? xdes[0] : 0.0;
     double ref_y = xdes ? xdes[1] : 0.0;
     double ref_theta = xdes ? xdes[2] : 0.0;
     double ref_v = xdes ? xdes[3] : 1.0;
 
-    double dx = x[0] - ref_x;
-    double dy = x[1] - ref_y;
-    double dtheta = wrap_angle(x[2] - ref_theta);
-    double dv = x[3] - ref_v;
+    // Calculate terminal cost using GRAMPC POW2 macro
+    double V = w_x_T * POW2(x[0] - ref_x) + w_y_T * POW2(x[1] - ref_y) + w_theta_T * POW2(wrap_angle(x[2] - ref_theta)) + w_v_T * POW2(x[3] - ref_v);
 
-    return 5.0 * (sq(dx) + sq(dy) + 0.5 * sq(dtheta) + 0.1 * sq(dv));
+    return V;
 }
-
-// ===== GRAMPC v2.2 required callbacks (signatures per probfct.h) =====
 
 void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, typeInt *NgT, typeInt *NhT, typeUSERPARAM *userparam)
 {
@@ -122,7 +148,7 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     *Nx = 4; // x, y, theta, v
     *Nu = 2; // velocity_cmd, steering_angle
     *Np = 0;
-    *Ng = 0;
+    *Ng = 0; // No constraints for debugging
     *Nh = 0;
     *NgT = 0;
     *NhT = 0;
@@ -130,56 +156,72 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
 
 void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
+    (void)t;
     (void)p;
-    // Cast userparam to the correct type for mpcc_dynamics
-    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
-    mpcc_dynamics(t, x, u, out, ctx);
+    (void)userparam;
+
+    // Ultra-simple dynamics for debugging - just copy state
+    if (!out || !x || !u)
+    {
+        return;
+    }
+
+    // Simple integrator dynamics for testing
+    out[0] = x[3] * 0.5;  // x_dot = v/2 (slow motion)
+    out[1] = 0.0;         // y_dot = 0
+    out[2] = u[1] * 0.1;  // theta_dot = steering/10
+    out[3] = u[0] - x[3]; // v_dot = v_cmd - v
 }
 
 void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
     (void)t;
+    (void)x;
+    (void)u;
     (void)p;
+    (void)userparam;
 
-    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
-    if (!ctx)
+    // Ultra-simple Jacobian for debugging - zero for now
+    if (!out || !vec)
     {
-        for (int i = 0; i < 4; ++i)
-            out[i] = 0.0; // 4D state
+        if (out)
+        {
+            for (int i = 0; i < 4; i++)
+                out[i] = 0.0;
+        }
         return;
     }
 
-    double v = x[3];
-    double theta = x[2];
-    double delta = u[1]; // steering angle is second input
-
-    // df/dx * vec for the 4D bicycle model
-    // xdot = v*cos(theta), ydot = v*sin(theta), thetadot = (v/L)*tan(delta), vdot = (v_cmd - v)/tau
-    out[0] = 0.0;                                                                                       // d/dx (no direct dependency)
-    out[1] = 0.0;                                                                                       // d/dy (no direct dependency)
-    out[2] = -v * sin(theta) * vec[0] + v * cos(theta) * vec[1];                                        // d/dtheta of xdot and ydot
-    out[3] = cos(theta) * vec[0] + sin(theta) * vec[1] + (tan(delta) / ctx->L) * vec[2] - vec[3] / 0.1; // d/dv
+    // df/dx is zero for simple integrator dynamics
+    for (int i = 0; i < 4; i++)
+    {
+        out[i] = 0.0;
+    }
 }
 
 void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
     (void)t;
+    (void)x;
+    (void)u;
     (void)p;
+    (void)userparam;
 
-    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
-    if (!ctx)
+    // Ultra-simple control Jacobian for debugging
+    if (!out || !vec)
     {
-        for (int i = 0; i < 2; ++i)
-            out[i] = 0.0;
+        if (out)
+        {
+            out[0] = 0.0;
+            out[1] = 0.0;
+        }
         return;
     }
 
-    double v = x[3];
-    double delta = u[1]; // steering angle is second input
-
-    // df/du * vec for the bicycle model with velocity control
-    out[0] = vec[3] / 0.1;                                      // d/d(v_cmd) of vdot
-    out[1] = (v / (ctx->L * cos(delta) * cos(delta))) * vec[2]; // d/d(delta) of thetadot
+    // df/du for simple dynamics: f = [v/2, 0, u[1]/10, u[0] - v]
+    // df/du = [[0, 0], [0, 0], [0, 1/10], [1, 0]]
+    out[0] = vec[3];       // d/d(v_cmd) of v_dot = 1
+    out[1] = vec[2] * 0.1; // d/d(steering) of theta_dot = 1/10
 }
 
 void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
@@ -196,75 +238,81 @@ void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNu
 
 void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
-    (void)p;
-    (void)udes;
-    // Cast userparam to the correct type for mpcc_stage_cost
-    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
-    out[0] = mpcc_stage_cost(t, x, u, xdes, ctx);
-}
-
-void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
-{
     (void)t;
     (void)p;
     (void)udes;
     (void)userparam;
 
-    // MPC tracking weights - match the stage cost
-    double w_x = 5.0;
-    double w_y = 5.0;
-    double w_theta = 10.0;
-    double w_v = 1.0;
+    // Ultra-simple quadratic cost for debugging
+    if (!out || !x || !u || !xdes)
+    {
+        if (out)
+            out[0] = 0.0;
+        return;
+    }
 
-    // Reference values
-    double ref_x = xdes ? xdes[0] : 0.0;
-    double ref_y = xdes ? xdes[1] : 0.0;
-    double ref_theta = xdes ? xdes[2] : 0.0;
-    double ref_v = xdes ? xdes[3] : 1.0;
-
-    // Gradients of MPC tracking cost
-    out[0] = 2.0 * w_x * (x[0] - ref_x);                   // d/dx
-    out[1] = 2.0 * w_y * (x[1] - ref_y);                   // d/dy
-    out[2] = 2.0 * w_theta * wrap_angle(x[2] - ref_theta); // d/dtheta
-    out[3] = 2.0 * w_v * (x[3] - ref_v);                   // d/dv
+    // Simple tracking cost: ||x - xdes||^2 + ||u||^2
+    double cost = 0.0;
+    for (int i = 0; i < 4; i++)
+    {
+        cost += (x[i] - xdes[i]) * (x[i] - xdes[i]);
+    }
+    for (int i = 0; i < 2; i++)
+    {
+        cost += 0.1 * u[i] * u[i];
+    }
+    out[0] = cost;
 }
-double w_v = 1.0;
+
+void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
+{
+    (void)t;
+    (void)u;
+    (void)p;
+    (void)udes;
+    (void)userparam;
+
+    // Ultra-simple gradients for debugging
+    if (!out || !x || !xdes)
+    {
+        if (out)
+        {
+            for (int i = 0; i < 4; i++)
+                out[i] = 0.0;
+        }
+        return;
+    }
+
+    // dJ/dx = 2*(x - xdes)
+    for (int i = 0; i < 4; i++)
+    {
+        out[i] = 2.0 * (x[i] - xdes[i]);
+    }
+}
 
 void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
     (void)t;
     (void)x;
     (void)p;
+    (void)xdes;
     (void)udes;
+    (void)userparam;
 
-    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
-    double w_v = 0.1;      // Velocity effort weight
-    double w_delta = 0.05; // Much lower steering penalty to allow larger steering
-
-    // Reference velocity for control effort calculation
-    double ref_v = xdes ? xdes[3] : 1.0;
-
-    // Add curvature-based feedforward steering
-    double delta_ff = 0.0;
-    if (ctx && xdes)
+    // Ultra-simple control gradients for debugging
+    if (!out || !u)
     {
-        // Simple feedforward based on reference heading change
-        double ref_theta = xdes[2];
-        double current_theta = x[2];
-        double heading_error = ref_theta - current_theta;
-        // Wrap angle
-        while (heading_error > M_PI)
-            heading_error -= 2.0 * M_PI;
-        while (heading_error < -M_PI)
-            heading_error += 2.0 * M_PI;
-
-        delta_ff = 0.5 * heading_error; // Simple proportional feedforward
-        delta_ff = clamp(delta_ff, -0.4, 0.4);
+        if (out)
+        {
+            out[0] = 0.0;
+            out[1] = 0.0;
+        }
+        return;
     }
 
-    // Control effort penalty gradients
-    out[0] = 2.0 * w_v * (u[0] - ref_v);        // d/d(v_cmd) - penalize deviation from reference velocity
-    out[1] = 2.0 * w_delta * (u[1] - delta_ff); // d/d(delta) - penalize deviation from feedforward steering
+    // dJ/du = 2*0.1*u (simple quadratic control penalty)
+    out[0] = 2.0 * 0.1 * u[0];
+    out[1] = 2.0 * 0.1 * u[1];
 }
 
 void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
@@ -283,9 +331,23 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xde
 {
     (void)T;
     (void)p;
-    // Cast userparam to the correct type for mpcc_terminal_cost
-    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
-    out[0] = mpcc_terminal_cost(x, xdes, ctx);
+    (void)userparam;
+
+    // Ultra-simple terminal cost for debugging
+    if (!out || !x || !xdes)
+    {
+        if (out)
+            out[0] = 0.0;
+        return;
+    }
+
+    // Simple terminal cost: ||x - xdes||^2
+    double cost = 0.0;
+    for (int i = 0; i < 4; i++)
+    {
+        cost += (x[i] - xdes[i]) * (x[i] - xdes[i]);
+    }
+    out[0] = cost;
 }
 
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
@@ -294,16 +356,22 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xde
     (void)p;
     (void)userparam;
 
-    // Terminal cost gradients for 4D state
-    double ref_x = xdes ? xdes[0] : 0.0;
-    double ref_y = xdes ? xdes[1] : 0.0;
-    double ref_theta = xdes ? xdes[2] : 0.0;
-    double ref_v = xdes ? xdes[3] : 1.0;
+    // Ultra-simple terminal gradients for debugging
+    if (!out || !x || !xdes)
+    {
+        if (out)
+        {
+            for (int i = 0; i < 4; i++)
+                out[i] = 0.0;
+        }
+        return;
+    }
 
-    out[0] = 2.0 * 5.0 * (x[0] - ref_x);                     // d/dx
-    out[1] = 2.0 * 5.0 * (x[1] - ref_y);                     // d/dy
-    out[2] = 2.0 * 5.0 * 0.5 * wrap_angle(x[2] - ref_theta); // d/dtheta
-    out[3] = 2.0 * 5.0 * 0.1 * (x[3] - ref_v);               // d/dv
+    // dV/dx = 2*(x - xdes)
+    for (int i = 0; i < 4; i++)
+    {
+        out[i] = 2.0 * (x[i] - xdes[i]);
+    }
 }
 
 void dVdp(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
@@ -329,11 +397,29 @@ void dVdT(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xde
 void gfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
     (void)t;
-    (void)x;
-    (void)u;
     (void)p;
-    (void)userparam;
-    (void)out;
+    (void)u;
+
+    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
+
+    // Safety checks
+    if (!x || !out)
+    {
+        if (out)
+        {
+            out[0] = 0.0;
+        }
+        return;
+    }
+
+    // Vehicle parameters with defaults
+    double v_max = (ctx ? ctx->v_max : 5.0);
+
+    // State variables
+    double v = x[3]; // velocity
+
+    // Single simple constraint: Maximum velocity
+    out[0] = v_max - v; // v <= v_max (g >= 0 means constraint satisfied)
 }
 
 void dgdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
@@ -342,9 +428,26 @@ void dgdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     (void)x;
     (void)u;
     (void)p;
-    (void)vec;
     (void)userparam;
-    (void)out;
+
+    // Safety checks
+    if (!out || !vec)
+    {
+        if (out)
+        {
+            for (int i = 0; i < 4; ++i)
+                out[i] = 0.0;
+        }
+        return;
+    }
+
+    // Gradient of single constraint g = v_max - v w.r.t. state x, multiplied by vec
+    // ∂g/∂v = -1, all other gradients are 0
+
+    out[0] = 0.0;             // ∂g/∂x
+    out[1] = 0.0;             // ∂g/∂y
+    out[2] = 0.0;             // ∂g/∂θ
+    out[3] = vec[0] * (-1.0); // ∂g/∂v = -1
 }
 
 void dgdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
@@ -353,9 +456,21 @@ void dgdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     (void)x;
     (void)u;
     (void)p;
-    (void)vec;
     (void)userparam;
-    (void)out;
+
+    // Safety checks
+    if (!out || !vec)
+    {
+        if (out)
+        {
+            out[0] = out[1] = 0.0;
+        }
+        return;
+    }
+
+    // Single constraint g = v_max - v doesn't depend on control inputs
+    out[0] = 0.0; // No dependence on velocity command u[0]
+    out[1] = 0.0; // No dependence on steering angle u[1]
 }
 
 void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
@@ -419,6 +534,7 @@ void gTfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, typeUSERPARAM
     (void)p;
     (void)userparam;
     (void)out;
+    // No terminal constraints for now
 }
 
 void dgTdx_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
@@ -426,9 +542,26 @@ void dgTdx_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum
     (void)T;
     (void)x;
     (void)p;
-    (void)vec;
     (void)userparam;
-    (void)out;
+
+    // Safety checks
+    if (!out || !vec)
+    {
+        if (out)
+        {
+            for (int i = 0; i < 4; ++i)
+                out[i] = 0.0;
+        }
+        return;
+    }
+
+    // Gradient of terminal constraint gT w.r.t. state x, multiplied by vec
+    // gT = v_max - v, so ∂gT/∂v = -1
+
+    out[0] = 0.0;             // ∂gT/∂x
+    out[1] = 0.0;             // ∂gT/∂y
+    out[2] = 0.0;             // ∂gT/∂θ
+    out[3] = vec[0] * (-1.0); // ∂gT/∂v = -1
 }
 
 void dgTdp_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)

@@ -13,7 +13,6 @@ Eigen::VectorXd Input::toVector() const {
     return vec;
 }
 
-// Definition of static member
 const int Input::size_;
 
 } // namespace control_grampc

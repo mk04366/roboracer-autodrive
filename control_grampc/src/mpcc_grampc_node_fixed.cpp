@@ -51,7 +51,7 @@ public:
         steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
 
         timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(200), std::bind(&MPCCGrampcNode::controlLoop, this));  // Slower for debugging
+            std::chrono::milliseconds(50), std::bind(&MPCCGrampcNode::controlLoop, this));
 
         // GRAMPC setup (v2.2 API) with user context
         ctx_.L = 0.33;
@@ -102,7 +102,7 @@ public:
         // Set problem dimensions - these MUST match exactly with ocp_dim() in mpcc_model.c
         grampc_->param->Nx = 4;  // [x, y, theta, v] - basic vehicle state
         grampc_->param->Nu = 2;  // [v_cmd, steering_angle]
-        grampc_->param->Ng = 0;  // Temporarily disable constraints to test basic functionality
+        grampc_->param->Ng = 1;  // 1 inequality constraint (velocity limit)
         grampc_->param->Nh = 0;
         grampc_->param->Np = 0;
         grampc_->param->NhT = 0;
@@ -135,30 +135,26 @@ public:
             grampc_setparam_real_vector(grampc_, "xdes", xref_init.data());
 
             // F1TENTH-style control bounds - [v_cmd, steering_angle]
-            // Input bounds: [v_cmd, steering_angle]
-            // u[0] = velocity command [m/s] - should be positive for forward motion
-            // u[1] = steering angle [rad] - symmetric around zero
-            double umin[2] = {0.0, -ctx_.delta_max};      // v_cmd_min=0, steering_min=-delta_max
-            double umax[2] = {ctx_.v_max, ctx_.delta_max}; // v_cmd_max=v_max, steering_max=delta_max
+            double umin[2] = {ctx_.a_min, -ctx_.delta_max};
+            double umax[2] = {ctx_.a_max, ctx_.delta_max};
             grampc_setparam_real_vector(grampc_, "umin", umin);
             grampc_setparam_real_vector(grampc_, "umax", umax);
             
-            // Set time parameters properly
-            grampc_setparam_real(grampc_, "Thor", 0.8);          // Prediction horizon
-            grampc_setparam_real(grampc_, "dt", 0.08);           // Discretization time step
-            grampc_setparam_real(grampc_, "t0", 0.0);            // Initial time
+            // Set constraint tolerance (following Vehicle example)
+            double ConstraintsAbsTol[1] = {1e-2}; // For 1 constraint
+            grampc_setopt_real_vector(grampc_, "ConstraintsAbsTol", ConstraintsAbsTol);
             
-            // CRITICAL: Set solver options explicitly (following Vehicle example)
-            grampc_setopt_int(grampc_, "Nhor", 10);              // Number of discretization steps
-            grampc_setopt_int(grampc_, "MaxGradIter", 5);        // Maximum gradient iterations
+            // Set manual penalty values since we disabled penalty estimation
+            double pen[1] = {1.0}; // Manual penalty for velocity constraint
+            grampc_setopt_real_vector(grampc_, "PenaltyMin", pen);
             
             RCLCPP_INFO(this->get_logger(), "GRAMPC parameters set successfully");
         } else {
             RCLCPP_ERROR(this->get_logger(), "Cannot set GRAMPC parameters - structures not initialized");
         }
         
-        // Skip penalty estimation for now since we disabled constraints
-        RCLCPP_INFO(this->get_logger(), "GRAMPC setup completed successfully");
+        // Estimate penalty parameters AFTER setting all parameters (following Vehicle example)
+        // grampc_estim_penmin(grampc_, 1);  // Temporarily disable to isolate segfault
     }
 
 private:
@@ -212,13 +208,8 @@ private:
 
         // Safety check: Ensure we have received IPS data
         if (!has_prev_fix_) {
-            RCLCPP_INFO(this->get_logger(), "No IPS data received yet, using default position for testing");
-            // Use default position for testing when no IPS data is available
-            x_ = 0.0;
-            y_ = 0.0; 
-            yaw_ = 0.0;
-            v_ = 0.0;
-            has_prev_fix_ = true;  // Enable control loop for testing
+            RCLCPP_DEBUG(this->get_logger(), "No IPS data received yet, skipping control loop");
+            return;
         }
 
         // Update progress state based on vehicle's position along the path
@@ -229,7 +220,7 @@ private:
         
         // Sample along the path to find the closest point
         for (double test_s = 0.0; test_s <= path_->total_length(); test_s += 0.2) {
-            Eigen::Vector2d path_point = path_->interpolate(test_s);
+            Eigen::Vector2d path_point = path_->position(test_s);
             double dist = (vehicle_pos - path_point).norm();
             if (dist < min_dist) {
                 min_dist = dist;
@@ -242,8 +233,8 @@ private:
         double ref_distance = 1.0; // Look-ahead distance in meters
         double s_ref = std::min(s_ + ref_distance, path_->total_length());
         
-        Eigen::Vector2d ref_pos = path_->interpolate(s_ref);
-        double ref_yaw = path_->heading(s_ref);
+        Eigen::Vector2d ref_pos = path_->position(s_ref);
+        double ref_yaw = path_->yaw(s_ref);
         double ref_speed = 0.5; // Target speed for path following
 
         // Current vehicle state
@@ -273,15 +264,14 @@ private:
             throttle_cmd = prev_throttle_;
         } else {
             // Print current state for debugging
-            RCLCPP_INFO(this->get_logger(), "GRAMPC solving for state: [x=%.3f, y=%.3f, yaw=%.3f, v=%.3f] -> target: [x=%.3f, y=%.3f, yaw=%.3f, v=%.3f]", 
-                grampc_->param->x0[0], grampc_->param->x0[1], grampc_->param->x0[2], grampc_->param->x0[3],
-                grampc_->param->xdes[0], grampc_->param->xdes[1], grampc_->param->xdes[2], grampc_->param->xdes[3]);
+            RCLCPP_INFO(this->get_logger(), "About to call grampc_run with state: [%.3f, %.3f, %.3f, %.3f]", 
+                grampc_->param->x0[0], grampc_->param->x0[1], grampc_->param->x0[2], grampc_->param->x0[3]);
             
             try {
                 // Try to run GRAMPC with exception handling
-                RCLCPP_INFO(this->get_logger(), "Calling grampc_run...");
+                RCLCPP_DEBUG(this->get_logger(), "Calling grampc_run...");
                 grampc_run(grampc_);
-                RCLCPP_INFO(this->get_logger(), "grampc_run completed with status: %d", grampc_->sol->status);
+                RCLCPP_DEBUG(this->get_logger(), "grampc_run completed");
                 
             } catch (...) {
                 RCLCPP_ERROR(this->get_logger(), "Exception during grampc_run");
@@ -357,28 +347,8 @@ private:
 
 int main(int argc, char * argv[])
 {
-    std::cout << "Starting GRAMPC MPCC Node..." << std::endl;
-    
     rclcpp::init(argc, argv);
-    std::cout << "ROS2 initialized successfully" << std::endl;
-    
-    try {
-        std::cout << "Creating MPCCGrampcNode..." << std::endl;
-        auto node = std::make_shared<MPCCGrampcNode>();
-        std::cout << "Node created successfully" << std::endl;
-        
-        std::cout << "Starting ROS2 spin..." << std::endl;
-        rclcpp::spin(node);
-        std::cout << "ROS2 spin completed" << std::endl;
-    } catch (const std::exception& e) {
-        std::cout << "Exception caught: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cout << "Unknown exception caught" << std::endl;
-        return 1;
-    }
-    
+    rclcpp::spin(std::make_shared<MPCCGrampcNode>());
     rclcpp::shutdown();
-    std::cout << "ROS2 shutdown completed" << std::endl;
     return 0;
 }

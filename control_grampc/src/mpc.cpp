@@ -219,7 +219,7 @@ namespace control_grampc
         grampc_setopt_string(grampc_, "LineSearchExpAutoFallback", "on");
         grampc_setopt_string(grampc_, "ShiftControl", "on");
 
-        grampc_setopt_int   (grampc_, "MaxGradIter", 20);               
+        grampc_setopt_int   (grampc_, "MaxGradIter", 200);               
         grampc_setopt_int   (grampc_, "MaxMultIter", 3);                
         grampc_setopt_real  (grampc_, "ConvergenceGradientRelTol", 1e-3); 
         grampc_setopt_real  (grampc_, "MultiplierMax", 100.0);           

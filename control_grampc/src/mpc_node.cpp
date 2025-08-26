@@ -311,9 +311,7 @@ void MPCNode::publishControl(const Input& input) {
     auto throttle_msg = std_msgs::msg::Float32();
     auto steering_msg = std_msgs::msg::Float32();
     
-    // Convert velocity to throttle (simple mapping)
     throttle_msg.data = static_cast<float>(input.velocity() / 5.0);
-    // Scale steering to normalized range expected downstream (assuming delta_max=0.4 rad)
     const double delta_max = 0.4;
     double steer_norm = std::clamp(input.steeringAngle() / delta_max, -1.0, 1.0);
     steering_msg.data = static_cast<float>(steer_norm);
@@ -323,7 +321,7 @@ void MPCNode::publishControl(const Input& input) {
     
     // Log steering values for debugging
     static int log_counter = 0;
-    if (++log_counter % 20 == 0) {  // Log every 20 calls
+    if (++log_counter % 20 == 0) { 
         RCLCPP_INFO(this->get_logger(), "Control: throttle=%.3f, steer_norm=%.3f, steer_rad=%.3f", 
                      throttle_msg.data, steering_msg.data, input.steeringAngle());
     }

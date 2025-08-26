@@ -3,7 +3,7 @@
 namespace control_grampc {
 
 Cost::Cost() {
-    // Default cost matrices
+    // Init cost matrices
     Q_.diagonal() << 10.0, 10.0, 1.0, 1.0;  // x, y, theta, v
     R_.diagonal() << 0.1, 1.0;              // velocity, steering
 }
