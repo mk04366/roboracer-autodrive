@@ -8,29 +8,6 @@ extern "C"
 
 #include "probfct.h"
 
-    // ==== Shared user context (visible to C and C++) ====
-    typedef struct
-    {
-        // vehicle & limits
-        double L, delta_max, a_min, a_max, v_max, a_lat_max;
-        // track boundaries (left and right track widths from centerline)
-        double track_width_left, track_width_right;
-        // weights for centerline-framed errors
-        double w_ey, w_epsi, w_v, w_s, w_u, w_du, w_term;
-        // barrier function weights for track boundaries
-        double w_barrier;
-        // previous control (for rate penalty)
-        double u_prev[2];
-        // path data pointer for centerline calculations
-        void *path_ptr;
-    } mpcc_ctx_t;
-
-    // Plain-double helpers (may be used internally)
-    void mpcc_dynamics(double t, const double *x, const double *u, double *xdot, void *user);
-    double mpcc_stage_cost(double t, const double *x, const double *u, const double *xdes, void *user);
-    double mpcc_terminal_cost(const double *x, const double *xdes, void *user);
-
-    // GRAMPC v2.2 required callbacks (signatures per probfct.h)
     void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, typeInt *NgT, typeInt *NhT, typeUSERPARAM *userparam);
     void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam);
     void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam);
@@ -65,7 +42,7 @@ extern "C"
     void dfdx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam);
     void dfdxtrans(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam);
     void dfdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam);
-    void dHdxdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *adj, ctypeRNum *p, typeUSERPARAM *userparam);
+    void dHdxdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *vec, ctypeRNum *p, typeUSERPARAM *userparam);
     void Mfct(typeRNum *out, typeUSERPARAM *userparam);
     void Mtrans(typeRNum *out, typeUSERPARAM *userparam);
 

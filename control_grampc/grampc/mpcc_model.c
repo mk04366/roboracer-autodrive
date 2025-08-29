@@ -1,677 +1,249 @@
 #include "control_grampc/mpcc_model.h"
-#include <math.h>
-#include <stddef.h>
 
-// Use GRAMPC standard definitions for consistency
 #if USE_typeRNum == USE_FLOAT
 #define SIN(a) sinf(a)
 #define COS(a) cosf(a)
-#define TAN(a) tanf(a)
 #else
 #define SIN(a) sin(a)
 #define COS(a) cos(a)
-#define TAN(a) tan(a)
 #endif
 
-// Square macro following GRAMPC convention
+/* square macro */
 #define POW2(a) ((a) * (a))
 
-static inline double clamp(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
-static inline double wrap_angle(double a)
-{
-    while (a > 3.14159265358979323846)
-        a -= 2.0 * 3.14159265358979323846;
-    while (a < -3.14159265358979323846)
-        a += 2.0 * 3.14159265358979323846;
-    return a;
-}
-
-void mpcc_dynamics(double t, const double *x, const double *u, double *xdot, void *user)
-{
-    (void)t;
-
-    // Safety checks
-    if (!x || !u || !xdot)
-    {
-        if (xdot)
-        {
-            xdot[0] = xdot[1] = xdot[2] = xdot[3] = 0.0;
-        }
-        return;
-    }
-
-    mpcc_ctx_t *C = (mpcc_ctx_t *)user;
-
-    // Vehicle parameters with proper defaults
-    double L = (C ? C->L : 0.33);
-    double delta_max = (C ? C->delta_max : 0.4);
-    double v_cmd_max = (C ? C->v_max : 5.0);
-    double tau_v = 0.1; // velocity time constant
-
-    // 4D state: [x, y, theta, v]
-    double X = x[0], Y = x[1], THETA = x[2], V = x[3];
-    double v_cmd = clamp(u[0], 0.0, v_cmd_max);        // velocity command
-    double delta = clamp(u[1], -delta_max, delta_max); // steering angle
-
-    // Bicycle model dynamics - following GRAMPC Vehicle example structure
-    xdot[0] = V * COS(THETA);       // x_dot = v*cos(theta)
-    xdot[1] = V * SIN(THETA);       // y_dot = v*sin(theta)
-    xdot[2] = (V / L) * TAN(delta); // theta_dot = (v/L)*tan(delta)
-    xdot[3] = (v_cmd - V) / tau_v;  // v_dot = (v_cmd - v)/tau (first-order velocity tracking)
-}
-
-double mpcc_stage_cost(double t, const double *x, const double *u, const double *xdes, void *user)
-{
-    (void)t;
-
-    // Safety checks
-    if (!x || !u)
-    {
-        return 0.0;
-    }
-
-    mpcc_ctx_t *C = (mpcc_ctx_t *)user;
-
-    // Cost weights - following GRAMPC parameter structure
-    // These should match the gradients exactly
-    double w_x = 5.0;      // x position tracking
-    double w_y = 5.0;      // y position tracking
-    double w_theta = 10.0; // heading tracking
-    double w_v = 1.0;      // velocity tracking
-    double w_v_cmd = 0.1;  // velocity command effort
-    double w_delta = 0.05; // steering effort
-
-    // 4D state: [x, y, theta, v]
-    double vehicle_x = x[0], vehicle_y = x[1], vehicle_theta = x[2], vehicle_v = x[3];
-
-    // Reference values: [ref_x, ref_y, ref_theta, ref_v]
-    double ref_x = xdes ? xdes[0] : 0.0;
-    double ref_y = xdes ? xdes[1] : 0.0;
-    double ref_theta = xdes ? xdes[2] : 0.0;
-    double ref_v = xdes ? xdes[3] : 1.0;
-
-    // Control inputs: [velocity_cmd, steering_angle]
-    double v_cmd = u[0];
-    double delta = u[1];
-
-    // Calculate curvature-based feedforward steering (for control effort reference)
-    double delta_ff = 0.0;
-    if (C && xdes)
-    {
-        // Simple feedforward based on reference heading error
-        double heading_error = wrap_angle(ref_theta - vehicle_theta);
-        delta_ff = 0.5 * heading_error; // Proportional feedforward
-        delta_ff = clamp(delta_ff, -0.4, 0.4);
-    }
-
-    // GRAMPC-style quadratic cost using POW2 macro
-    double J = 0.0;
-
-    // State tracking costs
-    J += w_x * POW2(vehicle_x - ref_x);
-    J += w_y * POW2(vehicle_y - ref_y);
-    J += w_theta * POW2(wrap_angle(vehicle_theta - ref_theta));
-    J += w_v * POW2(vehicle_v - ref_v);
-
-    // Control effort costs
-    J += w_v_cmd * POW2(v_cmd - ref_v);    // penalize deviation from reference velocity
-    J += w_delta * POW2(delta - delta_ff); // penalize deviation from feedforward steering
-
-    return J;
-}
-
-double mpcc_terminal_cost(const double *x, const double *xdes, void *user)
-{
-    (void)user;
-
-    // Terminal cost weights - higher than stage cost for terminal constraint
-    double w_x_T = 10.0;
-    double w_y_T = 10.0;
-    double w_theta_T = 5.0; // reduced weight for terminal heading
-    double w_v_T = 1.0;
-
-    // Reference values
-    double ref_x = xdes ? xdes[0] : 0.0;
-    double ref_y = xdes ? xdes[1] : 0.0;
-    double ref_theta = xdes ? xdes[2] : 0.0;
-    double ref_v = xdes ? xdes[3] : 1.0;
-
-    // Calculate terminal cost using GRAMPC POW2 macro
-    double V = w_x_T * POW2(x[0] - ref_x) + w_y_T * POW2(x[1] - ref_y) + w_theta_T * POW2(wrap_angle(x[2] - ref_theta)) + w_v_T * POW2(x[3] - ref_v);
-
-    return V;
-}
-
+/** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),
+    inequalities (Nh), terminal equalities (NgT), terminal inequalities (NhT) **/
 void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, typeInt *NgT, typeInt *NhT, typeUSERPARAM *userparam)
 {
-    (void)userparam;
-    *Nx = 4; // x, y, theta, v
-    *Nu = 2; // velocity_cmd, steering_angle
+    *Nx = 5; // x, y, theta, kappa, v
+    *Nu = 2; // acceleration, steering_rate
     *Np = 0;
-    *Ng = 0; // No constraints for debugging
-    *Nh = 0;
+    *Nh = 1; // velocity constraint
+    *Ng = 0;
     *NgT = 0;
     *NhT = 0;
 }
 
+/** System function f(t,x,u,p,userparam)
+    ------------------------------------ **/
 void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)p;
-    (void)userparam;
+    ctypeRNum *param = (ctypeRNum *)userparam;
 
-    // Ultra-simple dynamics for debugging - just copy state
-    if (!out || !x || !u)
-    {
-        return;
-    }
-
-    // Simple integrator dynamics for testing
-    out[0] = x[3] * 0.5;  // x_dot = v/2 (slow motion)
-    out[1] = 0.0;         // y_dot = 0
-    out[2] = u[1] * 0.1;  // theta_dot = steering/10
-    out[3] = u[0] - x[3]; // v_dot = v_cmd - v
+    out[0] = COS(x[2]) * x[4];                                                   // x_dot = v * cos(theta)
+    out[1] = SIN(x[2]) * x[4];                                                   // y_dot = v * sin(theta)
+    out[2] = (x[3] * x[4]) / (param[0] * (1 + 1 / POW2(param[1]) * POW2(x[4]))); // theta_dot = kappa * v / (L * (1 + 1/v_ch^2 * v^2))
+    out[3] = u[1];                                                               // kappa_dot = steering_rate
+    out[4] = u[0];                                                               // v_dot = acceleration
 }
 
+/** Jacobian df/dx multiplied by vector vec, i.e. (df/dx)^T*vec or vec^T*(df/dx) **/
 void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)userparam;
+    ctypeRNum *param = (ctypeRNum *)userparam;
 
-    // Ultra-simple Jacobian for debugging - zero for now
-    if (!out || !vec)
-    {
-        if (out)
-        {
-            for (int i = 0; i < 4; i++)
-                out[i] = 0.0;
-        }
-        return;
-    }
-
-    // df/dx is zero for simple integrator dynamics
-    for (int i = 0; i < 4; i++)
-    {
-        out[i] = 0.0;
-    }
+    out[0] = 0;
+    out[1] = 0;
+    out[2] = (vec[1] * COS(x[2]) - vec[0] * SIN(x[2])) * x[4];
+    out[3] = (vec[2] * POW2(param[1]) * x[4]) / (param[0] * POW2(param[1]) + param[0] * POW2(x[4]));
+    out[4] = vec[0] * COS(x[2]) + vec[1] * SIN(x[2]) + (vec[2] * POW2(param[1]) / POW2(POW2(param[1]) + POW2(x[4])) * x[3] * (param[1] - x[4]) * (param[1] + x[4])) / param[0];
 }
 
+/** Jacobian df/du multiplied by vector vec, i.e. (df/du)^T*vec or vec^T*(df/du) **/
 void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)userparam;
-
-    // Ultra-simple control Jacobian for debugging
-    if (!out || !vec)
-    {
-        if (out)
-        {
-            out[0] = 0.0;
-            out[1] = 0.0;
-        }
-        return;
-    }
-
-    // df/du for simple dynamics: f = [v/2, 0, u[1]/10, u[0] - v]
-    // df/du = [[0, 0], [0, 0], [0, 1/10], [1, 0]]
-    out[0] = vec[3];       // d/d(v_cmd) of v_dot = 1
-    out[1] = vec[2] * 0.1; // d/d(steering) of theta_dot = 1/10
+    out[0] = vec[4]; // d/d(acceleration) of v_dot = 1
+    out[1] = vec[3]; // d/d(steering_rate) of kappa_dot = 1
 }
 
+/** Jacobian df/dp multiplied by vector vec, i.e. (df/dp)^T*vec or vec^T*(df/dp) **/
 void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)vec;
-    (void)u;
-    (void)p;
-    (void)userparam;
-    // No parameters
-    (void)out;
 }
 
+/** Integral cost l(t,x(t),u(t),p,xdes,udes,userparam)
+    -------------------------------------------------- **/
 void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)p;
-    (void)udes;
-    (void)userparam;
+    ctypeRNum *param = (ctypeRNum *)userparam;
 
-    // Ultra-simple quadratic cost for debugging
-    if (!out || !x || !u || !xdes)
-    {
-        if (out)
-            out[0] = 0.0;
-        return;
-    }
-
-    // Simple tracking cost: ||x - xdes||^2 + ||u||^2
-    double cost = 0.0;
-    for (int i = 0; i < 4; i++)
-    {
-        cost += (x[i] - xdes[i]) * (x[i] - xdes[i]);
-    }
-    for (int i = 0; i < 2; i++)
-    {
-        cost += 0.1 * u[i] * u[i];
-    }
-    out[0] = cost;
+    out[0] = param[12] * POW2(u[0] - udes[0])   // acceleration effort
+             + param[13] * POW2(u[1] - udes[1]) // steering rate effort
+             + param[2] * POW2(x[0] - xdes[0])  // x position tracking
+             + param[3] * POW2(x[1] - xdes[1])  // y position tracking
+             + param[4] * POW2(x[2] - xdes[2])  // heading tracking
+             + param[5] * POW2(x[3] - xdes[3])  // curvature tracking
+             + param[6] * POW2(x[4] - xdes[4]); // velocity tracking
 }
 
+/** Gradient dl/dx **/
 void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)u;
-    (void)p;
-    (void)udes;
-    (void)userparam;
+    ctypeRNum *param = (ctypeRNum *)userparam;
 
-    // Ultra-simple gradients for debugging
-    if (!out || !x || !xdes)
-    {
-        if (out)
-        {
-            for (int i = 0; i < 4; i++)
-                out[i] = 0.0;
-        }
-        return;
-    }
-
-    // dJ/dx = 2*(x - xdes)
-    for (int i = 0; i < 4; i++)
-    {
-        out[i] = 2.0 * (x[i] - xdes[i]);
-    }
+    out[0] = 2 * param[2] * (x[0] - xdes[0]);
+    out[1] = 2 * param[3] * (x[1] - xdes[1]);
+    out[2] = 2 * param[4] * (x[2] - xdes[2]);
+    out[3] = 2 * param[5] * (x[3] - xdes[3]);
+    out[4] = 2 * param[6] * (x[4] - xdes[4]);
 }
 
+/** Gradient dl/du **/
 void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)p;
-    (void)xdes;
-    (void)udes;
-    (void)userparam;
+    ctypeRNum *param = (ctypeRNum *)userparam;
 
-    // Ultra-simple control gradients for debugging
-    if (!out || !u)
-    {
-        if (out)
-        {
-            out[0] = 0.0;
-            out[1] = 0.0;
-        }
-        return;
-    }
-
-    // dJ/du = 2*0.1*u (simple quadratic control penalty)
-    out[0] = 2.0 * 0.1 * u[0];
-    out[1] = 2.0 * 0.1 * u[1];
+    out[0] = 2 * param[12] * (u[0] - udes[0]);
+    out[1] = 2 * param[13] * (u[1] - udes[1]);
 }
 
+/** Gradient dl/dp **/
 void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)xdes;
-    (void)udes;
-    (void)userparam;
-    (void)out;
 }
 
+/** Terminal cost V(T,x(T),p,xdes,userparam)
+    ---------------------------------------- **/
 void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)p;
-    (void)userparam;
+    ctypeRNum *param = (ctypeRNum *)userparam;
 
-    // Ultra-simple terminal cost for debugging
-    if (!out || !x || !xdes)
-    {
-        if (out)
-            out[0] = 0.0;
-        return;
-    }
-
-    // Simple terminal cost: ||x - xdes||^2
-    double cost = 0.0;
-    for (int i = 0; i < 4; i++)
-    {
-        cost += (x[i] - xdes[i]) * (x[i] - xdes[i]);
-    }
-    out[0] = cost;
+    out[0] = param[7] * POW2(x[0] - xdes[0])     // terminal x position
+             + param[8] * POW2(x[1] - xdes[1])   // terminal y position
+             + param[9] * POW2(x[2] - xdes[2])   // terminal heading
+             + param[10] * POW2(x[3] - xdes[3])  // terminal curvature
+             + param[11] * POW2(x[4] - xdes[4]); // terminal velocity
 }
 
+/** Gradient dV/dx **/
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)p;
-    (void)userparam;
+    ctypeRNum *param = (ctypeRNum *)userparam;
 
-    // Ultra-simple terminal gradients for debugging
-    if (!out || !x || !xdes)
-    {
-        if (out)
-        {
-            for (int i = 0; i < 4; i++)
-                out[i] = 0.0;
-        }
-        return;
-    }
-
-    // dV/dx = 2*(x - xdes)
-    for (int i = 0; i < 4; i++)
-    {
-        out[i] = 2.0 * (x[i] - xdes[i]);
-    }
+    out[0] = 2 * param[7] * (x[0] - xdes[0]);
+    out[1] = 2 * param[8] * (x[1] - xdes[1]);
+    out[2] = 2 * param[9] * (x[2] - xdes[2]);
+    out[3] = 2 * param[10] * (x[3] - xdes[3]);
+    out[4] = 2 * param[11] * (x[4] - xdes[4]);
 }
 
+/** Gradient dV/dp **/
 void dVdp(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)xdes;
-    (void)userparam;
-    (void)out;
 }
-
+/** Gradient dV/dT **/
 void dVdT(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)xdes;
-    (void)userparam;
-    out[0] = 0.0;
+    out[0] = 0;
 }
 
+/** Equality constraints g(t,x(t),u(t),p,uperparam) = 0
+    --------------------------------------------------- **/
 void gfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)p;
-    (void)u;
-
-    mpcc_ctx_t *ctx = (mpcc_ctx_t *)userparam;
-
-    // Safety checks
-    if (!x || !out)
-    {
-        if (out)
-        {
-            out[0] = 0.0;
-        }
-        return;
-    }
-
-    // Vehicle parameters with defaults
-    double v_max = (ctx ? ctx->v_max : 5.0);
-
-    // State variables
-    double v = x[3]; // velocity
-
-    // Single simple constraint: Maximum velocity
-    out[0] = v_max - v; // v <= v_max (g >= 0 means constraint satisfied)
 }
-
+/** Jacobian dg/dx multiplied by vector vec, i.e. (dg/dx)^T*vec or vec^T*(dg/dx) **/
 void dgdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)userparam;
-
-    // Safety checks
-    if (!out || !vec)
-    {
-        if (out)
-        {
-            for (int i = 0; i < 4; ++i)
-                out[i] = 0.0;
-        }
-        return;
-    }
-
-    // Gradient of single constraint g = v_max - v w.r.t. state x, multiplied by vec
-    // ∂g/∂v = -1, all other gradients are 0
-
-    out[0] = 0.0;             // ∂g/∂x
-    out[1] = 0.0;             // ∂g/∂y
-    out[2] = 0.0;             // ∂g/∂θ
-    out[3] = vec[0] * (-1.0); // ∂g/∂v = -1
 }
-
+/** Jacobian dg/du multiplied by vector vec, i.e. (dg/du)^T*vec or vec^T*(dg/du) **/
 void dgdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)userparam;
-
-    // Safety checks
-    if (!out || !vec)
-    {
-        if (out)
-        {
-            out[0] = out[1] = 0.0;
-        }
-        return;
-    }
-
-    // Single constraint g = v_max - v doesn't depend on control inputs
-    out[0] = 0.0; // No dependence on velocity command u[0]
-    out[1] = 0.0; // No dependence on steering angle u[1]
 }
-
+/** Jacobian dg/dp multiplied by vector vec, i.e. (dg/dp)^T*vec or vec^T*(dg/dp) **/
 void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
 }
 
+/** Inequality constraints h(t,x(t),u(t),p,uperparam) <= 0
+    ------------------------------------------------------ **/
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)userparam;
-    (void)out;
-}
+    ctypeRNum *param = (ctypeRNum *)userparam;
 
+    // Velocity constraint: v_max - v >= 0 => -(v - v_max) <= 0
+    out[0] = x[4] - param[14]; // v - v_max <= 0
+}
+/** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
 void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
+    out[0] = 0;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    out[4] = vec[0]; // dh/dv = 1
 }
-
+/** Jacobian dh/du multiplied by vector vec, i.e. (dh/du)^T*vec or vec^T*(dg/du) **/
 void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
+    out[0] = 0;
+    out[1] = 0;
 }
-
+/** Jacobian dh/dp multiplied by vector vec, i.e. (dh/dp)^T*vec or vec^T*(dg/dp) **/
 void dhdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
 }
 
+/** Terminal equality constraints gT(T,x(T),p,uperparam) = 0
+    -------------------------------------------------------- **/
 void gTfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)userparam;
-    (void)out;
-    // No terminal constraints for now
 }
-
+/** Jacobian dgT/dx multiplied by vector vec, i.e. (dgT/dx)^T*vec or vec^T*(dgT/dx) **/
 void dgTdx_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)userparam;
-
-    // Safety checks
-    if (!out || !vec)
-    {
-        if (out)
-        {
-            for (int i = 0; i < 4; ++i)
-                out[i] = 0.0;
-        }
-        return;
-    }
-
-    // Gradient of terminal constraint gT w.r.t. state x, multiplied by vec
-    // gT = v_max - v, so ∂gT/∂v = -1
-
-    out[0] = 0.0;             // ∂gT/∂x
-    out[1] = 0.0;             // ∂gT/∂y
-    out[2] = 0.0;             // ∂gT/∂θ
-    out[3] = vec[0] * (-1.0); // ∂gT/∂v = -1
 }
-
+/** Jacobian dgT/dp multiplied by vector vec, i.e. (dgT/dp)^T*vec or vec^T*(dgT/dp) **/
 void dgTdp_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
 }
-
+/** Jacobian dgT/dT multiplied by vector vec, i.e. (dgT/dT)^T*vec or vec^T*(dgT/dT) **/
 void dgTdT_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
 }
 
+/** Terminal inequality constraints hT(T,x(T),p,uperparam) <= 0
+    ----------------------------------------------------------- **/
 void hTfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)userparam;
-    (void)out;
 }
-
+/** Jacobian dhT/dx multiplied by vector vec, i.e. (dhT/dx)^T*vec or vec^T*(dhT/dx) **/
 void dhTdx_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
 }
-
+/** Jacobian dhT/dp multiplied by vector vec, i.e. (dhT/dp)^T*vec or vec^T*(dhT/dp) **/
 void dhTdp_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
 }
-
+/** Jacobian dhT/dT multiplied by vector vec, i.e. (dhT/dT)^T*vec or vec^T*(dhT/dT) **/
 void dhTdT_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    (void)T;
-    (void)x;
-    (void)p;
-    (void)vec;
-    (void)userparam;
-    (void)out;
 }
 
-// RODAS-related stubs (not used)
+/** Additional functions required for semi-implicit systems
+    M*dx/dt(t) = f(t0+t,x(t),u(t),p) using the solver RODAS
+    ------------------------------------------------------- **/
+/** Jacobian df/dx in vector form (column-wise) **/
 void dfdx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)userparam;
-    for (int i = 0; i < 16; ++i)
-        out[i] = 0.0;
 }
+/** Jacobian df/dx in vector form (column-wise) **/
 void dfdxtrans(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)userparam;
-    for (int i = 0; i < 16; ++i)
-        out[i] = 0.0;
 }
+/** Jacobian df/dt **/
 void dfdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)p;
-    (void)userparam;
-    for (int i = 0; i < 4; ++i)
-        out[i] = 0.0;
 }
-void dHdxdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *adj, ctypeRNum *p, typeUSERPARAM *userparam)
+/** Jacobian d(dH/dx)/dt  **/
+void dHdxdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *vec, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    (void)t;
-    (void)x;
-    (void)u;
-    (void)adj;
-    (void)p;
-    (void)userparam;
-    for (int i = 0; i < 4; ++i)
-        out[i] = 0.0;
 }
+/** Mass matrix in vector form (column-wise, either banded or full matrix) **/
 void Mfct(typeRNum *out, typeUSERPARAM *userparam)
 {
-    (void)userparam;
-    (void)out;
 }
+/** Transposed mass matrix in vector form (column-wise, either banded or full matrix) **/
 void Mtrans(typeRNum *out, typeUSERPARAM *userparam)
 {
-    (void)userparam;
-    (void)out;
 }
