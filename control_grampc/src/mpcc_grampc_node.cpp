@@ -33,7 +33,7 @@ using std::placeholders::_1;
 
 #define NX 5
 #define NU 2
-#define NC 1
+#define NC 0
 #define NP 0
 
 // Helper function to wrap angle to [-pi, pi]
@@ -82,25 +82,24 @@ public:
         // Initialize parameter array for GRAMPC vehicle model
         // Following the vehicle problem structure:
         param_[0] = 3;  // L (wheelbase)
-        param_[1] = 2.0;  // v_ch (characteristic velocity)
+        param_[1] = 50.0;  // v_ch (characteristic velocity)
         param_[2] = 1.0;   // w_x (x position weight)
         param_[3] = 1.0;   // w_y (y position weight)
         param_[4] = 1.0;  // w_theta (heading weight)
         param_[5] = 1.0;   // w_kappa (curvature weight)
-        param_[6] = 1.0;   // w_v (velocity weight)
-        param_[7] = 1.0;  // w_x_T (terminal x weight)
+        param_[6] = 100.0;   // w_v (velocity weight)
+        param_[7] = 0.0;  // w_x_T (terminal x weight)
         param_[8] = 1.0;  // w_y_T (terminal y weight)
         param_[9] = 1.0;   // w_theta_T (terminal heading weight)
         param_[10] = 1.0;  // w_kappa_T (terminal curvature weight)
-        param_[11] = 1.0;  // w_v_T (terminal velocity weight)
+        param_[11] = 100.0;  // w_v_T (terminal velocity weight)
         param_[12] = 0.1;  // w_u0 (acceleration effort weight)
-        param_[13] = 0.05; // w_u1 (steering rate effort weight)
-        param_[14] = 1.0; // v_max (maximum velocity for constraints)
+        param_[13] = 0.1; // w_u1 (steering rate effort weight)
 
         // Store important vehicle parameters for easy access
         L_ = param_[0];
         delta_max_ = 0.4;
-        v_max_ = param_[14];
+        v_max_ = 30.0;  // Set a reasonable default max velocity since we removed velocity constraints
 
         // Initialize GRAMPC with safety checks
         grampc_ = nullptr;
@@ -125,7 +124,7 @@ public:
         grampc_->param->Nx = NX; // [x, y, theta, kappa, v] - 5D vehicle state
         grampc_->param->Nu = NU; // [acceleration, steering_rate]
         grampc_->param->Ng = 0;
-        grampc_->param->Nh = NC; // velocity constraint
+        grampc_->param->Nh = NC; // no inequality constraints (NC = 0)
         grampc_->param->Np = NP;
         grampc_->param->NhT = 0;
         grampc_->param->NgT = 0;
@@ -143,7 +142,6 @@ public:
         {
             grampc_setparam_real_vector(grampc_, "x0", x0_init);
             grampc_setparam_real_vector(grampc_, "xdes", xref_init);
-
             grampc_setparam_real_vector(grampc_, "u0", u0_init);
             grampc_setparam_real_vector(grampc_, "umin", umin);
             grampc_setparam_real_vector(grampc_, "umax", umax);
@@ -162,10 +160,6 @@ public:
         {
             RCLCPP_ERROR(this->get_logger(), "Cannot set GRAMPC parameters - structures not initialized");
         }
-
-        // Skip penalty estimation for now since we disabled constraints
-        // RCLCPP_INFO(this->get_logger(), "GRAMPC setup completed successfully");
-
     }
 
 private:
@@ -187,11 +181,17 @@ private:
             // Simple unwrap
             const double dyaw = std::atan2(std::sin(new_yaw - yaw_), std::cos(new_yaw - yaw_));
             yaw_ += 0.5 * dyaw;
+            
+            // Calculate curvature from vehicle motion (rate of change of heading)
+            const double yaw_rate = dyaw / dt;
+            const double current_speed = std::max(0.1, v_); // Avoid division by zero
+            kappa_ = yaw_rate / current_speed;
         }
         else
         {
             // First fix or invalid dt
             yaw_ = yaw_;
+            kappa_ = 0.0;
             has_prev_fix_ = true;
         }
 
@@ -232,7 +232,7 @@ private:
         double min_dist = std::numeric_limits<double>::max();
 
         // Sample along the path to find the closest point
-        for (double test_s = 0.0; test_s <= path_->total_length(); test_s += 0.2) // why 0.2?
+        for (double test_s = 0.0; test_s <= path_->total_length(); test_s += 0.1) // reduced from 0.2 to 0.1 for better accuracy
         {
             Eigen::Vector2d path_point = path_->interpolate(test_s);
             double dist = (vehicle_pos - path_point).norm();
@@ -244,12 +244,12 @@ private:
         }
 
         // Get reference point ahead on the path for path following
-        double ref_distance = 1.0; // Look-ahead distance in meters
+        double ref_distance = std::max(0.5, v_ * 0.5); // Dynamic look-ahead based on velocity (0.5-1.5s ahead)
         double s_ref = std::min(s_ + ref_distance, path_->total_length());
 
         Eigen::Vector2d ref_pos = path_->interpolate(s_ref);
         double ref_yaw = path_->heading(s_ref);
-        double ref_speed = 2.0; // Target speed for path following - increased from 0.5
+        double ref_speed = std::min(5.0, std::max(1.0, v_ + 0.5)); // Progressive speed increase
 
         // Current and target state vectors for GRAMPC
         std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
@@ -305,41 +305,6 @@ private:
             double acceleration = grampc_->sol->unext[0];  // acceleration [m/s^2]
             double steering_rate = grampc_->sol->unext[1]; // steering rate [rad/s]
 
-            // Reference integration using Heun scheme (exactly like GRAMPC Vehicle example)
-            double rwsReferenceIntegration[2 * NX];
-            double current_time = 0.0; // Current time for integration
-            double dt = 0.02; // control loop period
-            
-            // First ffct call at current time and state
-            double current_state_array[NX] = {x_, y_, yaw_, kappa_, v_};
-            ffct(rwsReferenceIntegration, current_time, current_state_array, grampc_->sol->unext, grampc_->sol->pnext, (void*)param_);
-            
-            // Heun integration step 1: x_temp = x0 + dt * f(x0, u)
-            double temp_state[NX];
-            for (int i = 0; i < NX; i++) {
-                temp_state[i] = current_state_array[i] + dt * rwsReferenceIntegration[i];
-            }
-            
-            // Second ffct call at next time with temporary state
-            ffct(rwsReferenceIntegration + NX, current_time + dt, temp_state, grampc_->sol->unext, grampc_->sol->pnext, (void*)param_);
-            
-            // Heun integration step 2: x_next = x0 + dt * (f(x0,u) + f(x_temp,u)) / 2
-            x_ = current_state_array[0] + dt * (rwsReferenceIntegration[0] + rwsReferenceIntegration[0 + NX]) / 2;
-            y_ = current_state_array[1] + dt * (rwsReferenceIntegration[1] + rwsReferenceIntegration[1 + NX]) / 2;
-            yaw_ = current_state_array[2] + dt * (rwsReferenceIntegration[2] + rwsReferenceIntegration[2 + NX]) / 2;
-            kappa_ = current_state_array[3] + dt * (rwsReferenceIntegration[3] + rwsReferenceIntegration[3 + NX]) / 2;
-            v_ = current_state_array[4] + dt * (rwsReferenceIntegration[4] + rwsReferenceIntegration[4 + NX]) / 2;
-            
-            // Update GRAMPC with the integrated state for next iteration (like Vehicle example)
-            double next_state[NX] = {
-                x_,
-                y_,
-                yaw_,
-                kappa_,
-                v_
-            };
-            grampc_setparam_real_vector(grampc_, "x0", next_state);
-            
             // Convert acceleration to throttle command
             if (acceleration >= 0.0) {
                 throttle_cmd = std::min(1.0, acceleration / 3.0);
@@ -352,8 +317,8 @@ private:
             steering_angle_ = std::max(-delta_max_, std::min(delta_max_, steering_angle_));
             steer_cmd = steering_angle_;
 
-            // RCLCPP_INFO(this->get_logger(), "MPCC Solution - acceleration: %.3f, steering_rate: %.3f, kappa: %.3f -> throttle: %.3f, steer: %.3f",
-            //             acceleration, steering_rate, kappa_, throttle_cmd, steer_cmd);
+            RCLCPP_INFO(this->get_logger(), "MPCC Solution - acceleration: %.3f, steering_rate: %.3f, kappa: %.3f -> throttle: %.3f, steer: %.3f",
+                        acceleration, steering_rate, kappa_, throttle_cmd, steer_cmd);
         }
 
         auto solver_end = std::chrono::high_resolution_clock::now();
@@ -410,7 +375,7 @@ private:
 
     // GRAMPC solver and parameter array
     TYPE_GRAMPC_POINTER(grampc_);
-    double param_[15]; // Parameter array for GRAMPC vehicle model
+    double param_[14]; // Parameter array for GRAMPC vehicle model (matches main_VEHICLE.c)
 
     // Easy access to key parameters
     double L_, delta_max_, v_max_;

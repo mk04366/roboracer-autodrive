@@ -18,7 +18,7 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     *Nx = 5; // x, y, theta, kappa, v
     *Nu = 2; // acceleration, steering_rate
     *Np = 0;
-    *Nh = 1; // velocity constraint
+    *Nh = 0; // no inequality constraints
     *Ng = 0;
     *NgT = 0;
     *NhT = 0;
@@ -159,25 +159,17 @@ void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     ------------------------------------------------------ **/
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    ctypeRNum *param = (ctypeRNum *)userparam;
-
-    // Velocity constraint: v_max - v >= 0 => -(v - v_max) <= 0
-    out[0] = x[4] - param[14]; // v - v_max <= 0
+    // No inequality constraints
 }
 /** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
 void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    out[0] = 0;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = vec[0]; // dh/dv = 1
+    // No inequality constraints
 }
 /** Jacobian dh/du multiplied by vector vec, i.e. (dh/du)^T*vec or vec^T*(dg/du) **/
 void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    out[0] = 0;
-    out[1] = 0;
+    // No inequality constraints
 }
 /** Jacobian dh/dp multiplied by vector vec, i.e. (dh/dp)^T*vec or vec^T*(dg/dp) **/
 void dhdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
