@@ -10,10 +10,20 @@ extern "C"
 #include "grampc_mess.h"
 }
 #include "rclcpp/rclcpp.hpp"
+#include "message_filters/subscriber.h"
+#include "message_filters/time_synchronizer.h"
+
+#include "rclcpp/rclcpp.hpp"
+#include "message_filters/subscriber.h"
+#include "message_filters/time_synchronizer.h"
 
 #include <memory>
 #include <eigen3/Eigen/Dense>
 #include <vector>
+#include <algorithm>
+#include <chrono>
+#include <cmath>  // For M_PI and std::abs
+#include <limits> // For std::numeric_limits
 #include <algorithm>
 #include <chrono>
 #include <cmath>  // For M_PI and std::abs
@@ -57,33 +67,35 @@ public:
             RCLCPP_ERROR(this->get_logger(), "Failed to load path from: %s", csv_file.c_str());
         }
 
-        // ROS interfaces
-        ips_sub_ = this->create_subscription<geometry_msgs::msg::Point>("/autodrive/f1tenth_1/ips", 30,
-                                                                        std::bind(&MPCCGrampcNode::ipsCallback, this, _1));
-
-        speed_sub_ = this->create_subscription<std_msgs::msg::Float32>("/autodrive/f1tenth_1/speed", 30,
-                                                                       std::bind(&MPCCGrampcNode::speedCallback, this, _1));
+        // ROS interfaces - using message filters for synchronization
+        ips_sub_.subscribe(this, "/autodrive/f1tenth_1/ips");
+        speed_sub_.subscribe(this, "/autodrive/f1tenth_1/speed");
+        
+        // Create time synchronizer for IPS and speed data
+        sync_ = std::make_shared<message_filters::TimeSynchronizer<geometry_msgs::msg::Point, std_msgs::msg::Float32>>(
+            ips_sub_, speed_sub_, 10);
+        sync_->registerCallback(&MPCCGrampcNode::synchronizedCallback, this);
 
         throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
         steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
 
         // Initialize parameter array for GRAMPC vehicle model
         // Following the vehicle problem structure:
-        param_[0] = 0.33;  // L (wheelbase)
-        param_[1] = 10.0;  // v_ch (characteristic velocity)
-        param_[2] = 5.0;   // w_x (x position weight)
-        param_[3] = 5.0;   // w_y (y position weight)
-        param_[4] = 10.0;  // w_theta (heading weight)
+        param_[0] = 3;  // L (wheelbase)
+        param_[1] = 2.0;  // v_ch (characteristic velocity)
+        param_[2] = 1.0;   // w_x (x position weight)
+        param_[3] = 1.0;   // w_y (y position weight)
+        param_[4] = 1.0;  // w_theta (heading weight)
         param_[5] = 1.0;   // w_kappa (curvature weight)
         param_[6] = 1.0;   // w_v (velocity weight)
-        param_[7] = 10.0;  // w_x_T (terminal x weight)
-        param_[8] = 10.0;  // w_y_T (terminal y weight)
-        param_[9] = 5.0;   // w_theta_T (terminal heading weight)
+        param_[7] = 1.0;  // w_x_T (terminal x weight)
+        param_[8] = 1.0;  // w_y_T (terminal y weight)
+        param_[9] = 1.0;   // w_theta_T (terminal heading weight)
         param_[10] = 1.0;  // w_kappa_T (terminal curvature weight)
         param_[11] = 1.0;  // w_v_T (terminal velocity weight)
         param_[12] = 0.1;  // w_u0 (acceleration effort weight)
         param_[13] = 0.05; // w_u1 (steering rate effort weight)
-        param_[14] = 10.0; // v_max (maximum velocity for constraints) - increased from 5.0
+        param_[14] = 1.0; // v_max (maximum velocity for constraints)
 
         // Store important vehicle parameters for easy access
         L_ = param_[0];
@@ -154,19 +166,20 @@ public:
         // Skip penalty estimation for now since we disabled constraints
         // RCLCPP_INFO(this->get_logger(), "GRAMPC setup completed successfully");
 
-        timer_ = this->create_wall_timer(std::chrono::milliseconds(20), std::bind(&MPCCGrampcNode::controlLoop, this));
     }
 
 private:
-    void ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg)
+    void synchronizedCallback(const geometry_msgs::msg::Point::SharedPtr ips_msg,
+                             const std_msgs::msg::Float32::SharedPtr speed_msg)
     {
+        // Update position data from IPS
         const double now_sec = this->now().seconds();
-        const double dx = msg->x - last_x_;
-        const double dy = msg->y - last_y_;
+        const double dx = ips_msg->x - last_x_;
+        const double dy = ips_msg->y - last_y_;
         const double dt = now_sec - last_time_;
 
-        x_ = msg->x;
-        y_ = msg->y;
+        x_ = ips_msg->x;
+        y_ = ips_msg->y;
 
         if (has_prev_fix_ && dt > 1e-3)
         {
@@ -185,12 +198,12 @@ private:
         last_x_ = x_;
         last_y_ = y_;
         last_time_ = now_sec;
-    }
 
-    void speedCallback(const std_msgs::msg::Float32::SharedPtr msg)
-    {
-        // Apply low-pass filter to smooth speed data
-        v_ = 0.7 * v_ + 0.3 * msg->data;
+        // Update speed data with low-pass filter
+        v_ = 0.7 * v_ + 0.3 * speed_msg->data;
+
+        // Now that we have synchronized data, run the control loop
+        controlLoop();
     }
 
     void controlLoop()
@@ -275,41 +288,20 @@ private:
             return;
         }
 
-        // Check for actual errors vs informational status codes
-        // STATUS_MULTIPLIER_UPDATE (32) is normal behavior, not an error
+        // Check for any GRAMPC solver issues - treat all status > 0 as errors
         if (grampc_->sol->status > 0)
         {
             // Print status for debugging
-            grampc_printstatus(grampc_->sol->status, STATUS_LEVEL_INFO);
+            grampc_printstatus(grampc_->sol->status, STATUS_LEVEL_ERROR);
+            RCLCPP_WARN(this->get_logger(), "GRAMPC solver failed with status %d - using previous commands", grampc_->sol->status);
             
-            // Only treat certain status codes as actual errors requiring fallback
-            bool is_error = (grampc_->sol->status & (STATUS_INFEASIBLE | 
-                                                   STATUS_INTEGRATOR_INPUT_NOT_CONSISTENT |
-                                                   STATUS_INTEGRATOR_MAXSTEPS |
-                                                   STATUS_INTEGRATOR_STEPS_TOO_SMALL |
-                                                   STATUS_INTEGRATOR_MATRIX_IS_SINGULAR)) != 0;
-            
-            if (is_error)
-            {
-                RCLCPP_ERROR(this->get_logger(), "GRAMPC solver error with status %d", grampc_->sol->status);
-                steer_cmd = prev_steer_;
-                throttle_cmd = prev_throttle_;
-            }
-            else
-            {
-                // Status codes like MULTIPLIER_UPDATE (32) are informational - continue with solution
-                RCLCPP_DEBUG(this->get_logger(), "GRAMPC status: %d (informational)", grampc_->sol->status);
-            }
+            // Use previous commands when solver fails
+            steer_cmd = prev_steer_;
+            throttle_cmd = prev_throttle_;
         }
-        
-        // Extract control solution if no errors occurred
-        if (!(grampc_->sol->status & (STATUS_INFEASIBLE | 
-                                    STATUS_INTEGRATOR_INPUT_NOT_CONSISTENT |
-                                    STATUS_INTEGRATOR_MAXSTEPS |
-                                    STATUS_INTEGRATOR_STEPS_TOO_SMALL |
-                                    STATUS_INTEGRATOR_MATRIX_IS_SINGULAR)))
+        else
         {
-            // Extract control from solution - [acceleration, steering_rate]
+            // Extract control solution only when solver succeeds (status == 0)
             double acceleration = grampc_->sol->unext[0];  // acceleration [m/s^2]
             double steering_rate = grampc_->sol->unext[1]; // steering rate [rad/s]
 
@@ -380,13 +372,13 @@ private:
         auto s_msg = std_msgs::msg::Float32();
         s_msg.data = static_cast<float>(steer_cmd);
         RCLCPP_INFO(this->get_logger(), "Steering Command: %.3f", steer_cmd);
-        // steering_pub_->publish(s_msg);
+        steering_pub_->publish(s_msg);
 
         // Publish throttle command
         auto t_msg = std_msgs::msg::Float32();
         t_msg.data = static_cast<float>(throttle_cmd);
         RCLCPP_INFO(this->get_logger(), "Throttle Command: %.3f", throttle_cmd);
-        // throttle_pub_->publish(t_msg);
+        throttle_pub_->publish(t_msg);
 
         // RCLCPP_INFO(this->get_logger(), "Published commands - steer: %.3f, throttle: %.3f", steer_cmd, throttle_cmd);
 
@@ -397,11 +389,12 @@ private:
 
 private:
     // Member variables
-    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr ips_sub_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
+    message_filters::Subscriber<geometry_msgs::msg::Point> ips_sub_;
+    message_filters::Subscriber<std_msgs::msg::Float32> speed_sub_;
+    std::shared_ptr<message_filters::TimeSynchronizer<geometry_msgs::msg::Point, std_msgs::msg::Float32>> sync_;
+    
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
-    rclcpp::TimerBase::SharedPtr timer_;
 
     std::shared_ptr<mpcc::Path> path_;
 

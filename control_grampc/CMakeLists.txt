@@ -17,6 +17,7 @@ find_package(ackermann_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(message_filters REQUIRED)
 
 # === Link GRAMPC ===
 set(GRAMPC_DIR "/home/ammar/ros2_ws/GRAMPC_v2.2")
@@ -62,6 +63,7 @@ ament_target_dependencies(mpcc_grampc_node
   ament_index_cpp
   sensor_msgs
   ackermann_msgs
+  message_filters
 )
 
 ament_target_dependencies(path_utils Eigen3)

@@ -15,6 +15,7 @@
   <depend>visualization_msgs</depend>
   <depend>ackermann_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>message_filters</depend>
 
   <!-- For YAML params & filesystem helpers -->
   <depend>ament_index_cpp</depend>
