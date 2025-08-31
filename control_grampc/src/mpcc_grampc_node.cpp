@@ -7,6 +7,7 @@
 extern "C"
 {
 #include "grampc.h"
+#include "grampc_mess.h"
 }
 #include "rclcpp/rclcpp.hpp"
 
@@ -82,7 +83,7 @@ public:
         param_[11] = 1.0;  // w_v_T (terminal velocity weight)
         param_[12] = 0.1;  // w_u0 (acceleration effort weight)
         param_[13] = 0.05; // w_u1 (steering rate effort weight)
-        param_[14] = 5.0;  // v_max (maximum velocity for constraints)
+        param_[14] = 10.0; // v_max (maximum velocity for constraints) - increased from 5.0
 
         // Store important vehicle parameters for easy access
         L_ = param_[0];
@@ -92,7 +93,7 @@ public:
         // Initialize GRAMPC with safety checks
         grampc_ = nullptr;
         grampc_init(&grampc_, (void *)param_);
-        RCLCPP_INFO(this->get_logger(), "GRAMPC init success");
+        // RCLCPP_INFO(this->get_logger(), "GRAMPC init success");
 
         if (!grampc_)
         {
@@ -106,7 +107,7 @@ public:
             return;
         }
 
-        RCLCPP_INFO(this->get_logger(), "GRAMPC pointer and structures are valid");
+        // RCLCPP_INFO(this->get_logger(), "GRAMPC pointer and structures are valid");
 
         // Set problem dimensions - these MUST match exactly with ocp_dim() in mpcc_model.c
         grampc_->param->Nx = NX; // [x, y, theta, kappa, v] - 5D vehicle state
@@ -122,8 +123,8 @@ public:
         double xref_init[NX] = {0.0, 0.0, 0.0, 0.0, 1.0}; // [x, y, theta, kappa, v]
 
         double u0_init[NU] = {0.0, 0.0}; // [acceleration, steering_rate]
-        double umin[NU] = {-1.0, -1.0};  // acceleration_min, steering_rate_min
-        double umax[NU] = {1.0, 1.0};    // acceleration_max, steering_rate_max
+        double umin[NU] = {-3.0, -2.0};  // acceleration_min, steering_rate_min - relaxed bounds
+        double umax[NU] = {3.0, 2.0};    // acceleration_max, steering_rate_max - relaxed bounds
 
         // Safety check before setting parameters
         if (grampc_ && grampc_->param)
@@ -143,7 +144,7 @@ public:
             grampc_setopt_int(grampc_, "Nhor", 20);        // Number of discretization steps
             grampc_setopt_int(grampc_, "MaxGradIter", 10); // Maximum gradient iterations
 
-            RCLCPP_INFO(this->get_logger(), "GRAMPC parameters set successfully");
+            // RCLCPP_INFO(this->get_logger(), "GRAMPC parameters set successfully");
         }
         else
         {
@@ -151,7 +152,7 @@ public:
         }
 
         // Skip penalty estimation for now since we disabled constraints
-        RCLCPP_INFO(this->get_logger(), "GRAMPC setup completed successfully");
+        // RCLCPP_INFO(this->get_logger(), "GRAMPC setup completed successfully");
 
         timer_ = this->create_wall_timer(std::chrono::milliseconds(20), std::bind(&MPCCGrampcNode::controlLoop, this));
     }
@@ -194,10 +195,17 @@ private:
 
     void controlLoop()
     {
+        // Safety check: Ensure we have a valid path
+        if (!path_ || path_->total_length() < 1e-3)
+        {
+            RCLCPP_WARN(this->get_logger(), "No valid path found, skipping control loop");
+            return;
+        }
+
         // Safety check: Ensure we have received IPS data
         if (!has_prev_fix_)
         {
-            RCLCPP_INFO(this->get_logger(), "No IPS data received yet, using default position");
+            // RCLCPP_INFO(this->get_logger(), "No IPS data received yet, using default position");
             x_ = 0.0;
             y_ = 0.0;
             yaw_ = 0.0;
@@ -228,23 +236,22 @@ private:
 
         Eigen::Vector2d ref_pos = path_->interpolate(s_ref);
         double ref_yaw = path_->heading(s_ref);
-        double ref_speed = 0.5; // Target speed for path following
+        double ref_speed = 2.0; // Target speed for path following - increased from 0.5
 
-        // Update curvature based on current steering angle and velocity
-        if (v_ > 0.1)
-        {
-            kappa_ = std::tan(steering_angle_) / L_;
-        }
-        else
-        {
-            kappa_ = 0.0;
-        }
-
+        // Current and target state vectors for GRAMPC
         std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
         double ref_curvature = path_->curvature(s_ref);
 
         // Desired target state (path following) - [x, y, theta, kappa, v]
         std::vector<double> target_state = {ref_pos.x(), ref_pos.y(), ref_yaw, ref_curvature, ref_speed};
+
+        // Print the current_state and target_state every time:
+        RCLCPP_INFO(this->get_logger(), "Current State: [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]", 
+                    current_state[0], current_state[1], current_state[2], current_state[3], current_state[4]);
+        RCLCPP_INFO(this->get_logger(), "Target State:  [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]", 
+                    target_state[0], target_state[1], target_state[2], target_state[3], target_state[4]);
+        RCLCPP_INFO(this->get_logger(), "Path Info: s_current=%.3f, s_ref=%.3f, min_dist=%.3f", 
+                    s_, s_ref, min_dist);
 
         // Set current state as initial condition
         grampc_setparam_real_vector(grampc_, "x0", current_state.data());
@@ -259,7 +266,6 @@ private:
         try
         {
             grampc_run(grampc_);
-            RCLCPP_INFO(this->get_logger(), "grampc_run completed with status: %d", grampc_->sol->status);
         }
         catch (const std::exception &e)
         {
@@ -269,60 +275,127 @@ private:
             return;
         }
 
+        // Check for actual errors vs informational status codes
+        // STATUS_MULTIPLIER_UPDATE (32) is normal behavior, not an error
         if (grampc_->sol->status > 0)
         {
-            RCLCPP_WARN(this->get_logger(), "GRAMPC solver failed with status %d", grampc_->sol->status);
-            steer_cmd = prev_steer_;
-            throttle_cmd = prev_throttle_;
+            // Print status for debugging
+            grampc_printstatus(grampc_->sol->status, STATUS_LEVEL_INFO);
+            
+            // Only treat certain status codes as actual errors requiring fallback
+            bool is_error = (grampc_->sol->status & (STATUS_INFEASIBLE | 
+                                                   STATUS_INTEGRATOR_INPUT_NOT_CONSISTENT |
+                                                   STATUS_INTEGRATOR_MAXSTEPS |
+                                                   STATUS_INTEGRATOR_STEPS_TOO_SMALL |
+                                                   STATUS_INTEGRATOR_MATRIX_IS_SINGULAR)) != 0;
+            
+            if (is_error)
+            {
+                RCLCPP_ERROR(this->get_logger(), "GRAMPC solver error with status %d", grampc_->sol->status);
+                steer_cmd = prev_steer_;
+                throttle_cmd = prev_throttle_;
+            }
+            else
+            {
+                // Status codes like MULTIPLIER_UPDATE (32) are informational - continue with solution
+                RCLCPP_DEBUG(this->get_logger(), "GRAMPC status: %d (informational)", grampc_->sol->status);
+            }
         }
-        else
+        
+        // Extract control solution if no errors occurred
+        if (!(grampc_->sol->status & (STATUS_INFEASIBLE | 
+                                    STATUS_INTEGRATOR_INPUT_NOT_CONSISTENT |
+                                    STATUS_INTEGRATOR_MAXSTEPS |
+                                    STATUS_INTEGRATOR_STEPS_TOO_SMALL |
+                                    STATUS_INTEGRATOR_MATRIX_IS_SINGULAR)))
         {
-            // Extract control from solution - now [acceleration, steering_rate]
+            // Extract control from solution - [acceleration, steering_rate]
             double acceleration = grampc_->sol->unext[0];  // acceleration [m/s^2]
             double steering_rate = grampc_->sol->unext[1]; // steering rate [rad/s]
 
-            // Convert acceleration to throttle command (simple mapping)
-            throttle_cmd = std::max(0.0, std::min(1.0, acceleration)); // normalize to [0,1]
-
-            // Integrate steering rate to get steering angle (simple Euler integration)
+            // Reference integration using Heun scheme (exactly like GRAMPC Vehicle example)
+            double rwsReferenceIntegration[2 * NX];
+            double current_time = 0.0; // Current time for integration
             double dt = 0.02; // control loop period
-            steering_angle_ += steering_rate * dt;
-            steering_angle_ = std::max(-delta_max_, std::min(delta_max_, steering_angle_)); // clamp to limits
+            
+            // First ffct call at current time and state
+            double current_state_array[NX] = {x_, y_, yaw_, kappa_, v_};
+            ffct(rwsReferenceIntegration, current_time, current_state_array, grampc_->sol->unext, grampc_->sol->pnext, (void*)param_);
+            
+            // Heun integration step 1: x_temp = x0 + dt * f(x0, u)
+            double temp_state[NX];
+            for (int i = 0; i < NX; i++) {
+                temp_state[i] = current_state_array[i] + dt * rwsReferenceIntegration[i];
+            }
+            
+            // Second ffct call at next time with temporary state
+            ffct(rwsReferenceIntegration + NX, current_time + dt, temp_state, grampc_->sol->unext, grampc_->sol->pnext, (void*)param_);
+            
+            // Heun integration step 2: x_next = x0 + dt * (f(x0,u) + f(x_temp,u)) / 2
+            x_ = current_state_array[0] + dt * (rwsReferenceIntegration[0] + rwsReferenceIntegration[0 + NX]) / 2;
+            y_ = current_state_array[1] + dt * (rwsReferenceIntegration[1] + rwsReferenceIntegration[1 + NX]) / 2;
+            yaw_ = current_state_array[2] + dt * (rwsReferenceIntegration[2] + rwsReferenceIntegration[2 + NX]) / 2;
+            kappa_ = current_state_array[3] + dt * (rwsReferenceIntegration[3] + rwsReferenceIntegration[3 + NX]) / 2;
+            v_ = current_state_array[4] + dt * (rwsReferenceIntegration[4] + rwsReferenceIntegration[4 + NX]) / 2;
+            
+            // Update GRAMPC with the integrated state for next iteration (like Vehicle example)
+            double next_state[NX] = {
+                x_,
+                y_,
+                yaw_,
+                kappa_,
+                v_
+            };
+            grampc_setparam_real_vector(grampc_, "x0", next_state);
+            
+            // Convert acceleration to throttle command
+            if (acceleration >= 0.0) {
+                throttle_cmd = std::min(1.0, acceleration / 3.0);
+            } else {
+                throttle_cmd = std::max(0.0, 0.5 + acceleration / 6.0);
+            }
+
+            // Convert steering rate to steering angle: delta = atan(kappa * L)
+            steering_angle_ = std::atan(kappa_ * L_);
+            steering_angle_ = std::max(-delta_max_, std::min(delta_max_, steering_angle_));
             steer_cmd = steering_angle_;
 
-            RCLCPP_INFO(this->get_logger(), "MPCC Solution - acceleration: %.3f, steering_rate: %.3f -> throttle: %.3f, steer: %.3f",
-                        acceleration, steering_rate, throttle_cmd, steer_cmd);
+            // RCLCPP_INFO(this->get_logger(), "MPCC Solution - acceleration: %.3f, steering_rate: %.3f, kappa: %.3f -> throttle: %.3f, steer: %.3f",
+            //             acceleration, steering_rate, kappa_, throttle_cmd, steer_cmd);
         }
 
         auto solver_end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(solver_end - solver_start);
-        RCLCPP_INFO(this->get_logger(), "GRAMPC solve time: %ld ms", duration.count());
+        // RCLCPP_INFO(this->get_logger(), "GRAMPC solve time: %ld ms", duration.count());
 
         // Apply control smoothing
         const double alpha_steer = 0.7;
         const double alpha_throttle = 0.8;
 
         // Smooth the commands
-        steer_cmd = alpha_steer * steer_cmd + (1.0 - alpha_steer) * prev_steer_;
-        throttle_cmd = alpha_throttle * throttle_cmd + (1.0 - alpha_throttle) * prev_throttle_;
+        // steer_cmd = alpha_steer * steer_cmd + (1.0 - alpha_steer) * prev_steer_;
+        // throttle_cmd = alpha_throttle * throttle_cmd + (1.0 - alpha_throttle) * prev_throttle_;
 
         // Publish steering command
         auto s_msg = std_msgs::msg::Float32();
         s_msg.data = static_cast<float>(steer_cmd);
-        steering_pub_->publish(s_msg);
+        RCLCPP_INFO(this->get_logger(), "Steering Command: %.3f", steer_cmd);
+        // steering_pub_->publish(s_msg);
 
         // Publish throttle command
         auto t_msg = std_msgs::msg::Float32();
         t_msg.data = static_cast<float>(throttle_cmd);
-        throttle_pub_->publish(t_msg);
+        RCLCPP_INFO(this->get_logger(), "Throttle Command: %.3f", throttle_cmd);
+        // throttle_pub_->publish(t_msg);
 
-        RCLCPP_INFO(this->get_logger(), "Published commands - steer: %.3f, throttle: %.3f", steer_cmd, throttle_cmd);
+        // RCLCPP_INFO(this->get_logger(), "Published commands - steer: %.3f, throttle: %.3f", steer_cmd, throttle_cmd);
 
         // Update previous commands for next iteration
         prev_steer_ = steer_cmd;
         prev_throttle_ = throttle_cmd;
     }
 
+private:
     // Member variables
     rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr ips_sub_;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
