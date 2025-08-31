@@ -60,6 +60,9 @@ public:
         ips_sub_ = this->create_subscription<geometry_msgs::msg::Point>("/autodrive/f1tenth_1/ips", 30,
                                                                         std::bind(&MPCCGrampcNode::ipsCallback, this, _1));
 
+        speed_sub_ = this->create_subscription<std_msgs::msg::Float32>("/autodrive/f1tenth_1/speed", 30,
+                                                                       std::bind(&MPCCGrampcNode::speedCallback, this, _1));
+
         throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
         steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
 
@@ -115,18 +118,18 @@ public:
         grampc_->param->NgT = 0;
 
         // Set initial state and control before running
-        std::vector<double> x0_init[NX] = {0.0, 0.0, 0.0, 0.0, 0.0};   // 5D state [x, y, theta, kappa, v]
-        std::vector<double> xref_init[NX] = {0.0, 0.0, 0.0, 0.0, 1.0}; // [x, y, theta, kappa, v]
+        double x0_init[NX] = {0.0, 0.0, 0.0, 0.0, 0.0};   // 5D state [x, y, theta, kappa, v]
+        double xref_init[NX] = {0.0, 0.0, 0.0, 0.0, 1.0}; // [x, y, theta, kappa, v]
 
-        std::vector<double> u0_init[NU] = {0.0, 0.0}; // [acceleration, steering_rate]
-        double umin[NU] = {-1.0, -1.0};               // acceleration_min, steering_rate_min
-        double umax[NU] = {1.0, 1.0};                 // acceleration_max, steering_rate_max
+        double u0_init[NU] = {0.0, 0.0}; // [acceleration, steering_rate]
+        double umin[NU] = {-1.0, -1.0};  // acceleration_min, steering_rate_min
+        double umax[NU] = {1.0, 1.0};    // acceleration_max, steering_rate_max
 
         // Safety check before setting parameters
         if (grampc_ && grampc_->param)
         {
             grampc_setparam_real_vector(grampc_, "x0", x0_init);
-            grampc_setparam_real_vector(grampc_, "xdes", xref_init.data());
+            grampc_setparam_real_vector(grampc_, "xdes", xref_init);
 
             grampc_setparam_real_vector(grampc_, "u0", u0_init);
             grampc_setparam_real_vector(grampc_, "umin", umin);
@@ -170,15 +173,11 @@ private:
             // Simple unwrap
             const double dyaw = std::atan2(std::sin(new_yaw - yaw_), std::cos(new_yaw - yaw_));
             yaw_ += 0.5 * dyaw;
-
-            const double speed = std::sqrt(dx * dx + dy * dy) / dt;
-            v_ = 0.7 * v_ + 0.3 * speed; // low-pass filter
         }
         else
         {
             // First fix or invalid dt
             yaw_ = yaw_;
-            v_ = 0.0;
             has_prev_fix_ = true;
         }
 
@@ -187,22 +186,14 @@ private:
         last_time_ = now_sec;
     }
 
+    void speedCallback(const std_msgs::msg::Float32::SharedPtr msg)
+    {
+        // Apply low-pass filter to smooth speed data
+        v_ = 0.7 * v_ + 0.3 * msg->data;
+    }
+
     void controlLoop()
     {
-        // Safety check: Ensure GRAMPC is properly initialized
-        if (!grampc_ || !grampc_->param || !grampc_->sol)
-        {
-            RCLCPP_ERROR(this->get_logger(), "GRAMPC not initialized, skipping control loop");
-            return;
-        }
-
-        // Safety check: Ensure we have a valid path
-        if (!path_ || path_->total_length() < 1e-3)
-        {
-            RCLCPP_WARN(this->get_logger(), "No path found, skipping control loop");
-            return;
-        }
-
         // Safety check: Ensure we have received IPS data
         if (!has_prev_fix_)
         {
@@ -218,20 +209,18 @@ private:
         // Find the closest point on the path to current vehicle position
         Eigen::Vector2d vehicle_pos(x_, y_);
         double min_dist = std::numeric_limits<double>::max();
-        double best_s = s_;
 
         // Sample along the path to find the closest point
-        for (double test_s = 0.0; test_s <= path_->total_length(); test_s += 0.2)
+        for (double test_s = 0.0; test_s <= path_->total_length(); test_s += 0.2) // why 0.2?
         {
             Eigen::Vector2d path_point = path_->interpolate(test_s);
             double dist = (vehicle_pos - path_point).norm();
             if (dist < min_dist)
             {
                 min_dist = dist;
-                best_s = test_s;
+                s_ = test_s;
             }
         }
-        s_ = best_s;
 
         // Get reference point ahead on the path for path following
         double ref_distance = 1.0; // Look-ahead distance in meters
@@ -252,9 +241,9 @@ private:
         }
 
         std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
-
-        // Desired target state (path following) - 5D [x, y, theta, kappa, v]
         double ref_curvature = path_->curvature(s_ref);
+
+        // Desired target state (path following) - [x, y, theta, kappa, v]
         std::vector<double> target_state = {ref_pos.x(), ref_pos.y(), ref_yaw, ref_curvature, ref_speed};
 
         // Set current state as initial condition
@@ -264,38 +253,20 @@ private:
         double steer_cmd = 0.0;
         double throttle_cmd = 0.0;
 
-        // Enhanced GRAMPC solver execution with debugging
+        // debugging
         auto solver_start = std::chrono::high_resolution_clock::now();
 
-        // Extensive validation before calling grampc_run
-        if (!grampc_->sol->xnext || !grampc_->sol->unext)
+        try
         {
-            RCLCPP_ERROR(this->get_logger(), "GRAMPC solution vectors not allocated");
+            grampc_run(grampc_);
+            RCLCPP_INFO(this->get_logger(), "grampc_run completed with status: %d", grampc_->sol->status);
+        }
+        catch (const std::exception &e)
+        {
+            RCLCPP_ERROR(this->get_logger(), "Exception during grampc_run: %s", e.what());
             steer_cmd = prev_steer_;
             throttle_cmd = prev_throttle_;
-        }
-        else if (!grampc_->rws->x || !grampc_->rws->u)
-        {
-            RCLCPP_ERROR(this->get_logger(), "GRAMPC workspace vectors not allocated");
-            steer_cmd = prev_steer_;
-            throttle_cmd = prev_throttle_;
-        }
-        else
-        {
-            try
-            {
-                // Try to run GRAMPC with exception handling
-                RCLCPP_INFO(this->get_logger(), "Calling grampc_run...");
-                grampc_run(grampc_);
-                RCLCPP_INFO(this->get_logger(), "grampc_run completed with status: %d", grampc_->sol->status);
-            }
-            catch (...)
-            {
-                RCLCPP_ERROR(this->get_logger(), "Exception during grampc_run");
-                steer_cmd = prev_steer_;
-                throttle_cmd = prev_throttle_;
-                return;
-            }
+            return;
         }
 
         if (grampc_->sol->status > 0)
@@ -311,7 +282,7 @@ private:
             double steering_rate = grampc_->sol->unext[1]; // steering rate [rad/s]
 
             // Convert acceleration to throttle command (simple mapping)
-            throttle_cmd = std::max(0.0, std::min(1.0, acceleration / 2.0 + 0.5)); // normalize to [0,1]
+            throttle_cmd = std::max(0.0, std::min(1.0, acceleration)); // normalize to [0,1]
 
             // Integrate steering rate to get steering angle (simple Euler integration)
             double dt = 0.02; // control loop period
@@ -354,6 +325,7 @@ private:
 
     // Member variables
     rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr ips_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
