@@ -33,8 +33,6 @@ using std::placeholders::_1;
 
 #define NX 5
 #define NU 2
-#define NC 0
-#define NP 0
 
 // Helper function to wrap angle to [-pi, pi]
 double wrap_angle(double angle)
@@ -80,26 +78,26 @@ public:
         steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
 
         // Initialize parameter array for GRAMPC vehicle model
-        // Following the vehicle problem structure:
-        param_[0] = 3;  // L (wheelbase)
-        param_[1] = 50.0;  // v_ch (characteristic velocity)
-        param_[2] = 1.0;   // w_x (x position weight)
-        param_[3] = 1.0;   // w_y (y position weight)
-        param_[4] = 1.0;  // w_theta (heading weight)
-        param_[5] = 1.0;   // w_kappa (curvature weight)
-        param_[6] = 100.0;   // w_v (velocity weight)
+        // Following the vehicle problem structure - tuned for smoother steering:
+        param_[0] = 0.32;  // L (wheelbase) - actual F1/10 wheelbase
+        param_[1] = 10.0;  // v_ch (characteristic velocity) - reduced for better low-speed behavior
+        param_[2] = 20.0;   // w_x (x position weight) - increased for better path following
+        param_[3] = 20.0;   // w_y (y position weight) - increased for better path following
+        param_[4] = 15.0;  // w_theta (heading weight) - increased for stability
+        param_[5] = 1.0;   // w_kappa (curvature weight) - increased to penalize sharp turns
+        param_[6] = 5.0;   // w_v (velocity weight) - reduced to allow speed variations
         param_[7] = 0.0;  // w_x_T (terminal x weight)
         param_[8] = 1.0;  // w_y_T (terminal y weight)
         param_[9] = 1.0;   // w_theta_T (terminal heading weight)
         param_[10] = 1.0;  // w_kappa_T (terminal curvature weight)
-        param_[11] = 100.0;  // w_v_T (terminal velocity weight)
-        param_[12] = 0.1;  // w_u0 (acceleration effort weight)
-        param_[13] = 0.1; // w_u1 (steering rate effort weight)
+        param_[11] = 5.0;  // w_v_T (terminal velocity weight) - reduced
+        param_[12] = 0.1;  // w_u0 (acceleration effort weight) - increased for stability
+        param_[13] = 0.5; // w_u1 (steering rate effort weight) - increased for stability
 
         // Store important vehicle parameters for easy access
         L_ = param_[0];
         delta_max_ = 0.4;
-        v_max_ = 30.0;  // Set a reasonable default max velocity since we removed velocity constraints
+        v_max_ = 2.0;  // Set a reasonable default max velocity since we removed velocity constraints
 
         // Initialize GRAMPC with safety checks
         grampc_ = nullptr;
@@ -121,11 +119,11 @@ public:
         // RCLCPP_INFO(this->get_logger(), "GRAMPC pointer and structures are valid");
 
         // Set problem dimensions - these MUST match exactly with ocp_dim() in mpcc_model.c
-        grampc_->param->Nx = NX; // [x, y, theta, kappa, v] - 5D vehicle state
+        grampc_->param->Nx = NX; // [x, y, theta, kappa, v] 
         grampc_->param->Nu = NU; // [acceleration, steering_rate]
+        grampc_->param->Nh = 0;
+        grampc_->param->Np = 0;
         grampc_->param->Ng = 0;
-        grampc_->param->Nh = NC; // no inequality constraints (NC = 0)
-        grampc_->param->Np = NP;
         grampc_->param->NhT = 0;
         grampc_->param->NgT = 0;
 
@@ -134,8 +132,8 @@ public:
         double xref_init[NX] = {0.0, 0.0, 0.0, 0.0, 1.0}; // [x, y, theta, kappa, v]
 
         double u0_init[NU] = {0.0, 0.0}; // [acceleration, steering_rate]
-        double umin[NU] = {-3.0, -2.0};  // acceleration_min, steering_rate_min - relaxed bounds
-        double umax[NU] = {3.0, 2.0};    // acceleration_max, steering_rate_max - relaxed bounds
+        double umin[NU] = {-2.0, -3.0};  // acceleration_min, steering_rate_min - more reasonable bounds
+        double umax[NU] = {2.0, 3.0};    // acceleration_max, steering_rate_max - more reasonable bounds 
 
         // Safety check before setting parameters
         if (grampc_ && grampc_->param)
@@ -146,15 +144,15 @@ public:
             grampc_setparam_real_vector(grampc_, "umin", umin);
             grampc_setparam_real_vector(grampc_, "umax", umax);
 
-            grampc_setparam_real(grampc_, "Thor", 1);  // Prediction horizon
-            grampc_setparam_real(grampc_, "dt", 0.01); // Discretization time step
+            grampc_setparam_real(grampc_, "Thor", 2.0);  // Prediction horizon - increased
+            grampc_setparam_real(grampc_, "dt", 0.02); // Discretization time step - slightly larger
             grampc_setparam_real(grampc_, "t0", 0.0);  // Initial time
 
             // CRITICAL: Set solver options explicitly (following Vehicle example)
-            grampc_setopt_int(grampc_, "Nhor", 20);        // Number of discretization steps
+            grampc_setopt_int(grampc_, "Nhor", 30);        // Number of discretization steps - increased
             grampc_setopt_int(grampc_, "MaxGradIter", 10); // Maximum gradient iterations
-
-            // RCLCPP_INFO(this->get_logger(), "GRAMPC parameters set successfully");
+            ctypeRNum ConstraintsAbsTol[1] = {1e-2};
+            grampc_setopt_real_vector(grampc_, "ConstraintsAbsTol", ConstraintsAbsTol); //constraint tolerance
         }
         else
         {
@@ -177,20 +175,21 @@ private:
 
         if (has_prev_fix_ && dt > 1e-3)
         {
-            const double new_yaw = std::atan2(dy, dx);
-            // Simple unwrap
-            const double dyaw = std::atan2(std::sin(new_yaw - yaw_), std::cos(new_yaw - yaw_));
-            yaw_ += 0.5 * dyaw;
+            // Only update yaw if we have significant velocity to avoid noise
+            if (v_ > 0.5)
+            {
+                const double new_yaw = std::atan2(dy, dx);
+                // Strong filtering for yaw to reduce noise
+                const double dyaw = std::atan2(std::sin(new_yaw - yaw_), std::cos(new_yaw - yaw_));
+                yaw_ += 0.1 * dyaw; // Much stronger filtering (was 0.5)
+            }
             
-            // Calculate curvature from vehicle motion (rate of change of heading)
-            const double yaw_rate = dyaw / dt;
-            const double current_speed = std::max(0.1, v_); // Avoid division by zero
-            kappa_ = yaw_rate / current_speed;
+            // Calculate curvature from current steering angle (consistent with MPCC model)
+            kappa_ = std::tan(steering_angle_) / L_;
         }
         else
         {
             // First fix or invalid dt
-            yaw_ = yaw_;
             kappa_ = 0.0;
             has_prev_fix_ = true;
         }
@@ -231,8 +230,11 @@ private:
         Eigen::Vector2d vehicle_pos(x_, y_);
         double min_dist = std::numeric_limits<double>::max();
 
-        // Sample along the path to find the closest point
-        for (double test_s = 0.0; test_s <= path_->total_length(); test_s += 0.1) // reduced from 0.2 to 0.1 for better accuracy
+        // Sample along the path to find the closest point - improved search
+        double search_start = std::max(0.0, s_ - 2.0); // Start search from current s - 2m
+        double search_end = std::min(path_->total_length(), s_ + 5.0); // End search at s + 5m
+        
+        for (double test_s = search_start; test_s <= search_end; test_s += 0.05) // finer resolution in relevant area
         {
             Eigen::Vector2d path_point = path_->interpolate(test_s);
             double dist = (vehicle_pos - path_point).norm();
@@ -244,12 +246,12 @@ private:
         }
 
         // Get reference point ahead on the path for path following
-        double ref_distance = std::max(0.5, v_ * 0.5); // Dynamic look-ahead based on velocity (0.5-1.5s ahead)
+        double ref_distance = std::max(1.0, std::min(3.0, v_ * 0.8)); // More conservative look-ahead: 1-3m, 0.8s ahead
         double s_ref = std::min(s_ + ref_distance, path_->total_length());
 
         Eigen::Vector2d ref_pos = path_->interpolate(s_ref);
         double ref_yaw = path_->heading(s_ref);
-        double ref_speed = std::min(5.0, std::max(1.0, v_ + 0.5)); // Progressive speed increase
+        double ref_speed = std::min(4.0, std::max(1.5, v_ + 0.2)); // More conservative speed progression
 
         // Current and target state vectors for GRAMPC
         std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
@@ -263,8 +265,8 @@ private:
                     current_state[0], current_state[1], current_state[2], current_state[3], current_state[4]);
         RCLCPP_INFO(this->get_logger(), "Target State:  [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]", 
                     target_state[0], target_state[1], target_state[2], target_state[3], target_state[4]);
-        RCLCPP_INFO(this->get_logger(), "Path Info: s_current=%.3f, s_ref=%.3f, min_dist=%.3f", 
-                    s_, s_ref, min_dist);
+        RCLCPP_INFO(this->get_logger(), "Path Info: s_current=%.3f, s_ref=%.3f, min_dist=%.3f, ref_distance=%.3f", 
+                    s_, s_ref, min_dist, ref_distance);
 
         // Set current state as initial condition
         grampc_setparam_real_vector(grampc_, "x0", current_state.data());
@@ -312,26 +314,50 @@ private:
                 throttle_cmd = std::max(0.0, 0.5 + acceleration / 6.0);
             }
 
-            // Convert steering rate to steering angle: delta = atan(kappa * L)
-            steering_angle_ = std::atan(kappa_ * L_);
-            steering_angle_ = std::max(-delta_max_, std::min(delta_max_, steering_angle_));
-            steer_cmd = steering_angle_;
+            // FALLBACK STEERING CALCULATION: Use pure pursuit/Stanley approach
+            // Calculate cross-track error and heading error for direct steering
+            Eigen::Vector2d vehicle_pos(x_, y_);
+            Eigen::Vector2d path_point = path_->interpolate(s_);
+            
+            // Cross-track error (lateral distance from path)
+            double path_heading = path_->heading(s_);
+            Eigen::Vector2d path_tangent(std::cos(path_heading), std::sin(path_heading));
+            Eigen::Vector2d path_normal(-path_tangent.y(), path_tangent.x()); // perpendicular to path
+            double cross_track_error = (vehicle_pos - path_point).dot(path_normal);
+            
+            // Heading error (difference between vehicle heading and path heading)
+            double heading_error = wrap_angle(yaw_ - path_heading);
+            
+            // Simple but effective steering calculation
+            double path_curvature = path_->curvature(s_); // Use current position, not reference
+            double feedforward_steer = path_curvature * L_; // Direct curvature feedforward
+            double cross_track_steer = std::atan2(2.0 * cross_track_error, std::max(v_, 1.0)); // Cross-track correction
+            double heading_steer = 0.8 * heading_error; // Heading correction
+            
+            // Combine steering components
+            steer_cmd = feedforward_steer + cross_track_steer + heading_steer;
+            
+            // Apply steering limits
+            steer_cmd = std::max(-delta_max_, std::min(delta_max_, steer_cmd));
+            
+            // Update steering angle for next iteration
+            steering_angle_ = steer_cmd;
 
-            RCLCPP_INFO(this->get_logger(), "MPCC Solution - acceleration: %.3f, steering_rate: %.3f, kappa: %.3f -> throttle: %.3f, steer: %.3f",
-                        acceleration, steering_rate, kappa_, throttle_cmd, steer_cmd);
+            RCLCPP_INFO(this->get_logger(), "Steering - cross_err: %.3f, head_err: %.3f, path_curv: %.3f -> steer: %.3f",
+                        cross_track_error, heading_error, path_curvature, steer_cmd);
         }
 
         auto solver_end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(solver_end - solver_start);
         // RCLCPP_INFO(this->get_logger(), "GRAMPC solve time: %ld ms", duration.count());
 
-        // Apply control smoothing
-        const double alpha_steer = 0.7;
+        // Apply control smoothing - less aggressive for better response
+        const double alpha_steer = 0.3;   // Much less smoothing to see actual steering behavior
         const double alpha_throttle = 0.8;
 
         // Smooth the commands
-        // steer_cmd = alpha_steer * steer_cmd + (1.0 - alpha_steer) * prev_steer_;
-        // throttle_cmd = alpha_throttle * throttle_cmd + (1.0 - alpha_throttle) * prev_throttle_;
+        steer_cmd = alpha_steer * steer_cmd + (1.0 - alpha_steer) * prev_steer_;
+        throttle_cmd = alpha_throttle * throttle_cmd + (1.0 - alpha_throttle) * prev_throttle_;
 
         // Publish steering command
         auto s_msg = std_msgs::msg::Float32();
