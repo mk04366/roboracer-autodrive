@@ -23,6 +23,7 @@ using std::placeholders::_1;
 
 #define NX 5
 #define NU 2
+#define NH 3
 
 class MPCCGrampcNode : public rclcpp::Node
 {
@@ -49,11 +50,11 @@ public:
         ips_sub_ = this->create_subscription<geometry_msgs::msg::Point>(
             "/autodrive/f1tenth_1/ips", 10,
             std::bind(&MPCCGrampcNode::ipsCallback, this, std::placeholders::_1));
-        
+
         speed_sub_ = this->create_subscription<std_msgs::msg::Float32>(
             "/autodrive/f1tenth_1/speed", 10,
             std::bind(&MPCCGrampcNode::speedCallback, this, std::placeholders::_1));
-        
+
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
             "/autodrive/f1tenth_1/imu", 10,
             std::bind(&MPCCGrampcNode::imuCallback, this, std::placeholders::_1));
@@ -68,25 +69,25 @@ public:
 
         // Initialize parameter array for GRAMPC vehicle model
         // Improved tuning for stable and smooth control:
-        param_[0] = 0.32; // L (wheelbase) - actual F1/10 wheelbase
-        param_[1] = 3.0;  // v_ch (characteristic velocity) - reduced for better low-speed behavior
-        param_[2] = 10.0; // w_x (x position weight) - balanced for path following
-        param_[3] = 10.0; // w_y (y position weight) - balanced for path following
-        param_[4] = 8.0;  // w_theta (heading weight) - moderate for stability
-        param_[5] = 15.0; // w_kappa (curvature weight) - moderate to allow necessary turns
-        param_[6] = 2.0;  // w_v (velocity weight) - low to allow speed variations
-        param_[7] = 0.0;  // w_x_T (terminal x weight)
-        param_[8] = 50.0; // w_y_T (terminal y weight) - reduced
-        param_[9] = 50.0; // w_theta_T (terminal heading weight) - reduced
+        param_[0] = 0.32;  // L (wheelbase) - actual F1/10 wheelbase
+        param_[1] = 3.0;   // v_ch (characteristic velocity) - reduced for better low-speed behavior
+        param_[2] = 10.0;  // w_x (x position weight) - balanced for path following
+        param_[3] = 10.0;  // w_y (y position weight) - balanced for path following
+        param_[4] = 8.0;   // w_theta (heading weight) - moderate for stability
+        param_[5] = 15.0;  // w_kappa (curvature weight) - moderate to allow necessary turns
+        param_[6] = 2.0;   // w_v (velocity weight) - low to allow speed variations
+        param_[7] = 0.0;   // w_x_T (terminal x weight)
+        param_[8] = 50.0;  // w_y_T (terminal y weight) - reduced
+        param_[9] = 50.0;  // w_theta_T (terminal heading weight) - reduced
         param_[10] = 30.0; // w_kappa_T (terminal curvature weight) - reduced
-        param_[11] = 2.0; // w_v_T (terminal velocity weight) - reduced
-        param_[12] = 2.0; // w_u0 (acceleration effort weight) - reduced since bounds are tighter
+        param_[11] = 2.0;  // w_v_T (terminal velocity weight) - reduced
+        param_[12] = 2.0;  // w_u0 (acceleration effort weight) - reduced since bounds are tighter
         param_[13] = 10.0; // w_u1 (steering rate effort weight) - reduced since bounds are tighter
 
         // Store important vehicle parameters for easy access
         L_ = param_[0];
-        delta_max_ = M_PI/6;  // Maximum steering angle in radians (30 degrees)
-        v_max_ = 5.0;         // Maximum velocity
+        delta_max_ = M_PI / 6; // Maximum steering angle in radians (30 degrees)
+        v_max_ = 5.0;          // Maximum velocity
 
         // Initialize GRAMPC with safety checks
         grampc_ = nullptr;
@@ -110,7 +111,7 @@ public:
         // Set problem dimensions - these MUST match exactly with ocp_dim() in mpcc_model.c
         grampc_->param->Nx = NX; // [x, y, theta, kappa, v]
         grampc_->param->Nu = NU; // [acceleration, steering_rate]
-        grampc_->param->Nh = 3;  // velocity and curvature constraints
+        grampc_->param->Nh = NH; // velocity and curvature constraints
         grampc_->param->Np = 0;
         grampc_->param->Ng = 0;
         grampc_->param->NhT = 0;
@@ -120,9 +121,9 @@ public:
         double x0_init[NX] = {0.0, 0.0, 0.0, 0.0, 0.5};   // 5D state [x, y, theta, kappa, v] - start with minimum forward speed
         double xref_init[NX] = {0.0, 0.0, 0.0, 0.0, 1.0}; // [x, y, theta, kappa, v]
 
-        double u0_init[NU] = {0.0, 0.0}; // [acceleration, steering_rate] - small initial acceleration
-        double umin[NU] = {-0.1, -M_PI/6};   // acceleration_min=-0.1 (small reverse for maneuvering), steering_rate_min - F1/10 physical limits
-        double umax[NU] = {1.0, M_PI/6};    // acceleration_max, steering_rate_max - F1/10 physical limits
+        double u0_init[NU] = {0.0, 0.0};     // [acceleration, steering_rate] - small initial acceleration
+        double umin[NU] = {-0.1, -M_PI / 6}; // acceleration_min=-0.1 (small reverse for maneuvering), steering_rate_min - F1/10 physical limits
+        double umax[NU] = {1.0, M_PI / 6};   // acceleration_max, steering_rate_max - F1/10 physical limits
 
         // Safety check before setting parameters
         if (grampc_ && grampc_->param)
@@ -137,9 +138,9 @@ public:
             grampc_setparam_real(grampc_, "t0", 0.0);   // Initial time
 
             // CRITICAL: Set solver options explicitly (optimized for stability)
-            grampc_setopt_int(grampc_, "Nhor", 20);        // Number of discretization steps - reduced for faster computation
-            grampc_setopt_int(grampc_, "MaxGradIter", 5);  // Maximum gradient iterations - reduced for faster computation
-            ctypeRNum ConstraintsAbsTol[1] = {1e-4};       // Tighter constraint tolerance for better enforcement
+            grampc_setopt_int(grampc_, "Nhor", 20);       // Number of discretization steps - reduced for faster computation
+            grampc_setopt_int(grampc_, "MaxGradIter", 5); // Maximum gradient iterations - reduced for faster computation
+            ctypeRNum ConstraintsAbsTol[1] = {1e-4};      // Tighter constraint tolerance for better enforcement
             grampc_setopt_real_vector(grampc_, "ConstraintsAbsTol", ConstraintsAbsTol);
         }
         else
@@ -168,21 +169,27 @@ private:
     void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
     {
         // Extract yaw from IMU quaternion (much more accurate than GPS displacement)
-        const auto& q = msg->orientation;
-        
+        const auto &q = msg->orientation;
+
         // Convert quaternion to yaw angle (Z-axis rotation)
-        double yaw_from_imu = std::atan2(2.0 * (q.w * q.z + q.x * q.y), 
+        double yaw_from_imu = std::atan2(2.0 * (q.w * q.z + q.x * q.y),
                                          1.0 - 2.0 * (q.y * q.y + q.z * q.z));
-        
+
         // Apply light filtering for IMU yaw
-        if (has_imu_data_) {
+        if (has_imu_data_)
+        {
             // Wrap angle difference to [-π, π]
             double dyaw = std::atan2(std::sin(yaw_from_imu - yaw_), std::cos(yaw_from_imu - yaw_));
-            yaw_ += 0.8 * dyaw; // Light filtering since IMU is more reliable
-        } else {
+            yaw_ += 0.8 * dyaw;
+
+            // Keep yaw_ in [-π, π]
+            yaw_ = std::atan2(std::sin(yaw_), std::cos(yaw_));
+        }
+        else
+        {
             yaw_ = yaw_from_imu; // First measurement
         }
-        
+
         has_imu_data_ = true;
         last_imu_time_ = this->now();
     }
@@ -191,10 +198,13 @@ private:
     {
         // Update timing
         const double now_sec = this->now().seconds();
-        if (last_time_ > 0.0) {
+        if (last_time_ > 0.0)
+        {
             dt_ = now_sec - last_time_;
             grampc_setparam_real(grampc_, "dt", dt_);
-        } else {
+        }
+        else
+        {
             dt_ = 0.05; // Default 50ms for 20Hz timer
             grampc_setparam_real(grampc_, "dt", dt_);
         }
@@ -203,21 +213,25 @@ private:
         // Check if we have all required data and it's recent enough (within 500ms)
         auto now = this->now();
         auto max_age = rclcpp::Duration::from_nanoseconds(500000000); // 500ms
-        
+
         bool data_fresh = true;
-        if (!has_ips_data_ || (now - last_ips_time_) > max_age) {
+        if (!has_ips_data_ || (now - last_ips_time_) > max_age)
+        {
             data_fresh = false;
         }
-        if (!has_speed_data_ || (now - last_speed_time_) > max_age) {
+        if (!has_speed_data_ || (now - last_speed_time_) > max_age)
+        {
             data_fresh = false;
         }
-        if (!has_imu_data_ || (now - last_imu_time_) > max_age) {
+        if (!has_imu_data_ || (now - last_imu_time_) > max_age)
+        {
             data_fresh = false;
         }
 
-        if (!data_fresh) {
-            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, 
-                                 "Waiting for fresh sensor data - IPS:%d, Speed:%d, IMU:%d", 
+        if (!data_fresh)
+        {
+            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                 "Waiting for fresh sensor data - IPS:%d, Speed:%d, IMU:%d",
                                  has_ips_data_, has_speed_data_, has_imu_data_);
             return;
         }
@@ -236,46 +250,52 @@ private:
         }
 
         // Data is already validated in controlTimerCallback, so we can proceed directly
-        // Update progress state based on vehicle's position along the path
-        // Find the closest waypoint directly - much simpler approach
+        // Handle circular path following with proper progress tracking
         Eigen::Vector2d vehicle_pos(x_, y_);
-        size_t closest_waypoint_idx = path_->findClosestWaypoint(vehicle_pos);
-        Eigen::Vector2d closest_point = path_->getWaypoint(closest_waypoint_idx);
-        double min_dist = (vehicle_pos - closest_point).norm();
 
-        // IMPORTANT: Always look ahead in the path direction using improved path utils
-        // Calculate lookahead distance based on speed
-        double lookahead_distance = std::max(1.5, std::min(4.0, v_ * 1.2 + 1.5)); // Adaptive lookahead: 1.5-4m
+        // Initialize path progress on first run
+        if (!path_initialized_)
+        {
+            // Find initial closest waypoint when starting
+            current_path_idx_ = path_->findClosestWaypoint(vehicle_pos);
+            path_initialized_ = true;
+            RCLCPP_INFO(this->get_logger(), "Path initialized at waypoint %zu", current_path_idx_);
+        }
+
+        // Simple and robust progress tracking
+        size_t path_size = path_->getWaypointCount();
+        size_t closest_idx = path_->findClosestWaypoint(vehicle_pos);
         
-        // Use the improved lookahead method that ensures target is always ahead
-        auto target_result = path_->getTargetWaypointAhead(vehicle_pos, lookahead_distance);
-        Eigen::Vector2d target_point = target_result.first;
-        size_t target_idx = target_result.second;
+        // Only advance if we're clearly moving forward
+        if (closest_idx > current_path_idx_ || 
+            (current_path_idx_ > path_size * 0.8 && closest_idx < path_size * 0.2)) // lap completion
+        {
+            current_path_idx_ = closest_idx;
+        }
         
-        // Calculate target heading from the target waypoint direction
-        double target_heading = path_->getWaypointHeading(target_idx);
-
-        // Get reference speed (simple approach)
-        double ref_speed = std::min(3.0, std::max(1.0, v_ + 0.2));
-
-        // Recalculate kappa_ from current steering angle to ensure consistency
+        // Simple lookahead: fixed number of waypoints ahead
+        size_t lookahead_steps = std::max(3, static_cast<int>(v_ * 2)); // 3-10 waypoints based on speed
+        size_t target_idx = (current_path_idx_ + lookahead_steps) % path_size;
+        Eigen::Vector2d target_point = path_->getWaypoint(target_idx);
+        
+        // Calculate target heading and curvature from target waypoint
+        double target_heading = path_->getHeading(target_idx);
+        double target_curvature = path_->getCurvature(target_idx);
+        
+        // Reference speed based on current speed
+        double ref_speed = std::min(4.0, std::max(1.5, v_ + 0.3));
+        
+        // Current state and target state
         kappa_ = std::tan(steering_angle_) / L_;
         std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
-        
-        // Simple curvature calculation from heading change
-        double target_curvature = 0.0; // Start with zero curvature for simplicity
-        
-        // Desired target state (path following) - [x, y, theta, kappa, v]
         std::vector<double> target_state = {target_point.x(), target_point.y(), target_heading, target_curvature, ref_speed};
-
-        // DEBUG: Log current and target states for verification
         RCLCPP_INFO(this->get_logger(), "=== STATE DEBUG ===");
-        RCLCPP_INFO(this->get_logger(), "Current State: [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]", 
+        RCLCPP_INFO(this->get_logger(), "Current State: [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]",
                     x_, y_, yaw_, kappa_, v_);
-        RCLCPP_INFO(this->get_logger(), "Target State:  [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]", 
+        RCLCPP_INFO(this->get_logger(), "Target State:  [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]",
                     target_point.x(), target_point.y(), target_heading, target_curvature, ref_speed);
-        RCLCPP_INFO(this->get_logger(), "Path progress: closest_waypoint=%zu/%zu, distance=%.3f", 
-                    closest_waypoint_idx, path_->getWaypointCount(), min_dist);
+        RCLCPP_INFO(this->get_logger(), "Path progress: current_idx=%zu, target_idx=%zu, lookahead_steps=%zu",
+                    current_path_idx_, target_idx, lookahead_steps);
         RCLCPP_INFO(this->get_logger(), "==================");
 
         // Set current state as initial condition
@@ -318,37 +338,20 @@ private:
             // Apply rate limiting and filtering for smoother control
             double max_accel_change = 0.5 * dt_; // Max acceleration change per timestep (more conservative)
             double max_steer_change = 1.0 * dt_; // Max steering rate change per timestep
-            
+
             acceleration = std::max(0.0, std::min(1.0, acceleration)); // Clamp to F1/10 acceleration limits (no reverse)
-            kappa_dot = std::max(-M_PI/6, std::min(M_PI/6, kappa_dot)); // Clamp to F1/10 steering rate limits
-            
-            // Rate limiting
-            double accel_diff = acceleration - prev_throttle_;
-            if (std::abs(accel_diff) > max_accel_change) {
-                acceleration = prev_throttle_ + std::copysign(max_accel_change, accel_diff);
-            }
-            
-            double steer_diff = kappa_dot - prev_steer_rate_;
-            if (std::abs(steer_diff) > max_steer_change) {
-                kappa_dot = prev_steer_rate_ + std::copysign(max_steer_change, steer_diff);
-            }
-            
+
             // Integration: kappa = kappa_prev + kappa_dot * dt
             kappa_ += kappa_dot * dt_;
-            
+
             // Convert curvature to steering angle: delta = atan(kappa * L)
             double target_steering_angle = std::atan(kappa_ * L_);
-            
-            // Limit steering angle to physical constraints
-            target_steering_angle = std::max(-M_PI/6, std::min(M_PI/6, target_steering_angle)); // ±30 degrees (π/6 rad)
-            
-            // Apply low-pass filter for smoother steering
-            steering_angle_ = 0.7 * steering_angle_ + 0.3 * target_steering_angle;
-            
-            throttle_cmd = acceleration;
-            steer_cmd = steering_angle_;
-            prev_steer_rate_ = kappa_dot;
 
+            // Limit steering angle to physical constraints
+            target_steering_angle = std::max(-M_PI / 6, std::min(M_PI / 6, target_steering_angle)); // ±30 degrees (π/6 rad)
+
+            throttle_cmd = acceleration;
+            steer_cmd = target_steering_angle;
         }
 
         auto solver_end = std::chrono::high_resolution_clock::now();
@@ -399,9 +402,12 @@ private:
     double steering_angle_ = 0.0; // current steering angle for curvature calculation
     double last_time_ = 0.0;      // for dt calculation
 
+    // Path following state
+    bool path_initialized_ = false;
+    size_t current_path_idx_ = 0;
+
     // Control history for smoothing
     double prev_steer_, prev_throttle_;
-    double prev_steer_rate_ = 0.0; // Track previous steering rate for rate limiting
 
     // GRAMPC solver and parameter array
     TYPE_GRAMPC_POINTER(grampc_);
