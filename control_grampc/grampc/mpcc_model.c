@@ -18,7 +18,7 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     *Nx = 5; // x, y, theta, kappa, v
     *Nu = 2; // acceleration, steering_rate
     *Np = 0;
-    *Nh = 0; // no inequality constraints
+    *Nh = 3; // velocity and curvature bounds, plus one for steering constraint
     *Ng = 0;
     *NgT = 0;
     *NhT = 0;
@@ -30,23 +30,41 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
 
-    out[0] = COS(x[2]) * x[4];                                                   // x_dot = v * cos(theta)
-    out[1] = SIN(x[2]) * x[4];                                                   // y_dot = v * sin(theta)
-    out[2] = (x[3] * x[4]) / (param[0] * (1 + 1 / POW2(param[1]) * POW2(x[4]))); // theta_dot = kappa * v / (L * (1 + 1/v_ch^2 * v^2))
-    out[3] = u[1];                                                               // kappa_dot = steering_rate
-    out[4] = u[0];                                                               // v_dot = acceleration
+    // Improved bicycle model with velocity-dependent dynamics
+    ctypeRNum L = param[0];    // wheelbase
+    ctypeRNum v_ch = param[1]; // characteristic velocity
+    ctypeRNum v = x[4];        // current velocity
+    ctypeRNum kappa = x[3];    // current curvature
+    ctypeRNum theta = x[2];    // current heading
+
+    // Velocity-dependent factor for more realistic dynamics
+    ctypeRNum velocity_factor = 1.0 / (1.0 + POW2(v / v_ch));
+
+    out[0] = v * COS(theta);                    // x_dot = v * cos(theta)
+    out[1] = v * SIN(theta);                    // y_dot = v * sin(theta)
+    out[2] = (kappa * v * velocity_factor) / L; // theta_dot = kappa * v / L (with velocity dependence)
+    out[3] = u[1];                              // kappa_dot = steering_rate
+    out[4] = u[0];                              // v_dot = acceleration
 }
 
 /** Jacobian df/dx multiplied by vector vec, i.e. (df/dx)^T*vec or vec^T*(df/dx) **/
 void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
+    ctypeRNum L = param[0];
+    ctypeRNum v_ch = param[1];
+    ctypeRNum v = x[4];
+    ctypeRNum kappa = x[3];
+    ctypeRNum theta = x[2];
+
+    ctypeRNum velocity_factor = 1.0 / (1.0 + POW2(v / v_ch));
+    ctypeRNum dvf_dv = -2.0 * v / (POW2(v_ch) * POW2(1.0 + POW2(v / v_ch)));
 
     out[0] = 0;
     out[1] = 0;
-    out[2] = (vec[1] * COS(x[2]) - vec[0] * SIN(x[2])) * x[4];
-    out[3] = (vec[2] * POW2(param[1]) * x[4]) / (param[0] * POW2(param[1]) + param[0] * POW2(x[4]));
-    out[4] = vec[0] * COS(x[2]) + vec[1] * SIN(x[2]) + (vec[2] * POW2(param[1]) / POW2(POW2(param[1]) + POW2(x[4])) * x[3] * (param[1] - x[4]) * (param[1] + x[4])) / param[0];
+    out[2] = (vec[1] * COS(theta) - vec[0] * SIN(theta)) * v;
+    out[3] = vec[2] * v * velocity_factor / L;
+    out[4] = vec[0] * COS(theta) + vec[1] * SIN(theta) + vec[2] * (kappa * velocity_factor / L + kappa * v * dvf_dv / L);
 }
 
 /** Jacobian df/du multiplied by vector vec, i.e. (df/du)^T*vec or vec^T*(df/du) **/
@@ -66,6 +84,14 @@ void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNu
 void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
+    typeRNum velocity_penalty = 0.0;
+
+    // Add penalty for low velocity to encourage forward motion
+    if (x[4] < 0.5)
+    {
+        typeRNum vel_diff = 0.5 - x[4];
+        velocity_penalty = 10.0 * vel_diff * vel_diff; // Strong penalty below 0.5 m/s
+    }
 
     out[0] = param[12] * POW2(u[0] - udes[0])   // acceleration effort
              + param[13] * POW2(u[1] - udes[1]) // steering rate effort
@@ -73,7 +99,8 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
              + param[3] * POW2(x[1] - xdes[1])  // y position tracking
              + param[4] * POW2(x[2] - xdes[2])  // heading tracking
              + param[5] * POW2(x[3] - xdes[3])  // curvature tracking
-             + param[6] * POW2(x[4] - xdes[4]); // velocity tracking
+             + param[6] * POW2(x[4] - xdes[4])  // velocity tracking
+             + velocity_penalty;                // penalty for low velocity
 }
 
 /** Gradient dl/dx **/
@@ -159,17 +186,31 @@ void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     ------------------------------------------------------ **/
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    // out[0] = 0.7 - POW2(-20 + x[0]) - POW2(((typeRNum)-0.5) + x[1]);
+    ctypeRNum *param = (ctypeRNum *)userparam;
+    ctypeRNum L = param[0];
+
+    // Velocity constraints: 0.1 <= v <= 5.0 m/s (minimum speed to prevent reverse)
+    out[0] = 0.1 - x[4]; // 0.1 - v <= 0 => v >= 0.1 (minimum forward speed)
+    out[1] = x[4] - 5.0; // v - 5.0 <= 0 => v <= 5.0
+
+    // Curvature constraint: |kappa| <= 1/L * tan(π/6) (max steering angle π/6 rad = 30°)
+    ctypeRNum max_kappa = tan(3.14159265359 / 6.0) / L;
+    out[2] = x[3] * x[3] - max_kappa * max_kappa; // kappa^2 <= max_kappa^2
 }
 /** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
 void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    // No inequality constraints
+    out[0] = 0;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 2.0 * x[3] * vec[2]; // d/dkappa of kappa^2 constraint
+    out[4] = -vec[0] + vec[1];    // d/dv of velocity constraints
 }
 /** Jacobian dh/du multiplied by vector vec, i.e. (dh/du)^T*vec or vec^T*(dg/du) **/
 void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    // No inequality constraints
+    out[0] = 0; // No control dependence in constraints
+    out[1] = 0;
 }
 /** Jacobian dh/dp multiplied by vector vec, i.e. (dh/dp)^T*vec or vec^T*(dg/dp) **/
 void dhdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)

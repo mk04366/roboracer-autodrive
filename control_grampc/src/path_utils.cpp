@@ -73,6 +73,102 @@ namespace mpcc
         return this->total_length_;
     }
 
+    // New simplified interface implementation
+    size_t Path::findClosestWaypoint(const Eigen::Vector2d& position) const
+    {
+        if (waypoints_.empty()) return 0;
+        
+        size_t closest_idx = 0;
+        double min_distance = (position - waypoints_[0]).norm();
+        
+        for (size_t i = 1; i < waypoints_.size(); ++i)
+        {
+            double distance = (position - waypoints_[i]).norm();
+            if (distance < min_distance)
+            {
+                min_distance = distance;
+                closest_idx = i;
+            }
+        }
+        
+        return closest_idx;
+    }
+
+    Eigen::Vector2d Path::getWaypoint(size_t index) const
+    {
+        if (index >= waypoints_.size()) return waypoints_.back();
+        return waypoints_[index];
+    }
+
+    std::pair<Eigen::Vector2d, size_t> Path::getTargetWaypointAhead(const Eigen::Vector2d& position, double lookahead_distance) const
+    {
+        if (waypoints_.empty()) 
+            return std::make_pair(Eigen::Vector2d::Zero(), 0);
+        
+        size_t closest_idx = findClosestWaypoint(position);
+        Eigen::Vector2d closest_point = waypoints_[closest_idx];
+        
+        // Find target point ahead of current position along the path
+        size_t target_idx = closest_idx;
+        Eigen::Vector2d target_point = closest_point;
+        double accumulated_distance = 0.0;
+        
+        // Move forward along the path until we reach the desired lookahead distance
+        for (size_t i = closest_idx; i < waypoints_.size() - 1; ++i) {
+            Eigen::Vector2d current_wp = waypoints_[i];
+            Eigen::Vector2d next_wp = waypoints_[i + 1];
+            double segment_length = (next_wp - current_wp).norm();
+            
+            if (accumulated_distance + segment_length >= lookahead_distance) {
+                // Interpolate to get exact lookahead point
+                double remaining_distance = lookahead_distance - accumulated_distance;
+                double t = remaining_distance / segment_length;
+                target_point = current_wp + t * (next_wp - current_wp);
+                target_idx = i + 1;
+                break;
+            }
+            
+            accumulated_distance += segment_length;
+            target_point = next_wp;
+            target_idx = i + 1;
+        }
+        
+        // If we've reached the end of the path, use the last waypoint
+        if (target_idx >= waypoints_.size() - 1) {
+            target_idx = waypoints_.size() - 1;
+            target_point = waypoints_[target_idx];
+        }
+        
+        return std::make_pair(target_point, target_idx);
+    }
+
+    double Path::getWaypointHeading(size_t index) const
+    {
+        if (waypoints_.size() < 2) return 0.0;
+        
+        // Use next waypoint for direction if available, otherwise previous
+        Eigen::Vector2d direction;
+        if (index < waypoints_.size() - 1)
+        {
+            direction = (waypoints_[index + 1] - waypoints_[index]).normalized();
+        }
+        else if (index > 0)
+        {
+            direction = (waypoints_[index] - waypoints_[index - 1]).normalized();
+        }
+        else
+        {
+            return 0.0;
+        }
+        
+        return std::atan2(direction.y(), direction.x());
+    }
+
+    size_t Path::getWaypointCount() const
+    {
+        return waypoints_.size();
+    }
+
     Path load_path_from_csv(const std::string &filename)
     {
         std::ifstream file(filename);

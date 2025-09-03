@@ -12,12 +12,7 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(visualization_msgs REQUIRED)
-find_package(ackermann_msgs REQUIRED)
-find_package(ament_index_cpp REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(nav_msgs REQUIRED)
-find_package(message_filters REQUIRED)
 
 # === Link GRAMPC ===
 set(GRAMPC_DIR "/home/ammar/ros2_ws/GRAMPC_v2.2")
@@ -58,12 +53,8 @@ target_link_libraries(mpcc_grampc_node
 ament_target_dependencies(mpcc_grampc_node
   rclcpp
   std_msgs
-  nav_msgs
   geometry_msgs
-  ament_index_cpp
   sensor_msgs
-  ackermann_msgs
-  message_filters
 )
 
 ament_target_dependencies(path_utils Eigen3)
