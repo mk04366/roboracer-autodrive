@@ -253,36 +253,36 @@ private:
         // Handle circular path following with proper progress tracking
         Eigen::Vector2d vehicle_pos(x_, y_);
 
-        // Initialize path progress on first run
-        if (!path_initialized_)
-        {
-            // Find initial closest waypoint when starting
-            current_path_idx_ = path_->findClosestWaypoint(vehicle_pos);
-            path_initialized_ = true;
-            RCLCPP_INFO(this->get_logger(), "Path initialized at waypoint %zu", current_path_idx_);
-        }
+        // // Initialize path progress on first run
+        // if (!path_initialized_)
+        // {
+        //     // Find initial closest waypoint when starting
+        //     current_path_idx_ = path_->findClosestWaypoint(vehicle_pos);
+        //     path_initialized_ = true;
+        //     RCLCPP_INFO(this->get_logger(), "Path initialized at waypoint %zu", current_path_idx_);
+        // }
+        // // Simple and robust progress tracking
+        // size_t path_size = path_->getWaypointCount();
+        // size_t closest_idx = path_->findClosestWaypoint(vehicle_pos);
+        // // Only advance if we're clearly moving forward
+        // if (closest_idx > current_path_idx_ || 
+        //     (current_path_idx_ > path_size * 0.8 && closest_idx < path_size * 0.2)) // lap completion
+        // {
+        //     current_path_idx_ = closest_idx;
+        // }
+        // // Simple lookahead: fixed number of waypoints ahead
+        // size_t lookahead_steps = std::max(3, static_cast<int>(v_ * 2)); // 3-10 waypoints based on speed
+        // size_t target_idx = (current_path_idx_ + lookahead_steps) % path_size;
+        // Eigen::Vector2d target_point = path_->getWaypoint(target_idx);
+        // // Calculate target heading and curvature from target waypoint
+        // double target_heading = path_->getHeading(target_idx);
+        // double target_curvature = path_->getCurvature(target_idx);
 
-        // Simple and robust progress tracking
-        size_t path_size = path_->getWaypointCount();
         size_t closest_idx = path_->findClosestWaypoint(vehicle_pos);
-        
-        // Only advance if we're clearly moving forward
-        if (closest_idx > current_path_idx_ || 
-            (current_path_idx_ > path_size * 0.8 && closest_idx < path_size * 0.2)) // lap completion
-        {
-            current_path_idx_ = closest_idx;
-        }
-        
-        // Simple lookahead: fixed number of waypoints ahead
-        size_t lookahead_steps = std::max(3, static_cast<int>(v_ * 2)); // 3-10 waypoints based on speed
-        size_t target_idx = (current_path_idx_ + lookahead_steps) % path_size;
-        Eigen::Vector2d target_point = path_->getWaypoint(target_idx);
-        
-        // Calculate target heading and curvature from target waypoint
-        double target_heading = path_->getHeading(target_idx);
-        double target_curvature = path_->getCurvature(target_idx);
-        
-        // Reference speed based on current speed
+
+        Eigen::Vector2d target_point = path_->getWaypoint(closest_idx);
+        double target_heading = path_->getHeading(closest_idx);
+        double target_curvature = path_->getCurvature(closest_idx);
         double ref_speed = std::min(4.0, std::max(1.5, v_ + 0.3));
         
         // Current state and target state
@@ -294,8 +294,8 @@ private:
                     x_, y_, yaw_, kappa_, v_);
         RCLCPP_INFO(this->get_logger(), "Target State:  [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]",
                     target_point.x(), target_point.y(), target_heading, target_curvature, ref_speed);
-        RCLCPP_INFO(this->get_logger(), "Path progress: current_idx=%zu, target_idx=%zu, lookahead_steps=%zu",
-                    current_path_idx_, target_idx, lookahead_steps);
+        RCLCPP_INFO(this->get_logger(), "Path progress: current_idx=%zu, closest_idx=%zu",
+                    current_path_idx_, closest_idx);
         RCLCPP_INFO(this->get_logger(), "==================");
 
         // Set current state as initial condition
