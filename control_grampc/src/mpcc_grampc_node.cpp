@@ -1,34 +1,8 @@
-#include "geometry_msgs/msg/point.hpp"
-#include "std_msgs/msg/float32.hpp"
-#include "sensor_msgs/msg/imu.hpp"
-
-#include "control_grampc/path_utils.hpp"
-#include "control_grampc/mpcc_model.h"
-extern "C"
-{
-#include "grampc.h"
-#include "grampc_mess.h"
-}
-
-#include "rclcpp/rclcpp.hpp"
-
-#include <memory>
-#include <eigen3/Eigen/Dense>
-#include <vector>
-#include <algorithm>
-#include <chrono>
-#include <cmath>
+#include "control_grampc/mpcc_grampc_node.hpp"
 
 using std::placeholders::_1;
 
-#define NX 5
-#define NU 2
-#define NH 3
-
-class MPCCGrampcNode : public rclcpp::Node
-{
-public:
-    MPCCGrampcNode()
+MPCCGrampcNode::MPCCGrampcNode()
         : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), yaw_(0.0), v_(0.0), prev_steer_(0.0), prev_throttle_(0.0), t(0.0)
     {
         // Load path from CSV file
@@ -149,8 +123,7 @@ public:
         }
     }
 
-private:
-    void ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg)
+    void MPCCGrampcNode::ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg)
     {
         x_ = msg->x;
         y_ = msg->y;
@@ -158,7 +131,7 @@ private:
         last_ips_time_ = this->now();
     }
 
-    void speedCallback(const std_msgs::msg::Float32::SharedPtr msg)
+    void MPCCGrampcNode::speedCallback(const std_msgs::msg::Float32::SharedPtr msg)
     {
         // Update speed data with low-pass filter
         v_ = 0.7 * v_ + 0.3 * msg->data;
@@ -166,7 +139,7 @@ private:
         last_speed_time_ = this->now();
     }
 
-    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
+    void MPCCGrampcNode::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
     {
         // Extract yaw from IMU quaternion (much more accurate than GPS displacement)
         const auto &q = msg->orientation;
@@ -194,7 +167,7 @@ private:
         last_imu_time_ = this->now();
     }
 
-    void controlTimerCallback()
+    void MPCCGrampcNode::controlTimerCallback()
     {
         // Update timing
         const double now_sec = this->now().seconds();
@@ -240,7 +213,26 @@ private:
         controlLoop();
     }
 
-    void controlLoop()
+    void MPCCGrampcNode::initializePathPosition()
+    {
+        // Initialize with closest waypoint on first run
+        Eigen::Vector2d vehicle_pos(x_, y_);
+        current_path_idx_ = 0;
+        double min_dist = (vehicle_pos - path_->getWaypoint(0)).norm();
+        for (size_t i = 1; i < path_->getWaypointCount(); ++i)
+        {
+            double dist = (vehicle_pos - path_->getWaypoint(i)).norm();
+            if (dist < min_dist)
+            {
+                min_dist = dist;
+                current_path_idx_ = i;
+            }
+        }
+        current_s_ = path_->getArcLength(current_path_idx_);
+        path_initialized_ = true;
+    }
+
+    void MPCCGrampcNode::controlLoop()
     {
         // Safety check: Ensure we have a valid path
         if (!path_ || path_->total_length() < 1e-3)
@@ -249,42 +241,25 @@ private:
             return;
         }
 
-        // Data is already validated in controlTimerCallback, so we can proceed directly
-        // Handle circular path following with proper progress tracking
-        Eigen::Vector2d vehicle_pos(x_, y_);
+        if (!path_initialized_)
+        {
+            // Update current arc length position based on current waypoint since we can start from anywhere
+            initializePathPosition();
+        }
 
-        // // Initialize path progress on first run
-        // if (!path_initialized_)
-        // {
-        //     // Find initial closest waypoint when starting
-        //     current_path_idx_ = path_->findClosestWaypoint(vehicle_pos);
-        //     path_initialized_ = true;
-        //     RCLCPP_INFO(this->get_logger(), "Path initialized at waypoint %zu", current_path_idx_);
-        // }
-        // // Simple and robust progress tracking
-        // size_t path_size = path_->getWaypointCount();
-        // size_t closest_idx = path_->findClosestWaypoint(vehicle_pos);
-        // // Only advance if we're clearly moving forward
-        // if (closest_idx > current_path_idx_ || 
-        //     (current_path_idx_ > path_size * 0.8 && closest_idx < path_size * 0.2)) // lap completion
-        // {
-        //     current_path_idx_ = closest_idx;
-        // }
-        // // Simple lookahead: fixed number of waypoints ahead
-        // size_t lookahead_steps = std::max(3, static_cast<int>(v_ * 2)); // 3-10 waypoints based on speed
-        // size_t target_idx = (current_path_idx_ + lookahead_steps) % path_size;
-        // Eigen::Vector2d target_point = path_->getWaypoint(target_idx);
-        // // Calculate target heading and curvature from target waypoint
-        // double target_heading = path_->getHeading(target_idx);
-        // double target_curvature = path_->getCurvature(target_idx);
+        // Find current waypoint using arc length and get next waypoint
+        size_t nextIdx = path_->findNextWaypointIdx(current_s_);
+        RCLCPP_INFO(this->get_logger(), "Current State: [next_idx=%zu]",
+                    nextIdx);
+        // Update current arc length based on progress
+        current_s_ = path_->getArcLength(nextIdx);
 
-        size_t closest_idx = path_->findClosestWaypoint(vehicle_pos);
-
-        Eigen::Vector2d target_point = path_->getWaypoint(closest_idx);
-        double target_heading = path_->getHeading(closest_idx);
-        double target_curvature = path_->getCurvature(closest_idx);
+        // Get target waypoint and reference states
+        Eigen::Vector2d target_point = path_->getWaypoint(nextIdx);
+        double target_heading = path_->getHeading(nextIdx);
+        double target_curvature = path_->getCurvature(nextIdx);
         double ref_speed = std::min(4.0, std::max(1.5, v_ + 0.3));
-        
+
         // Current state and target state
         kappa_ = std::tan(steering_angle_) / L_;
         std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
@@ -294,8 +269,8 @@ private:
                     x_, y_, yaw_, kappa_, v_);
         RCLCPP_INFO(this->get_logger(), "Target State:  [x=%.3f, y=%.3f, yaw=%.3f, kappa=%.3f, v=%.3f]",
                     target_point.x(), target_point.y(), target_heading, target_curvature, ref_speed);
-        RCLCPP_INFO(this->get_logger(), "Path progress: current_idx=%zu, closest_idx=%zu",
-                    current_path_idx_, closest_idx);
+        RCLCPP_INFO(this->get_logger(), "Path progress: current_s=%.3f, next_idx=%zu",
+                    current_s_, nextIdx);
         RCLCPP_INFO(this->get_logger(), "==================");
 
         // Set current state as initial condition
@@ -308,23 +283,12 @@ private:
         // debugging
         auto solver_start = std::chrono::high_resolution_clock::now();
 
-        try
-        {
-            grampc_run(grampc_);
-        }
-        catch (const std::exception &e)
-        {
-            RCLCPP_ERROR(this->get_logger(), "Exception during grampc_run: %s", e.what());
-            steer_cmd = prev_steer_;
-            throttle_cmd = prev_throttle_;
-            return;
-        }
+        grampc_run(grampc_);
 
         // Check for any GRAMPC solver issues - treat all status > 0 as errors
         if (grampc_->sol->status > 0)
         {
-            // Print status for debugging
-            grampc_printstatus(grampc_->sol->status, STATUS_LEVEL_ERROR);
+            RCLCPP_INFO(this->get_logger(), "GRAMPC solver error with status: %d", grampc_->sol->status);
 
             // Use previous commands when solver fails
             steer_cmd = prev_steer_;
@@ -375,49 +339,6 @@ private:
         t += dt_;
         grampc_setparam_real(grampc_, "t0", t);
     }
-
-private:
-    // Member variables
-    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr ips_sub_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-    rclcpp::TimerBase::SharedPtr control_timer_;
-
-    // Data availability and timing
-    bool has_ips_data_ = false;
-    bool has_speed_data_ = false;
-    bool has_imu_data_ = false;
-    rclcpp::Time last_ips_time_;
-    rclcpp::Time last_speed_time_;
-    rclcpp::Time last_imu_time_;
-
-    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
-
-    std::shared_ptr<mpcc::Path> path_;
-
-    // Vehicle state - 5D [x, y, theta, kappa, v]
-    double x_, y_, yaw_, v_;
-    double kappa_ = 0.0;          // current curvature
-    double steering_angle_ = 0.0; // current steering angle for curvature calculation
-    double last_time_ = 0.0;      // for dt calculation
-
-    // Path following state
-    bool path_initialized_ = false;
-    size_t current_path_idx_ = 0;
-
-    // Control history for smoothing
-    double prev_steer_, prev_throttle_;
-
-    // GRAMPC solver and parameter array
-    TYPE_GRAMPC_POINTER(grampc_);
-    double param_[14]; // Parameter array for GRAMPC vehicle model (matches main_VEHICLE.c)
-    double dt_ = 0.0;
-    double t = 0.0; // Current time for GRAMPC integration
-
-    // Easy access to key parameters
-    double L_, delta_max_, v_max_;
-};
 
 int main(int argc, char *argv[])
 {

@@ -9,16 +9,18 @@ namespace mpcc
 class Path
 {
 public:
-    Path(const std::vector<Eigen::Vector4d> &waypoints);
-    size_t findClosestWaypoint(const Eigen::Vector2d& position) const;
+    Path(const std::vector<Eigen::Vector4d> &waypoints, const std::vector<double> &arc_lengths);
+    size_t findNextWaypointIdx(double current_s) const;
     Eigen::Vector2d getWaypoint(size_t index) const;
     double getHeading(size_t index) const;
     double getCurvature(size_t index) const;
+    double getArcLength(size_t index) const;
     size_t getWaypointCount() const;
     double total_length() const;
 
 private:
     std::vector<Eigen::Vector4d> waypoints_;
+    std::vector<double> arc_lengths_;
     double total_length_;
 };
 
