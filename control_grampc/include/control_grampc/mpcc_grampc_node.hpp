@@ -23,7 +23,8 @@ extern "C"
 
 #define NX 5
 #define NU 2
-#define NH 3
+#define NH 0
+
 
 class MPCCGrampcNode : public rclcpp::Node
 {
@@ -31,25 +32,30 @@ public:
     MPCCGrampcNode();
 
 private:
-    void ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg);
-    void speedCallback(const std_msgs::msg::Float32::SharedPtr msg);
-    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
     void initializePathPosition();
-    void controlLoop();
+    void initGrampcParams();
+    void controlLoop(
+        const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg,
+        const std_msgs::msg::Float32::ConstSharedPtr &speed_msg,
+        const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
+    double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
+    double computeCurvature(
+        const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg,
+        double current_yaw);
 
     // Member variables
-    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr ips_sub_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-    rclcpp::TimerBase::SharedPtr control_timer_;
+    // Subscribers
+    message_filters::Subscriber<geometry_msgs::msg::Point> ips_sub_;
+    message_filters::Subscriber<std_msgs::msg::Float32> speed_sub_;
+    message_filters::Subscriber<sensor_msgs::msg::Imu> imu_sub_;
 
-    // Data availability and timing
-    bool has_ips_data_ = false;
-    bool has_speed_data_ = false;
-    bool has_imu_data_ = false;
-    rclcpp::Time last_ips_time_;
-    rclcpp::Time last_speed_time_;
-    rclcpp::Time last_imu_time_;
+    // Synchronizer
+    std::shared_ptr<message_filters::Synchronizer<
+        message_filters::sync_policies::ApproximateTime<
+            geometry_msgs::msg::Point,
+            std_msgs::msg::Float32,
+            sensor_msgs::msg::Imu>>>
+        sync_;
 
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
@@ -77,6 +83,10 @@ private:
 
     // Easy access to key parameters
     double L_, delta_max_, v_max_;
+    double last_yaw_ = 0.0;
+    bool first_pose_ = true;
+    geometry_msgs::msg::Point last_pos_;
+    typeRNum rwsReferenceIntegration[2 * NX];
 };
 
-#endif  // CONTROL_GRAMPC__MPCC_GRAMPC_NODE_HPP_
+#endif // CONTROL_GRAMPC__MPCC_GRAMPC_NODE_HPP_
