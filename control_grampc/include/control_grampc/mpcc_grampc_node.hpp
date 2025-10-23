@@ -34,7 +34,6 @@ private:
     void ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg);
     void speedCallback(const std_msgs::msg::Float32::SharedPtr msg);
     void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
-    void controlTimerCallback();
     void initializePathPosition();
     void controlLoop();
 
@@ -64,7 +63,6 @@ private:
     double last_time_ = 0.0;      // for dt calculation
 
     // Path following state
-    bool path_initialized_ = false;
     size_t current_path_idx_ = 0;
     double current_s_ = 0.0; // Current arc length position
 
