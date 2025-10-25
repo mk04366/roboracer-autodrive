@@ -1,21 +1,20 @@
 #include "control_grampc/mpcc_grampc_node.hpp"
 
-#include "message_filters/subscriber.h"
-#include "message_filters/sync_policies/approximate_time.h"
-#include "message_filters/synchronizer.h"
-#include <Quaternion.hpp>
-#include <Matrix3x3.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+
+#include "nav_msgs/msg/path.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 using std::placeholders::_1;
-using std::placeholders::_2;
-using std::placeholders::_3;
 
 MPCCGrampcNode::MPCCGrampcNode()
-    : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), yaw_(0.0), v_(0.0), prev_steer_(0.0), prev_throttle_(0.0), t(0.0)
+    : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), yaw_(0.0), v_(0.0), prev_steer_(0.0), prev_throttle_(0.0), t_(0.0)
 {
     // Load path from CSV file
     std::string csv_file = this->declare_parameter<std::string>("path_csv",
-                                                                "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl.csv");
+                                                                "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl_old.csv");
     path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
 
     if (path_ && path_->total_length() > 1e-3)
@@ -29,29 +28,63 @@ MPCCGrampcNode::MPCCGrampcNode()
         return;
     }
 
-    // Create message_filters subscribers
-    ips_sub_.subscribe(this, "/autodrive/f1tenth_1/ips");
-    speed_sub_.subscribe(this, "/autodrive/f1tenth_1/speed");
-    imu_sub_.subscribe(this, "/autodrive/f1tenth_1/imu");
+    // Create subscribers for each topic
+    ips_sub_ = this->create_subscription<geometry_msgs::msg::Point>(
+        "/autodrive/f1tenth_1/ips", 10,
+        std::bind(&MPCCGrampcNode::ipsCallback, this, std::placeholders::_1));
 
-    typedef message_filters::sync_policies::ApproximateTime<
-        geometry_msgs::msg::Point,
-        std_msgs::msg::Float32,
-        sensor_msgs::msg::Imu>
-        ApproxSyncPolicy;
+    speed_sub_ = this->create_subscription<std_msgs::msg::Float32>(
+        "/autodrive/f1tenth_1/speed", 10,
+        std::bind(&MPCCGrampcNode::speedCallback, this, std::placeholders::_1));
 
-    sync_ = std::make_shared<message_filters::Synchronizer<ApproxSyncPolicy>>(
-        ApproxSyncPolicy(10), ips_sub_, speed_sub_, imu_sub_);
-
-    // Register the synchronized callback
-    sync_->registerCallback(std::bind(&MPCCGrampcNode::controlLoop, this, _1, _2, _3));
-
-    RCLCPP_INFO(this->get_logger(), "MPCCGrampcNode synchronized subscribers initialized.");
+    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+        "/autodrive/f1tenth_1/imu", 10,
+        std::bind(&MPCCGrampcNode::imuCallback, this, std::placeholders::_1));
 
     throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
     steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
 
+    path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/planned_path", 10);
+
+    path_timer_ = this->create_wall_timer(
+        std::chrono::seconds(1),
+        std::bind(&MPCCGrampcNode::publishPath, this));
+    // ---------------------------------------- //
+
     initGrampcParams();
+}
+
+void MPCCGrampcNode::publishPath()
+{
+    if (!path_ || path_->getWaypointCount() == 0)
+        return;
+
+    nav_msgs::msg::Path path_msg;
+    path_msg.header.stamp = this->now();
+    path_msg.header.frame_id = "map"; // keep consistent with RViz fixed frame
+
+    path_msg.poses.reserve(path_->getWaypointCount());
+    for (size_t i = 0; i < path_->getWaypointCount(); ++i)
+    {
+        Eigen::Vector2d wp = path_->getWaypoint(i);
+        double heading = path_->getHeading(i);
+
+        geometry_msgs::msg::PoseStamped pose;
+        pose.header = path_msg.header;
+        pose.pose.position.x = wp.x();
+        pose.pose.position.y = wp.y();
+        pose.pose.position.z = 0.0;
+
+        tf2::Quaternion q;
+        q.setRPY(0.0, 0.0, heading);
+        pose.pose.orientation = tf2::toMsg(q);
+
+        path_msg.poses.push_back(pose);
+    }
+
+    path_pub_->publish(path_msg);
+    // optional throttle info:
+    RCLCPP_DEBUG(this->get_logger(), "Published path with %zu waypoints", path_->getWaypointCount());
 }
 
 void MPCCGrampcNode::initGrampcParams()
@@ -67,15 +100,11 @@ void MPCCGrampcNode::initGrampcParams()
     /* Initial values, setpoints and limits of the inputs */
     ctypeRNum u0[NU] = {0.0, 0.0};
     ctypeRNum udes[NU] = {0.0, 0.0};
-    ctypeRNum umax[NU] = {0.5, 5.0};
-    ctypeRNum umin[NU] = {-0.5, -5.0};
-    ctypeRNum u0[NU] = {0.0, 0.0};
-    ctypeRNum udes[NU] = {0.0, 0.0};
     ctypeRNum umax[NU] = {1.0, M_PI / 6};
     ctypeRNum umin[NU] = {-0.1, -M_PI / 6};
     ctypeRNum Thor = 1; /* Prediction horizon */
     dt_ = 0.05;         // Default 50ms for 20Hz timer
-    typeRNum t = 0.0;   /* time at the current sampling step */
+    t_ = 0.0;           /* time at the current sampling step */
 
     /********* Option definition *********/
     ctypeInt Nhor = 20; /* Number of steps for the system integration */
@@ -108,7 +137,7 @@ void MPCCGrampcNode::initGrampcParams()
     grampc_setparam_real_vector(grampc_, "umax", umax);
 
     grampc_setparam_real(grampc_, "Thor", Thor);
-    grampc_setparam_real(grampc_, "t0", t);
+    grampc_setparam_real(grampc_, "t0", t_);
 
     grampc_setopt_int(grampc_, "Nhor", Nhor);
     grampc_setopt_int(grampc_, "MaxGradIter", MaxGradIter);
@@ -139,59 +168,85 @@ void MPCCGrampcNode::initializePathPosition()
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
 {
-  tf2::Quaternion q(
-      imu_msg->orientation.x,
-      imu_msg->orientation.y,
-      imu_msg->orientation.z,
-      imu_msg->orientation.w);
+    tf2::Quaternion q(
+        imu_msg->orientation.x,
+        imu_msg->orientation.y,
+        imu_msg->orientation.z,
+        imu_msg->orientation.w);
 
-  double roll, pitch, yaw;
-  tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
-  return yaw;  // in radians
+    double roll, pitch, yaw;
+    tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+    return yaw; // in radians
+}
+
+void MPCCGrampcNode::ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg)
+{
+    latest_ips = msg;
+}
+
+void MPCCGrampcNode::speedCallback(const std_msgs::msg::Float32::SharedPtr msg)
+{
+    latest_speed = msg;
+}
+
+void MPCCGrampcNode::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
+{
+    latest_imu = msg;
+    processIfReady();
+}
+
+void MPCCGrampcNode::processIfReady()
+{
+    if (!latest_ips || !latest_speed || !latest_imu)
+        return;
+
+    // All 3 available → use them
+    x_ = latest_ips->x;
+    y_ = latest_ips->y;
+    v_ = static_cast<double>(latest_speed->data);
+    yaw_ = getYawFromImu(latest_imu);
+    kappa_ = computeCurvature(latest_ips, yaw_);
+
+    controlLoop();
 }
 
 double MPCCGrampcNode::computeCurvature(
     const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg,
     double current_yaw)
 {
-  if (first_pose_) {
+    if (first_pose_)
+    {
+        last_pos_ = *ips_msg;
+        last_yaw_ = current_yaw;
+        first_pose_ = false;
+        return 0.0;
+    }
+
+    double dx = ips_msg->x - last_pos_.x;
+    double dy = ips_msg->y - last_pos_.y;
+    double ds = std::sqrt(dx * dx + dy * dy);
+
+    if (ds < 1e-5)
+        return 0.0; // avoid division by zero
+
+    double dyaw = current_yaw - last_yaw_;
+
+    // normalize yaw difference to [-pi, pi]
+    while (dyaw > M_PI)
+        dyaw -= 2.0 * M_PI;
+    while (dyaw < -M_PI)
+        dyaw += 2.0 * M_PI;
+
+    double kappa = dyaw / ds;
+
     last_pos_ = *ips_msg;
     last_yaw_ = current_yaw;
-    first_pose_ = false;
-    return 0.0;
-  }
 
-  double dx = ips_msg->x - last_pos_.x;
-  double dy = ips_msg->y - last_pos_.y;
-  double ds = std::sqrt(dx * dx + dy * dy);
-
-  if (ds < 1e-5) return 0.0;  // avoid division by zero
-
-  double dyaw = current_yaw - last_yaw_;
-
-  // normalize yaw difference to [-pi, pi]
-  while (dyaw > M_PI) dyaw -= 2.0 * M_PI;
-  while (dyaw < -M_PI) dyaw += 2.0 * M_PI;
-
-  double kappa = dyaw / ds;
-
-  last_pos_ = *ips_msg;
-  last_yaw_ = current_yaw;
-
-  return kappa;
+    return kappa;
 }
 
-void MPCCGrampcNode::controlLoop(const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg,
-                                 const std_msgs::msg::Float32::ConstSharedPtr &speed_msg,
-                                 const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
+void MPCCGrampcNode::controlLoop()
 {
-
-    x_ = ips_msg->x;
-    y_ = ips_msg->y;
-    v_ = static_cast<double>(speed_msg->data);
-    yaw_ = getYawFromImu(imu_msg);
-    kappa_ = computeCurvature(ips_msg, yaw_);
-
     initializePathPosition();
     // Find current waypoint using arc length and get next waypoint
     size_t nextIdx = path_->findNextWaypointIdx(current_s_);
@@ -210,7 +265,11 @@ void MPCCGrampcNode::controlLoop(const geometry_msgs::msg::Point::ConstSharedPtr
 
     // Set current state as initial condition
     grampc_setparam_real_vector(grampc_, "xdes", target_state.data());
-
+    // print target state for debugging
+    RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, yaw=%.2f, kappa=%.4f, v=%.2f",
+                target_state[0], target_state[1], target_state[2], target_state[3], target_state[4]);
+    RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, yaw=%.2f, kappa=%.4f, v=%.2f",
+                current_state[0], current_state[1], current_state[2], current_state[3], current_state[4]);
     double steer_cmd = 0.0;
     double throttle_cmd = 0.0;
 
@@ -229,20 +288,20 @@ void MPCCGrampcNode::controlLoop(const geometry_msgs::msg::Point::ConstSharedPtr
     {
 
         /* reference integration of the system via heun scheme since grampc->sol->xnext is only an interpolated value */
-		ffct(rwsReferenceIntegration, t, grampc_->param->x0, grampc_->sol->unext, grampc_->sol->pnext, grampc_->userparam);
-		for (auto i = 0; i < NX; i++)
-		{
-			grampc_->sol->xnext[i] = grampc_->param->x0[i] + dt_ * rwsReferenceIntegration[i];
-		}
-		ffct(rwsReferenceIntegration + NX, t + dt_, grampc_->sol->xnext, grampc_->sol->unext, grampc_->sol->pnext, grampc_->userparam);
-		for (auto i = 0; i < NX; i++)
-		{
-			grampc_->sol->xnext[i] = grampc_->param->x0[i] + dt_ * (rwsReferenceIntegration[i] + rwsReferenceIntegration[i + NX]) / 2;
-		}
+        ffct(rwsReferenceIntegration, t_, grampc_->param->x0, grampc_->sol->unext, grampc_->sol->pnext, grampc_->userparam);
+        for (auto i = 0; i < NX; i++)
+        {
+            grampc_->sol->xnext[i] = grampc_->param->x0[i] + dt_ * rwsReferenceIntegration[i];
+        }
+        ffct(rwsReferenceIntegration + NX, t_ + dt_, grampc_->sol->xnext, grampc_->sol->unext, grampc_->sol->pnext, grampc_->userparam);
+        for (auto i = 0; i < NX; i++)
+        {
+            grampc_->sol->xnext[i] = grampc_->param->x0[i] + dt_ * (rwsReferenceIntegration[i] + rwsReferenceIntegration[i + NX]) / 2;
+        }
 
-		/* update state and time */
-		t = t + dt_;
-		grampc_setparam_real_vector(grampc_, "x0", grampc_->sol->xnext);
+        /* update state and time */
+        t_ = t_ + dt_;
+        grampc_setparam_real_vector(grampc_, "x0", grampc_->sol->xnext);
 
         double acceleration = grampc_->sol->unext[0]; // u[0] = acceleration [m/s^2]
         double kappa_dot = grampc_->sol->unext[1];    // u[1] = steering_rate (curvature rate) [1/s]
@@ -252,8 +311,11 @@ void MPCCGrampcNode::controlLoop(const geometry_msgs::msg::Point::ConstSharedPtr
 
         throttle_cmd = acceleration;
         steer_cmd = kappa_ * L_;
-    }
 
+        // Update previous commands for fallback case of next iteration
+        prev_steer_ = steer_cmd;
+        prev_throttle_ = throttle_cmd;
+    }
 
     // Publish steering command
     auto s_msg = std_msgs::msg::Float32();
@@ -264,14 +326,6 @@ void MPCCGrampcNode::controlLoop(const geometry_msgs::msg::Point::ConstSharedPtr
     auto t_msg = std_msgs::msg::Float32();
     t_msg.data = static_cast<float>(throttle_cmd);
     throttle_pub_->publish(t_msg);
-
-    // Update previous commands for next iteration
-    prev_steer_ = steer_cmd;
-    prev_throttle_ = throttle_cmd;
-
-    // Update time for GRAMPC integration
-    t += dt_;
-    grampc_setparam_real(grampc_, "t0", t);
 }
 
 int main(int argc, char *argv[])
