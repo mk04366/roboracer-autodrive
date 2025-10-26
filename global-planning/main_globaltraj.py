@@ -58,7 +58,7 @@ print("track filename: ", file_paths["track_name"])
 
 
 # set import options ---------------------------------------------------------------------------------------------------
-imp_opts = {"flip_imp_track": True,                # flip imported track to reverse direction
+imp_opts = {"flip_imp_track": False,                # flip imported track to reverse direction
             "set_new_start": False,                 # set new starting point (changes order, not coordinates)
             "new_start": np.array([0.0, -47.0]),    # [x_m, y_m]
             "min_track_width": None,                # [m] minimum enforced track width (set None to deactivate)
@@ -524,11 +524,10 @@ trajectory_opt = np.column_stack((s_points_opt_interp,
                                   ax_profile_opt))
 spline_data_opt = np.column_stack((spline_lengths_opt, coeffs_x_opt, coeffs_y_opt))
 
-x_new = trajectory_opt[:, 1]
-y_new = trajectory_opt[:, 2]
-trajectory_opt[:, 1] = y_new      # swap axes
-trajectory_opt[:, 2] = -x_new
-trajectory_opt[:, 3] += np.pi/2   # rotate heading accordingly
+# Rotate heading by 90° to match car frame
+trajectory_opt[:, 3] += np.pi / 2
+# Wrap angles to [-pi, pi]
+trajectory_opt[:, 3] = (trajectory_opt[:, 3] + np.pi) % (2 * np.pi) - np.pi
 
 # create a closed race trajectory array
 traj_race_cl = np.vstack((trajectory_opt, trajectory_opt[0, :]))
