@@ -21,7 +21,7 @@ setup(
     maintainer_email='csamak@clemson.edu' 'tsamak@clemson.edu',
     description='AutoDRIVE Ecosystem ROS 2 Package for F1TENTH',
     license='BSD',
-    tests_require=['pytest'],
+    
     entry_points={
         'console_scripts': [
             'autodrive_bridge = autodrive_f1tenth.autodrive_bridge:main', # AutoDRIVE ROS 2 bridge

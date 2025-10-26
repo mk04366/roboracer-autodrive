@@ -524,6 +524,12 @@ trajectory_opt = np.column_stack((s_points_opt_interp,
                                   ax_profile_opt))
 spline_data_opt = np.column_stack((spline_lengths_opt, coeffs_x_opt, coeffs_y_opt))
 
+x_new = trajectory_opt[:, 1]
+y_new = trajectory_opt[:, 2]
+trajectory_opt[:, 1] = y_new      # swap axes
+trajectory_opt[:, 2] = -x_new
+trajectory_opt[:, 3] += np.pi/2   # rotate heading accordingly
+
 # create a closed race trajectory array
 traj_race_cl = np.vstack((trajectory_opt, trajectory_opt[0, :]))
 traj_race_cl[-1, 0] = np.sum(spline_data_opt[:, 0])  # set correct length
