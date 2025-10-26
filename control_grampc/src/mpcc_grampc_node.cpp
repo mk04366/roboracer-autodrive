@@ -257,7 +257,7 @@ void MPCCGrampcNode::controlLoop()
     Eigen::Vector2d target_point = path_->getWaypoint(nextIdx);
     double target_heading = path_->getHeading(nextIdx);
     double target_curvature = path_->getCurvature(nextIdx);
-    double ref_speed = 1.0; // Desired speed [m/s] //TODO:
+    double ref_speed = path_->getVelocity(nextIdx);
 
     // Current state and target state
     std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
