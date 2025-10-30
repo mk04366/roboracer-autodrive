@@ -13,26 +13,33 @@ def generate_launch_description():
         'simulator_bringup_headless.launch.py'
     )
 
-    waypoints_loader_launch_path = os.path.join(
-        get_package_share_directory('control'),
-        'launch',
-        'waypoints_loader_launch.py'
+    # waypoints_loader_launch_path = os.path.join(
+    #     get_package_share_directory('control'),
+    #     'launch',
+    #     'waypoints_loader_launch.py'
+    # )
+
+    # control_launch_path = os.path.join(
+    #     get_package_share_directory('control_grampc'),
+    #     'launch',
+    #     # 'pid_controller_launch.py'
+    #     # 'ftg_controller_launch.py'
+    #     # 'stanley_controller_launch.py'
+    #     'mpcc_grampc.launch.py',
+    # )
+
+    mpcc_node = Node(
+        package="control_grampc",
+        executable="mpcc_grampc_node",
+        name="mpcc_controller",
+        output="screen",
     )
 
-    control_launch_path = os.path.join(
-        get_package_share_directory('control_grampc'),
-        'launch',
-        # 'pid_controller_launch.py'
-        # 'ftg_controller_launch.py'
-        # 'stanley_controller_launch.py'
-        'mpcc_grampc.launch.py' 
-    )
-
-    localization_launch_path = os.path.join(
-        get_package_share_directory('localization'),
-        'launch',
-        'amcl_launch.py'
-    )
+    # localization_launch_path = os.path.join(
+    #     get_package_share_directory('localization'),
+    #     'launch',
+    #     'amcl_launch.py'
+    # )
 
     foxglove_node = Node(
         package="foxglove_bridge",
@@ -44,23 +51,27 @@ def generate_launch_description():
         }]
     )
 
-    initial_pose_node = Node(
-        package='localization',
-        executable='initial_pose_publisher',
-        name='initial_pose_publisher',
-        output='screen'
-    )
+    # initial_pose_node = Node(
+    #     package='localization',
+    #     executable='initial_pose_publisher',
+    #     name='initial_pose_publisher',
+    #     output='screen'
+    # )
 
     return LaunchDescription([
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(autodrive_launch_path)
         ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(localization_launch_path)
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(waypoints_loader_launch_path)
-        ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(control_launch_path),
+        #     ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(localization_launch_path)
+        # ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(waypoints_loader_launch_path)
+        # ),
+        mpcc_node,
         foxglove_node,
-        initial_pose_node
+        # initial_pose_node
     ])
