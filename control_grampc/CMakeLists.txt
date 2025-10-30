@@ -16,6 +16,7 @@ find_package(Eigen3 REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(message_filters REQUIRED)
 
 # === Link GRAMPC ===
 set(GRAMPC_DIR "/home/ammar/ros2_ws/GRAMPC_v2.2")
@@ -61,6 +62,7 @@ ament_target_dependencies(mpcc_grampc_node
   tf2
   tf2_geometry_msgs
   nav_msgs
+  message_filters
 )
 
 ament_target_dependencies(path_utils Eigen3)

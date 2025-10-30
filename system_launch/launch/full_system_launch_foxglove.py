@@ -56,9 +56,6 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(autodrive_launch_path)
         ),
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(control_launch_path)
-        ),
-        IncludeLaunchDescription(
             PythonLaunchDescriptionSource(localization_launch_path)
         ),
         IncludeLaunchDescription(

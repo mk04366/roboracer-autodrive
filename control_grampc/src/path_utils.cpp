@@ -9,7 +9,7 @@ namespace mpcc
 
     Path::Path(const std::vector<Eigen::Vector4d> &waypoints,
                const std::vector<double> &arc_lengths,
-               const std::vector<double> &velocities = std::vector<double>())
+               const std::vector<double> &velocities)
         : waypoints_(waypoints), arc_lengths_(arc_lengths), velocities_(velocities), total_length_(0.0)
     {
         if (!arc_lengths_.empty())
@@ -55,6 +55,11 @@ namespace mpcc
         if (index >= waypoints_.size())
             return waypoints_.back()(2);
         return waypoints_[index](2);
+    }
+
+    double Path::getTotalLength() const
+    {
+        return total_length_;
     }
 
     double Path::getVelocity(size_t index) const

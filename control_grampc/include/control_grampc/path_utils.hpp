@@ -18,7 +18,7 @@ namespace mpcc
         double getCurvature(size_t index) const;
         double getArcLength(size_t index) const;
         size_t getWaypointCount() const;
-        double total_length() const;
+        double getTotalLength() const;
         double getVelocity(size_t index) const;
 
     private:
@@ -26,7 +26,6 @@ namespace mpcc
         std::vector<double> arc_lengths_;
         double total_length_;
         std::vector<double> velocities_;
-        double total_length_;
     };
 
     // Utility: load waypoints from CSV file

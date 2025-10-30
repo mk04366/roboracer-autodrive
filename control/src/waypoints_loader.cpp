@@ -21,13 +21,13 @@ public:
         try
         {
             waypoints_ = loadWaypointsFromCSV(path);
-            RCLCPP_INFO(this->get_logger(), "Loaded %zu waypoints", waypoints_.size());
+            // RCLCPP_INFO(this->get_logger(), "Loaded %zu waypoints", waypoints_.size());
 
-            for (size_t i = 0; i < waypoints_.size(); ++i)
-            {
-                RCLCPP_INFO(this->get_logger(), "[%zu] x=%.3f, y=%.3f, heading=%.3f, vel=%.3f",
-                            i, waypoints_[i].x, waypoints_[i].y, waypoints_[i].heading, waypoints_[i].velocity);
-            }
+            // for (size_t i = 0; i < waypoints_.size(); ++i)
+            // {
+            //     RCLCPP_INFO(this->get_logger(), "[%zu] x=%.3f, y=%.3f, heading=%.3f, vel=%.3f",
+            //                 i, waypoints_[i].x, waypoints_[i].y, waypoints_[i].heading, waypoints_[i].velocity);
+            // }
 
             // Publish markers continuously
             timer_ = this->create_wall_timer(

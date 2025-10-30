@@ -7,49 +7,53 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
-using std::placeholders::_1;
+#include "message_filters/subscriber.h"
+#include "message_filters/time_synchronizer.h"
+#include "message_filters/sync_policies/approximate_time.h"
 
-MPCCGrampcNode::MPCCGrampcNode()
-    : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), yaw_(0.0), v_(0.0), prev_steer_(0.0), prev_throttle_(0.0), t_(0.0)
+// Inside your MPCCGrampcNode constructor:
+using namespace message_filters;
+
+using std::placeholders::_1;
+using std::placeholders::_2;
+using std::placeholders::_3;
+
+MPCCGrampcNode::MPCCGrampcNode() : Node("mpcc_grampc_node"),
+                                   x_(0.0), y_(0.0), yaw_(0.0), v_(0.0),
+                                   prev_steer_(0.0), prev_throttle_(0.0), t_(0.0)
 {
-    // Load path from CSV file
+    rclcpp::Clock::SharedPtr clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+
+    // Load path from CSV (same as before)
     std::string csv_file = this->declare_parameter<std::string>("path_csv",
-                                                                "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl_old.csv");
+                                                                "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl.csv");
     path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
 
-    if (path_ && path_->total_length() > 1e-3)
-    {
-        RCLCPP_INFO(this->get_logger(), "Path loaded successfully: %s, length: %f", csv_file.c_str(),
-                    path_->total_length());
-    }
-    else
+    if (!path_ || path_->getTotalLength() < 1e-3)
     {
         RCLCPP_ERROR(this->get_logger(), "Failed to load path from: %s", csv_file.c_str());
         return;
     }
 
-    // Create subscribers for each topic
-    ips_sub_ = this->create_subscription<geometry_msgs::msg::Point>(
-        "/autodrive/f1tenth_1/ips", 10,
-        std::bind(&MPCCGrampcNode::ipsCallback, this, std::placeholders::_1));
+    RCLCPP_INFO(this->get_logger(), "Path loaded successfully: length: %f", path_->getTotalLength());
 
-    speed_sub_ = this->create_subscription<std_msgs::msg::Float32>(
-        "/autodrive/f1tenth_1/speed", 10,
-        std::bind(&MPCCGrampcNode::speedCallback, this, std::placeholders::_1));
+    // after loading path
+    ips_sub_ = std::make_shared<message_filters::Subscriber<geometry_msgs::msg::Point>>(this, "/autodrive/f1tenth_1/ips");
+    speed_sub_ = std::make_shared<message_filters::Subscriber<std_msgs::msg::Float32>>(this, "/autodrive/f1tenth_1/speed");
+    imu_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Imu>>(this, "/autodrive/f1tenth_1/imu");
 
-    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "/autodrive/f1tenth_1/imu", 10,
-        std::bind(&MPCCGrampcNode::imuCallback, this, std::placeholders::_1));
+    // now safe to construct synchronizer
+    sync_ = std::make_shared<Synchronizer<MySyncPolicy>>(MySyncPolicy(10), *ips_sub_, *speed_sub_, *imu_sub_);
+    sync_->registerCallback(std::bind(&MPCCGrampcNode::synchronizedCallback, this, _1, _2, _3));
 
+    // Publishers
     throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
     steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
-
     path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/planned_path", 10);
 
     path_timer_ = this->create_wall_timer(
         std::chrono::seconds(1),
         std::bind(&MPCCGrampcNode::publishPath, this));
-    // ---------------------------------------- //
 
     initGrampcParams();
 }
@@ -179,35 +183,18 @@ double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr
     return yaw; // in radians
 }
 
-void MPCCGrampcNode::ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg)
+void MPCCGrampcNode::synchronizedCallback(
+    const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg,
+    const std_msgs::msg::Float32::ConstSharedPtr &speed_msg,
+    const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
 {
-    latest_ips = msg;
-}
+    x_ = ips_msg->x;
+    y_ = ips_msg->y;
+    v_ = static_cast<double>(speed_msg->data);
+    yaw_ = getYawFromImu(imu_msg);
+    kappa_ = computeCurvature(ips_msg, yaw_);
 
-void MPCCGrampcNode::speedCallback(const std_msgs::msg::Float32::SharedPtr msg)
-{
-    latest_speed = msg;
-}
-
-void MPCCGrampcNode::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
-{
-    latest_imu = msg;
-    processIfReady();
-}
-
-void MPCCGrampcNode::processIfReady()
-{
-    if (!latest_ips || !latest_speed || !latest_imu)
-        return;
-
-    // All 3 available → use them
-    x_ = latest_ips->x;
-    y_ = latest_ips->y;
-    v_ = static_cast<double>(latest_speed->data);
-    yaw_ = getYawFromImu(latest_imu);
-    kappa_ = computeCurvature(latest_ips, yaw_);
-
-    controlLoop();
+    controlLoop(); // Now called only when all three messages are synchronized
 }
 
 double MPCCGrampcNode::computeCurvature(
