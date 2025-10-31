@@ -11,10 +11,6 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 
-#include "message_filters/subscriber.h"
-#include "message_filters/synchronizer.h"
-#include "message_filters/sync_policies/approximate_time.h"
-
 extern "C"
 {
 #include "grampc.h"
@@ -45,29 +41,25 @@ private:
     void publishPath();
     double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
     double computeCurvature(const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg, double current_yaw);
-
-    void synchronizedCallback(
-        const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg,
-        const std_msgs::msg::Float32::ConstSharedPtr &speed_msg,
-        const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
+    void ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg);
+    void speedCallback(const std_msgs::msg::Float32::SharedPtr msg);
+    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
+    void processIfReady();
 
     // ROS publishers/subscribers
+    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr ips_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
-    rclcpp::TimerBase::SharedPtr path_timer_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_; 
+    rclcpp::TimerBase::SharedPtr path_timer_;  
+
+    geometry_msgs::msg::Point::SharedPtr latest_ips;
+    std_msgs::msg::Float32::SharedPtr latest_speed;
+    sensor_msgs::msg::Imu::SharedPtr latest_imu;
 
     std::shared_ptr<mpcc::Path> path_;
-
-    std::shared_ptr<message_filters::Subscriber<geometry_msgs::msg::Point>> ips_sub_;
-    std::shared_ptr<message_filters::Subscriber<std_msgs::msg::Float32>> speed_sub_;
-    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Imu>> imu_sub_;
-
-    using MySyncPolicy = message_filters::sync_policies::ApproximateTime<
-        geometry_msgs::msg::Point,
-        std_msgs::msg::Float32,
-        sensor_msgs::msg::Imu>;
-    std::shared_ptr<message_filters::Synchronizer<MySyncPolicy>> sync_;
 
     // Vehicle state - 5D [x, y, theta, kappa, v]
     double x_, y_, yaw_, v_;
