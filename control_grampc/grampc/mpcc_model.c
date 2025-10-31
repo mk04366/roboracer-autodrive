@@ -18,7 +18,7 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     *Nx = 5; // x, y, theta, kappa, v
     *Nu = 2; // acceleration, steering_rate
     *Np = 0;
-    *Nh = 1;
+    *Nh = 0; /* no inequality constraints (hfct disabled) */
     *Ng = 0;
     *NgT = 0;
     *NhT = 0;
@@ -150,13 +150,16 @@ void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     ------------------------------------------------------ **/
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    out[0] = 4 - POW2(-20 + x[0]) - POW2(((typeRNum)-0.5) + x[1]);
+    /* Inequality constraints disabled for now. If you re-enable inequalities,
+       set *Nh in ocp_dim accordingly and implement hfct/dhdx_vec/dhdu_vec.
+    */
 }
 /** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
 void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    out[0] = -2 * vec[0] * (-20 + x[0]);
-    out[1] = -2 * vec[0] * (((typeRNum)-0.5) + x[1]);
+    /* No inequality constraints -> no dh/dx entries to compute. Keep zeros. */
+    out[0] = 0;
+    out[1] = 0;
     out[2] = 0;
     out[3] = 0;
     out[4] = 0;
