@@ -28,7 +28,7 @@ extern "C"
 
 #define NX 5
 #define NU 2
-#define NH 0
+#define NH 1
 
 class MPCCGrampcNode : public rclcpp::Node
 {
