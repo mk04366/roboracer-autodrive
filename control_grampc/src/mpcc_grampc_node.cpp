@@ -14,7 +14,7 @@ MPCCGrampcNode::MPCCGrampcNode()
 {
     // Load path from CSV file
     std::string csv_file = this->declare_parameter<std::string>("path_csv",
-                                                                "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl_old.csv");
+                                                                "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl.csv");
     path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
 
     if (path_ && path_->getTotalLength() > 1e-3)
@@ -28,18 +28,10 @@ MPCCGrampcNode::MPCCGrampcNode()
         return;
     }
 
-    // Create subscribers for each topic
-    ips_sub_ = this->create_subscription<geometry_msgs::msg::Point>(
-        "/autodrive/f1tenth_1/ips", 10,
-        std::bind(&MPCCGrampcNode::ipsCallback, this, std::placeholders::_1));
-
-    speed_sub_ = this->create_subscription<std_msgs::msg::Float32>(
-        "/autodrive/f1tenth_1/speed", 10,
-        std::bind(&MPCCGrampcNode::speedCallback, this, std::placeholders::_1));
-
-    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        "/autodrive/f1tenth_1/imu", 10,
-        std::bind(&MPCCGrampcNode::imuCallback, this, std::placeholders::_1));
+    // ---------------------------------------- //
+    vehicle_sub_ = this->create_subscription<autodrive_msgs::msg::Vehiclestate>(
+    "/autodrive/f1tenth_1/vehicle_state", 10,
+    std::bind(&MPCCGrampcNode::vehicleCallback, this, std::placeholders::_1));
 
     throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
     steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
@@ -179,37 +171,6 @@ double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr
     return yaw; // in radians
 }
 
-void MPCCGrampcNode::ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg)
-{
-    latest_ips = msg;
-}
-
-void MPCCGrampcNode::speedCallback(const std_msgs::msg::Float32::SharedPtr msg)
-{
-    latest_speed = msg;
-}
-
-void MPCCGrampcNode::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
-{
-    latest_imu = msg;
-    processIfReady();
-}
-
-void MPCCGrampcNode::processIfReady()
-{
-    if (!latest_ips || !latest_speed || !latest_imu)
-        return;
-
-    // All 3 available → use them
-    x_ = latest_ips->x;
-    y_ = latest_ips->y;
-    v_ = static_cast<double>(latest_speed->data);
-    yaw_ = getYawFromImu(latest_imu);
-    kappa_ = computeCurvature(latest_ips, yaw_);
-
-    controlLoop();
-}
-
 double MPCCGrampcNode::computeCurvature(
     const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg,
     double current_yaw)
@@ -243,6 +204,28 @@ double MPCCGrampcNode::computeCurvature(
     last_yaw_ = current_yaw;
 
     return kappa;
+}
+
+
+void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg)
+{
+    // Extract IPS position
+    x_ = msg->position.x;
+    y_ = msg->position.y;
+
+    // Extract speed
+    v_ = static_cast<double>(msg->speed);
+
+    // Extract yaw from IMU
+    auto imu_ptr = std::make_shared<sensor_msgs::msg::Imu>(msg->imu);
+    yaw_ = getYawFromImu(imu_ptr);
+
+    // Compute curvature
+    auto pos_ptr = std::make_shared<geometry_msgs::msg::Point>(msg->position);
+    kappa_ = computeCurvature(pos_ptr, yaw_);
+
+    // Run control loop
+    controlLoop();
 }
 
 void MPCCGrampcNode::controlLoop()

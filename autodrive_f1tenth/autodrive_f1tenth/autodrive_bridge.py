@@ -35,7 +35,7 @@ import tf2_ros # ROS bindings for tf2 library to handle transforms
 from std_msgs.msg import Int32, Float32, Header # Int32, Float32 and Header message classes
 from geometry_msgs.msg import Point, TransformStamped # Point and TransformStamped message classes
 from sensor_msgs.msg import JointState, Imu, LaserScan, Image # JointState, Imu, LaserScan and Image message classes
-from autodrive_msgs.msg import VehicleState
+from autodrive_msgs.msg import Vehiclestate
 from tf_transformations import quaternion_from_euler # Euler angle representation to quaternion representation
 from threading import Thread # Thread-based parallelism
 
@@ -227,15 +227,16 @@ def publish_collision_count_data(collision_count):
     publishers['pub_collision_count'].publish(create_int_msg(msg_int32, collision_count))
 
 def publish_vehicle_state():
-    """Publish a single VehicleState message with the current IPS/IMU/speed."""
+    """Publish a single Vehiclestate message with the current IPS/IMU/speed."""
     try:
-        msg = VehicleState()
+        msg = Vehiclestate()
         msg.header = Header()
         msg.header.stamp = autodrive_bridge.get_clock().now().to_msg()
         # position
         msg.position.x = float(autodrive.position[0])
         msg.position.y = float(autodrive.position[1])
         msg.position.z = float(autodrive.position[2])
+
         # imu (use helper to create a properly stamped Imu message)
         imu_msg = Imu()
         imu_msg = create_imu_msg(imu_msg, autodrive.orientation_quaternion, autodrive.angular_velocity, autodrive.linear_acceleration)
@@ -247,7 +248,7 @@ def publish_vehicle_state():
     except Exception:
         # Keep node robust to transient issues
         try:
-            autodrive_bridge.get_logger().warning('Failed to publish VehicleState')
+            autodrive_bridge.get_logger().warning('Failed to publish Vehiclestate')
         except Exception:
             pass
 
@@ -327,7 +328,7 @@ def bridge(sid, data):
         publish_ips_data(autodrive.position)
         # IMU
         publish_imu_data(autodrive.orientation_quaternion, autodrive.angular_velocity, autodrive.linear_acceleration)
-        # Publish aggregated VehicleState (IPS, IMU, speed)
+        # Publish aggregated Vehiclestate (IPS, IMU, speed)
         publish_vehicle_state()
         # Cooordinate transforms
         # Coordinate transforms
@@ -421,14 +422,15 @@ def main():
     publishers = {e.name: autodrive_bridge.create_publisher(e.type, e.topic, qos_profile)
                   for e in config.pub_sub_dict.publishers} # Publishers
     # Add vehicle state publisher (custom message)
-    publishers['pub_vehicle_state'] = autodrive_bridge.create_publisher(VehicleState,
+    publishers['pub_vehicle_state'] = autodrive_bridge.create_publisher(Vehiclestate,
                                                                             '/autodrive/f1tenth_1/vehicle_state',
                                                                             qos_profile)
     callbacks = {
         '/autodrive/f1tenth_1/throttle_command': callback_throttle_command,
         '/autodrive/f1tenth_1/steering_command': callback_steering_command,
         '/autodrive/reset_command': callback_reset_command
-    } # Subscriber callback functions
+    } # Subscriber callback functionsros2 interface show autodrive_msgs/msg/VehicleState
+    
     [autodrive_bridge.create_subscription(e.type, e.topic, callbacks[e.topic], qos_profile) for e in config.pub_sub_dict.subscribers] # Subscribers
 
     # timer_period = 0.025 # Timer period in seconds

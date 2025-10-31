@@ -10,6 +10,7 @@
 #include "control_grampc/mpcc_model.h"
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include "autodrive_msgs/msg/vehiclestate.hpp"
 
 extern "C"
 {
@@ -41,23 +42,13 @@ private:
     void publishPath();
     double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
     double computeCurvature(const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg, double current_yaw);
-    void ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg);
-    void speedCallback(const std_msgs::msg::Float32::SharedPtr msg);
-    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
-    void processIfReady();
-
+    void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
     // ROS publishers/subscribers
-    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr ips_sub_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_; 
     rclcpp::TimerBase::SharedPtr path_timer_;  
-
-    geometry_msgs::msg::Point::SharedPtr latest_ips;
-    std_msgs::msg::Float32::SharedPtr latest_speed;
-    sensor_msgs::msg::Imu::SharedPtr latest_imu;
+    rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
 
     std::shared_ptr<mpcc::Path> path_;
 

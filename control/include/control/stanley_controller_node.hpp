@@ -12,7 +12,7 @@
 #include <limits>
 #include "control/common.hpp"
 
-struct VehicleState
+struct VehicleStateStanley
 {
     double x;
     double y;
@@ -41,11 +41,11 @@ public:
 
     double pi2pi(double angle);
     std::tuple<double, double, size_t, double> calcThetaAndEf(
-        const VehicleState &state,
+        const VehicleStateStanley &state,
         const std::vector<Waypoint> &waypoints);
 
     std::pair<double, double> controller(
-        const VehicleState &state,
+        const VehicleStateStanley &state,
         const std::vector<Waypoint> &waypoints,
         double k_path);
 
