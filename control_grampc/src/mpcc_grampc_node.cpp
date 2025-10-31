@@ -30,8 +30,8 @@ MPCCGrampcNode::MPCCGrampcNode()
 
     // ---------------------------------------- //
     vehicle_sub_ = this->create_subscription<autodrive_msgs::msg::Vehiclestate>(
-    "/autodrive/f1tenth_1/vehicle_state", 10,
-    std::bind(&MPCCGrampcNode::vehicleCallback, this, std::placeholders::_1));
+        "/autodrive/f1tenth_1/vehicle_state", 10,
+        std::bind(&MPCCGrampcNode::vehicleCallback, this, std::placeholders::_1));
 
     throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
     steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
@@ -206,7 +206,6 @@ double MPCCGrampcNode::computeCurvature(
     return kappa;
 }
 
-
 void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg)
 {
     // Extract IPS position
@@ -240,14 +239,16 @@ void MPCCGrampcNode::controlLoop()
     Eigen::Vector2d target_point = path_->getWaypoint(nextIdx);
     double target_heading = path_->getHeading(nextIdx);
     double target_curvature = path_->getCurvature(nextIdx);
-    double ref_speed = path_->getVelocity(nextIdx);
+    double ref_speed = path_->getVelocity(nextIdx) / 2.0; // Scale down for safety
 
     // Current state and target state
     std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
     std::vector<double> target_state = {target_point.x(), target_point.y(), target_heading, target_curvature, ref_speed};
 
-    // Set current state as initial condition
+    // Set current state as initial & desired condition
+    grampc_setparam_real_vector(grampc_, "x0", current_state.data());
     grampc_setparam_real_vector(grampc_, "xdes", target_state.data());
+
     // print target state for debugging
     RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, yaw=%.2f, kappa=%.4f, v=%.2f",
                 target_state[0], target_state[1], target_state[2], target_state[3], target_state[4]);
@@ -269,23 +270,9 @@ void MPCCGrampcNode::controlLoop()
     }
     else
     {
-
-        /* reference integration of the system via heun scheme since grampc->sol->xnext is only an interpolated value */
-        ffct(rwsReferenceIntegration, t_, grampc_->param->x0, grampc_->sol->unext, grampc_->sol->pnext, grampc_->userparam);
-        for (auto i = 0; i < NX; i++)
-        {
-            grampc_->sol->xnext[i] = grampc_->param->x0[i] + dt_ * rwsReferenceIntegration[i];
-        }
-        ffct(rwsReferenceIntegration + NX, t_ + dt_, grampc_->sol->xnext, grampc_->sol->unext, grampc_->sol->pnext, grampc_->userparam);
-        for (auto i = 0; i < NX; i++)
-        {
-            grampc_->sol->xnext[i] = grampc_->param->x0[i] + dt_ * (rwsReferenceIntegration[i] + rwsReferenceIntegration[i + NX]) / 2;
-        }
-
+        // grampc_setparam_real_vector(grampc, "x0", grampc->sol->xnext);
         /* update state and time */
         t_ = t_ + dt_;
-        grampc_setparam_real_vector(grampc_, "x0", grampc_->sol->xnext);
-
         double acceleration = grampc_->sol->unext[0]; // u[0] = acceleration [m/s^2]
         double kappa_dot = grampc_->sol->unext[1];    // u[1] = steering_rate (curvature rate) [1/s]
 
