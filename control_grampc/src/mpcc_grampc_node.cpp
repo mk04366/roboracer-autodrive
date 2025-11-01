@@ -97,6 +97,7 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum Thor = 1; /* Prediction horizon */
     dt_ = 0.05;         // Default 50ms for 20Hz timer
     t_ = 0.0;           /* time at the current sampling step */
+	const char* Integrator = "euler";
 
     /********* Option definition *********/
     ctypeInt Nhor = 20; /* Number of steps for the system integration */
@@ -104,15 +105,34 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
     /********* userparam *********/
-    typeRNum pSys[14] = {L_, 50,
-                         0.0, 1.0, 1.0, 1.0, 100.0,
-                         0.0, 1.0, 1.0, 1.0, 100.0,
-                         ((typeRNum)0.01), ((typeRNum)0.01)};
-    typeUSERPARAM *userparam = pSys;
+    /* Use member param_ so it remains valid after this function returns.
+       Passing a pointer to a local stack array caused use-after-return and
+       NaNs in solver outputs. */
+    param_[0] = L_;   // [0] Wheelbase length
+    param_[1] = 1.0;  // [1] Velocity scaling factor (stabilization term)
+
+    /* Running-state cost weights (Q) */
+    param_[2] = 1.0;  // [2] Qx
+    param_[3] = 1.0;  // [3] Qy
+    param_[4] = 1.0;  // [4] Qtheta
+    param_[5] = 1.0;  // [5] Qkappa
+    param_[6] = 1.0;  // [6] Qv
+
+    /* Terminal-state cost weights (P) */
+    param_[7] = 1.0;  // [7] Px
+    param_[8] = 1.0;  // [8] Py
+    param_[9] = 1.0;  // [9] Ptheta
+    param_[10] = 1.0; // [10] Pkappa
+    param_[11] = 1.0; // [11] Pv
+
+    /* Control cost weights (R) */
+    param_[12] = 0.01; // [12] Ra
+    param_[13] = 0.01; // [13] Rsteer_rate
 
     /********* grampc init *********/
     grampc_ = nullptr;
-    grampc_init(&grampc_, userparam);
+    /* pass pointer to member param_ so it remains valid for solver lifetime */
+    grampc_init(&grampc_, (typeUSERPARAM *)param_);
 
     if (!grampc_)
     {
@@ -124,18 +144,21 @@ void MPCCGrampcNode::initGrampcParams()
 
     grampc_setparam_real_vector(grampc_, "x0", x0);
     grampc_setparam_real_vector(grampc_, "xdes", xdes);
+
+    grampc_setparam_real_vector(grampc_, "udes", udes);
     grampc_setparam_real_vector(grampc_, "u0", u0);
     grampc_setparam_real_vector(grampc_, "umin", umin);
     grampc_setparam_real_vector(grampc_, "umax", umax);
 
     grampc_setparam_real(grampc_, "Thor", Thor);
     grampc_setparam_real(grampc_, "t0", t_);
+    grampc_setparam_real(grampc_, "dt", dt_);
 
     grampc_setopt_int(grampc_, "Nhor", Nhor);
     grampc_setopt_int(grampc_, "MaxGradIter", MaxGradIter);
     grampc_setopt_real_vector(grampc_, "ConstraintsAbsTol", ConstraintsAbsTol);
 
-    grampc_setparam_real(grampc_, "dt", dt_);
+    grampc_setopt_string(grampc_, "Integrator", Integrator);
 
     grampc_estim_penmin(grampc_, 1);
 };
@@ -259,6 +282,10 @@ void MPCCGrampcNode::controlLoop()
 
     grampc_run(grampc_);
 
+    // log grampc_>sol->status and sol->unext
+    RCLCPP_INFO(this->get_logger(), "GRAMPC solver status: %d", grampc_->sol->status);
+    RCLCPP_INFO(this->get_logger(), "Next control inputs: unext[0]=%.4f, unext[1]=%.4f",
+                grampc_->sol->unext[0], grampc_->sol->unext[1]);
     // Check for any GRAMPC solver issues - treat all status > 0 as errors
     if (grampc_->sol->status > 0)
     {
@@ -270,9 +297,9 @@ void MPCCGrampcNode::controlLoop()
     }
     else
     {
-        // grampc_setparam_real_vector(grampc, "x0", grampc->sol->xnext);
         /* update state and time */
         t_ = t_ + dt_;
+
         double acceleration = grampc_->sol->unext[0]; // u[0] = acceleration [m/s^2]
         double kappa_dot = grampc_->sol->unext[1];    // u[1] = steering_rate (curvature rate) [1/s]
 
@@ -296,6 +323,11 @@ void MPCCGrampcNode::controlLoop()
     auto t_msg = std_msgs::msg::Float32();
     t_msg.data = static_cast<float>(throttle_cmd);
     throttle_pub_->publish(t_msg);
+}
+
+MPCCGrampcNode::~MPCCGrampcNode()
+{
+    grampc_free(&grampc_);
 }
 
 int main(int argc, char *argv[])

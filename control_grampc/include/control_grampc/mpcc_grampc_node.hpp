@@ -28,12 +28,13 @@ extern "C"
 
 #define NX 5
 #define NU 2
-#define NH 1
+#define NH 0
 
 class MPCCGrampcNode : public rclcpp::Node
 {
 public:
     MPCCGrampcNode();
+    ~MPCCGrampcNode();  
 
 private:
     void initializePathPosition();
