@@ -36,7 +36,10 @@ namespace mpcc
         {
             if (arc_lengths_[i] > current_s)
             {
-                return i;
+                int target_idx = i  + 5; // Lookahead of 10 waypoints
+                if(target_idx > waypoints_.size() - 1)
+                    return target_idx - waypoints_.size() - 1;
+                return target_idx;
             }
         }
         // If none is greater, return the start of the path to loop around
