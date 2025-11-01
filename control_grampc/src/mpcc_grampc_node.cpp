@@ -303,11 +303,8 @@ void MPCCGrampcNode::controlLoop()
         double acceleration = grampc_->sol->unext[0]; // u[0] = acceleration [m/s^2]
         double kappa_dot = grampc_->sol->unext[1];    // u[1] = steering_rate (curvature rate) [1/s]
 
-        // Integration: kappa = kappa_prev + kappa_dot * dt
-        kappa_ += kappa_dot * dt_;
-
         throttle_cmd = acceleration;
-        steer_cmd = kappa_ * L_;
+        steer_cmd = kappa_;
 
         // Update previous commands for fallback case of next iteration
         prev_steer_ = steer_cmd;
