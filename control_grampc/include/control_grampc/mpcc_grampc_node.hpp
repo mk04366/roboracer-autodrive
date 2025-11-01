@@ -41,6 +41,7 @@ private:
     void initGrampcParams();
     void controlLoop();
     void publishPath();
+    void publishTarget(const Eigen::Vector2d &point, double heading);
     double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
     double computeCurvature(const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg, double current_yaw);
     void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
@@ -48,6 +49,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_; 
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_; 
     rclcpp::TimerBase::SharedPtr path_timer_;  
     rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
 
@@ -65,6 +67,16 @@ private:
 
     // Control history
     double prev_steer_, prev_throttle_;
+
+    // Steering/throttle helper params (mirrors FTG controller behavior)
+    double kd_gain_ = 0.7;
+    double decay_ = 0.9;
+    double THROTTLE_ADJUSTMENT_FACTOR_ = 0.01;
+    double max_steering_angle_ = 1.0; // rad
+
+    // helper functions to map internal MPCC outputs to actuator commands
+    float calculate_steering_angle_from_kappa(double kappa);
+    float calculate_throttle_from_accel(double acceleration, double steering_angle);
 
     // GRAMPC solver and parameter array
     TYPE_GRAMPC_POINTER(grampc_);

@@ -37,6 +37,7 @@ MPCCGrampcNode::MPCCGrampcNode()
     steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
 
     path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/planned_path", 10);
+    target_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/mpcc_target", 10);
 
     path_timer_ = this->create_wall_timer(
         std::chrono::seconds(1),
@@ -79,6 +80,26 @@ void MPCCGrampcNode::publishPath()
     RCLCPP_DEBUG(this->get_logger(), "Published path with %zu waypoints", path_->getWaypointCount());
 }
 
+
+void MPCCGrampcNode::publishTarget(const Eigen::Vector2d &point, double heading)
+{
+    if (!target_pub_)
+        return;
+
+    geometry_msgs::msg::PoseStamped target_msg;
+    target_msg.header.stamp = this->now();
+    target_msg.header.frame_id = "map";
+    target_msg.pose.position.x = point.x();
+    target_msg.pose.position.y = point.y();
+    target_msg.pose.position.z = 0.0;
+
+    tf2::Quaternion q;
+    q.setRPY(0.0, 0.0, heading);
+    target_msg.pose.orientation = tf2::toMsg(q);
+
+    target_pub_->publish(target_msg);
+}
+
 void MPCCGrampcNode::initGrampcParams()
 {
     L_ = 0.32;
@@ -92,8 +113,8 @@ void MPCCGrampcNode::initGrampcParams()
     /* Initial values, setpoints and limits of the inputs */
     ctypeRNum u0[NU] = {0.0, 0.0};
     ctypeRNum udes[NU] = {0.0, 0.0};
-    ctypeRNum umax[NU] = {1.0, M_PI / 6};
-    ctypeRNum umin[NU] = {-0.1, -M_PI / 6};
+    ctypeRNum umax[NU] = {1.0, M_PI / 30};
+    ctypeRNum umin[NU] = {0.01, -M_PI / 30};
     ctypeRNum Thor = 1; /* Prediction horizon */
     dt_ = 0.05;         // Default 50ms for 20Hz timer
     t_ = 0.0;           /* time at the current sampling step */
@@ -263,6 +284,10 @@ void MPCCGrampcNode::controlLoop()
     double target_heading = path_->getHeading(nextIdx);
     double target_curvature = path_->getCurvature(nextIdx);
     double ref_speed = path_->getVelocity(nextIdx) / 2.0; // Scale down for safety
+
+    // publish target pose for RViz visualization
+    // publish target pose
+    publishTarget(target_point, target_heading);
 
     // Current state and target state
     std::vector<double> current_state = {x_, y_, yaw_, kappa_, v_};
