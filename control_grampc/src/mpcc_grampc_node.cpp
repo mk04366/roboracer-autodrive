@@ -10,7 +10,7 @@
 using std::placeholders::_1;
 
 MPCCGrampcNode::MPCCGrampcNode()
-    : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), yaw_(0.0), v_(0.0), prev_steer_(0.0), prev_throttle_(0.0), t_(0.0)
+    : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), yaw_(0.0), v_(0.0), prev_steer_(0.0), prev_throttle_(0.0)
 {
     // Load path from CSV file
     std::string csv_file = this->declare_parameter<std::string>("path_csv",
@@ -80,7 +80,6 @@ void MPCCGrampcNode::publishPath()
     RCLCPP_DEBUG(this->get_logger(), "Published path with %zu waypoints", path_->getWaypointCount());
 }
 
-
 void MPCCGrampcNode::publishTarget(const Eigen::Vector2d &point, double heading)
 {
     if (!target_pub_)
@@ -103,7 +102,6 @@ void MPCCGrampcNode::publishTarget(const Eigen::Vector2d &point, double heading)
 void MPCCGrampcNode::initGrampcParams()
 {
     L_ = 0.32;
-    v_max_ = 1.0;
 
     /********* Parameter definition *********/
     /* Initial values and setpoints of the states, inputs, parameters, penalties and Lagrangian mmultipliers, setpoints for the states and inputs */
@@ -113,12 +111,11 @@ void MPCCGrampcNode::initGrampcParams()
     /* Initial values, setpoints and limits of the inputs */
     ctypeRNum u0[NU] = {0.0, 0.0};
     ctypeRNum udes[NU] = {0.0, 0.0};
-    ctypeRNum umax[NU] = {1.0, M_PI / 30};
-    ctypeRNum umin[NU] = {0.01, -M_PI / 30};
-    ctypeRNum Thor = 1; /* Prediction horizon */
-    dt_ = 0.05;         // Default 50ms for 20Hz timer
-    t_ = 0.0;           /* time at the current sampling step */
-	const char* Integrator = "euler";
+    ctypeRNum umax[NU] = {M_PI/6, 1.0};
+    ctypeRNum umin[NU] = {-M_PI/6, 0.01};
+    ctypeRNum Thor = 1.0; /* Prediction horizon */
+    dt_ = 0.05;           // Default 50ms for 20Hz timer
+    typeRNum t0 = 0.0;             /* time at the current sampling step */
 
     /********* Option definition *********/
     ctypeInt Nhor = 20; /* Number of steps for the system integration */
@@ -126,18 +123,15 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
     /********* userparam *********/
-    /* Use member param_ so it remains valid after this function returns.
-       Passing a pointer to a local stack array caused use-after-return and
-       NaNs in solver outputs. */
-    param_[0] = L_;   // [0] Wheelbase length
-    param_[1] = 1.0;  // [1] Velocity scaling factor (stabilization term)
+    param_[0] = L_;  // [0] Wheelbase length
+    param_[1] = 1.0; // [1] Velocity scaling factor (stabilization term)
 
     /* Running-state cost weights (Q) */
-    param_[2] = 1.0;  // [2] Qx
-    param_[3] = 1.0;  // [3] Qy
-    param_[4] = 1.0;  // [4] Qtheta
-    param_[5] = 1.0;  // [5] Qkappa
-    param_[6] = 1.0;  // [6] Qv
+    param_[2] = 1.0; // [2] Qx
+    param_[3] = 1.0; // [3] Qy
+    param_[4] = 1.0; // [4] Qtheta
+    param_[5] = 1.0; // [5] Qkappa
+    param_[6] = 1.0; // [6] Qv
 
     /* Terminal-state cost weights (P) */
     param_[7] = 1.0;  // [7] Px
@@ -147,12 +141,11 @@ void MPCCGrampcNode::initGrampcParams()
     param_[11] = 1.0; // [11] Pv
 
     /* Control cost weights (R) */
-    param_[12] = 0.01; // [12] Ra
-    param_[13] = 0.01; // [13] Rsteer_rate
+    param_[12] = 0.01; // [12] R_steer_rate (weight on u[0])
+    param_[13] = 0.01; // [13] R_accel (weight on u[1])
 
     /********* grampc init *********/
     grampc_ = nullptr;
-    /* pass pointer to member param_ so it remains valid for solver lifetime */
     grampc_init(&grampc_, (typeUSERPARAM *)param_);
 
     if (!grampc_)
@@ -172,16 +165,12 @@ void MPCCGrampcNode::initGrampcParams()
     grampc_setparam_real_vector(grampc_, "umax", umax);
 
     grampc_setparam_real(grampc_, "Thor", Thor);
-    grampc_setparam_real(grampc_, "t0", t_);
+    grampc_setparam_real(grampc_, "t0", t0);
     grampc_setparam_real(grampc_, "dt", dt_);
 
     grampc_setopt_int(grampc_, "Nhor", Nhor);
     grampc_setopt_int(grampc_, "MaxGradIter", MaxGradIter);
     grampc_setopt_real_vector(grampc_, "ConstraintsAbsTol", ConstraintsAbsTol);
-
-    grampc_setopt_string(grampc_, "Integrator", Integrator);
-
-    grampc_estim_penmin(grampc_, 1);
 };
 
 void MPCCGrampcNode::initializePathPosition()
@@ -215,41 +204,6 @@ double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr
     return yaw; // in radians
 }
 
-double MPCCGrampcNode::computeCurvature(
-    const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg,
-    double current_yaw)
-{
-    if (first_pose_)
-    {
-        last_pos_ = *ips_msg;
-        last_yaw_ = current_yaw;
-        first_pose_ = false;
-        return 0.0;
-    }
-
-    double dx = ips_msg->x - last_pos_.x;
-    double dy = ips_msg->y - last_pos_.y;
-    double ds = std::sqrt(dx * dx + dy * dy);
-
-    if (ds < 1e-5)
-        return 0.0; // avoid division by zero
-
-    double dyaw = current_yaw - last_yaw_;
-
-    // normalize yaw difference to [-pi, pi]
-    while (dyaw > M_PI)
-        dyaw -= 2.0 * M_PI;
-    while (dyaw < -M_PI)
-        dyaw += 2.0 * M_PI;
-
-    double kappa = dyaw / ds;
-
-    last_pos_ = *ips_msg;
-    last_yaw_ = current_yaw;
-
-    return kappa;
-}
-
 void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg)
 {
     // Extract IPS position
@@ -265,7 +219,6 @@ void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::Sh
 
     // Compute curvature
     auto pos_ptr = std::make_shared<geometry_msgs::msg::Point>(msg->position);
-    kappa_ = computeCurvature(pos_ptr, yaw_);
 
     // Run control loop
     controlLoop();
@@ -283,10 +236,9 @@ void MPCCGrampcNode::controlLoop()
     Eigen::Vector2d target_point = path_->getWaypoint(nextIdx);
     double target_heading = path_->getHeading(nextIdx);
     double target_curvature = path_->getCurvature(nextIdx);
-    double ref_speed = path_->getVelocity(nextIdx) / 2.0; // Scale down for safety
+    double ref_speed = path_->getVelocity(nextIdx);
 
-    // publish target pose for RViz visualization
-    // publish target pose
+    // publish target pose for visualization
     publishTarget(target_point, target_heading);
 
     // Current state and target state
@@ -323,13 +275,29 @@ void MPCCGrampcNode::controlLoop()
     else
     {
         /* update state and time */
-        t_ = t_ + dt_;
 
-        double acceleration = grampc_->sol->unext[0]; // u[0] = acceleration [m/s^2]
-        double kappa_dot = grampc_->sol->unext[1];    // u[1] = steering_rate (curvature rate) [1/s]
+        double kappa_dot = grampc_->sol->unext[0];    // u[0] = steering_rate (curvature rate) [1/s]
+        double acceleration = grampc_->sol->unext[1]; // u[1] = acceleration [m/s^2]
 
-        throttle_cmd = acceleration;
-        steer_cmd = kappa_;
+        kappa_ = kappa_ + kappa_dot * dt_;
+        double steer_angle = std::atan(L_ * kappa_);
+
+        double max_steer_angle = M_PI / 6.0;
+        if (steer_angle > max_steer_angle)
+            steer_angle = max_steer_angle;
+        if (steer_angle < -max_steer_angle)
+            steer_angle = -max_steer_angle;
+
+        // map acceleration to throttle (simple linear mapping; tune/replace with mapping or PID)
+        double max_acc = 3.0; // m/s^2
+        double throttle_out = acceleration / max_acc;
+        if (throttle_out > 1.0)
+            throttle_out = 1.0;
+        if (throttle_out < -1.0)
+            throttle_out = -1.0;
+
+        throttle_cmd = throttle_out;
+        steer_cmd = steer_angle;
 
         // Update previous commands for fallback case of next iteration
         prev_steer_ = steer_cmd;

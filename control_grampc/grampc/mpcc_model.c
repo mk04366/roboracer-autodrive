@@ -33,8 +33,8 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     out[0] = COS(x[2]) * x[4];
     out[1] = SIN(x[2]) * x[4];
     out[2] = (x[3] * x[4]) / (param[0] * (1 + 1 / POW2(param[1]) * POW2(x[4])));
-    out[3] = u[1]; // kappa_dot = steering_rate
-    out[4] = u[0]; // v_dot = acceleration
+    out[3] = u[0]; // kappa_dot = steering_rate
+    out[4] = u[1]; // v_dot = acceleration
 }
 
 /** Jacobian df/dx multiplied by vector vec, i.e. (df/dx)^T*vec or vec^T*(df/dx) **/
@@ -52,8 +52,8 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNu
 /** Jacobian df/du multiplied by vector vec, i.e. (df/du)^T*vec or vec^T*(df/du) **/
 void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    out[0] = vec[4]; // derivative of f wrt u0 (accel) is in f4 -> vec4
-    out[1] = vec[3]; // derivative wrt u1 (steer rate) is in f3 -> vec3
+    out[0] = vec[3]; // derivative of f wrt u0 (accel) is in f4 -> vec4
+    out[1] = vec[4]; // derivative wrt u1 (steer rate) is in f3 -> vec3
 }
 
 /** Jacobian df/dp multiplied by vector vec, i.e. (df/dp)^T*vec or vec^T*(df/dp) **/

@@ -34,7 +34,7 @@ class MPCCGrampcNode : public rclcpp::Node
 {
 public:
     MPCCGrampcNode();
-    ~MPCCGrampcNode();  
+    ~MPCCGrampcNode();
 
 private:
     void initializePathPosition();
@@ -43,23 +43,19 @@ private:
     void publishPath();
     void publishTarget(const Eigen::Vector2d &point, double heading);
     double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
-    double computeCurvature(const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg, double current_yaw);
     void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
     // ROS publishers/subscribers
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_; 
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_; 
-    rclcpp::TimerBase::SharedPtr path_timer_;  
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
+    rclcpp::TimerBase::SharedPtr path_timer_;
     rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
 
     std::shared_ptr<mpcc::Path> path_;
 
     // Vehicle state - 5D [x, y, theta, kappa, v]
-    double x_, y_, yaw_, v_;
-    double kappa_ = 0.0;
-    double steering_angle_ = 0.0;
-    double last_time_ = 0.0;
+    double x_, y_, yaw_, v_, kappa_;
 
     // Path following state
     size_t current_path_idx_ = 0;
@@ -68,28 +64,16 @@ private:
     // Control history
     double prev_steer_, prev_throttle_;
 
-    // Steering/throttle helper params (mirrors FTG controller behavior)
-    double kd_gain_ = 0.7;
-    double decay_ = 0.9;
-    double THROTTLE_ADJUSTMENT_FACTOR_ = 0.01;
-    double max_steering_angle_ = 1.0; // rad
-
-    // helper functions to map internal MPCC outputs to actuator commands
-    float calculate_steering_angle_from_kappa(double kappa);
-    float calculate_throttle_from_accel(double acceleration, double steering_angle);
-
     // GRAMPC solver and parameter array
     TYPE_GRAMPC_POINTER(grampc_);
     double param_[14];
     double dt_ = 0.0;
-    typeRNum t_ = 0.0;
 
     // Vehicle parameters
-    double L_, delta_max_, v_max_;
+    double L_;
     double last_yaw_ = 0.0;
     bool first_pose_ = true;
     geometry_msgs::msg::Point last_pos_;
-    typeRNum rwsReferenceIntegration[2 * NX];
 };
 
 #endif // CONTROL_GRAMPC__MPCC_GRAMPC_NODE_HPP_
