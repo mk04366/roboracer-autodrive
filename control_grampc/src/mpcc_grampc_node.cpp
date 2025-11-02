@@ -127,21 +127,21 @@ void MPCCGrampcNode::initGrampcParams()
     param_[1] = 1.0; // [1] Velocity scaling factor (stabilization term)
 
     /* Running-state cost weights (Q) */
-    param_[2] = 100.0;  // [2] Qx
-    param_[3] = 100.0;  // [3] Qy
-    param_[4] = 1.0; // [4] Qtheta
-    param_[5] = 2.0;  // [5] Qkappa
-    param_[6] = 1.0;  // [6] Qv
+    param_[2] = 100.0; // [2] Qx
+    param_[3] = 100.0; // [3] Qy
+    param_[4] = 1.0;   // [4] Qtheta
+    param_[5] = 2.0;   // [5] Qkappa
+    param_[6] = 1.0;   // [6] Qv
 
     /* Terminal-state cost weights (P) */
-    param_[7] = 100.0;  // [7] Px
-    param_[8] = 100.0;  // [8] Py
-    param_[9] = 1.0;  // [9] Ptheta
-    param_[10] = 2.0; // [10] Pkappa
-    param_[11] = 1.0; // [11] Pv
+    param_[7] = 100.0; // [7] Px
+    param_[8] = 100.0; // [8] Py
+    param_[9] = 1.0;   // [9] Ptheta
+    param_[10] = 2.0;  // [10] Pkappa
+    param_[11] = 1.0;  // [11] Pv
 
     /* Control cost weights (R) */
-    param_[12] = 1.0; // [12] R_steer_rate (weight on u[0])
+    param_[12] = 1.0;   // [12] R_steer_rate (weight on u[0])
     param_[13] = 200.0; // [13] R_accel (weight on u[1])
 
     /********* grampc init *********/
@@ -259,14 +259,10 @@ void MPCCGrampcNode::controlLoop()
 
     grampc_run(grampc_);
 
-    // log grampc_>sol->status and sol->unext
-    RCLCPP_INFO(this->get_logger(), "GRAMPC solver status: %d", grampc_->sol->status);
-    RCLCPP_INFO(this->get_logger(), "Next control inputs: unext[0]=%.4f, unext[1]=%.4f",
-                grampc_->sol->unext[0], grampc_->sol->unext[1]);
     // Check for any GRAMPC solver issues - treat all status > 0 as errors
     if (grampc_->sol->status > 0)
     {
-        RCLCPP_INFO(this->get_logger(), "GRAMPC solver error with status: %d", grampc_->sol->status);
+        RCLCPP_ERROR(this->get_logger(), "GRAMPC solver error with status: %d", grampc_->sol->status);
 
         // Use previous commands when solver fails
         steer_cmd = prev_steer_;
@@ -275,9 +271,11 @@ void MPCCGrampcNode::controlLoop()
     else
     {
         /* update state and time */
-
-        double kappa_dot = grampc_->sol->unext[0];    // u[0] = steering_rate (curvature rate) [1/s]
-        throttle_cmd = grampc_->sol->unext[1]; // u[1] = acceleration [m/s^2]
+        // log grampc_>sol->status and sol->unext
+        RCLCPP_INFO(this->get_logger(), "Next control inputs: unext[0]=%.4f, unext[1]=%.4f",
+                    grampc_->sol->unext[0], grampc_->sol->unext[1]);
+        double kappa_dot = grampc_->sol->unext[0]; // u[0] = steering_rate (curvature rate) [1/s]
+        throttle_cmd = grampc_->sol->unext[1];     // u[1] = acceleration [m/s^2]
         kappa_ = kappa_ + kappa_dot * dt_;
         steer_cmd = std::atan(L_ * kappa_);
 
