@@ -111,14 +111,14 @@ void MPCCGrampcNode::initGrampcParams()
     /* Initial values, setpoints and limits of the inputs */
     ctypeRNum u0[NU] = {0.0, 0.0};
     ctypeRNum udes[NU] = {0.0, 0.0};
-    ctypeRNum umax[NU] = {M_PI/6, 1.0};
-    ctypeRNum umin[NU] = {-M_PI/6, 0.01};
-    ctypeRNum Thor = 1.0; /* Prediction horizon */
+    ctypeRNum umax[NU] = {M_PI / 6, 1.0};
+    ctypeRNum umin[NU] = {-M_PI / 6, 0.01};
+    ctypeRNum Thor = 2.0; /* Prediction horizon */
     dt_ = 0.05;           // Default 50ms for 20Hz timer
-    typeRNum t0 = 0.0;             /* time at the current sampling step */
+    typeRNum t0 = 0.0;    /* time at the current sampling step */
 
     /********* Option definition *********/
-    ctypeInt Nhor = 20; /* Number of steps for the system integration */
+    ctypeInt Nhor = 40; /* Number of steps for the system integration */
     ctypeInt MaxGradIter = 5;
     ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
@@ -127,22 +127,22 @@ void MPCCGrampcNode::initGrampcParams()
     param_[1] = 1.0; // [1] Velocity scaling factor (stabilization term)
 
     /* Running-state cost weights (Q) */
-    param_[2] = 1.0; // [2] Qx
-    param_[3] = 1.0; // [3] Qy
+    param_[2] = 100.0;  // [2] Qx
+    param_[3] = 100.0;  // [3] Qy
     param_[4] = 1.0; // [4] Qtheta
-    param_[5] = 1.0; // [5] Qkappa
-    param_[6] = 1.0; // [6] Qv
+    param_[5] = 2.0;  // [5] Qkappa
+    param_[6] = 1.0;  // [6] Qv
 
     /* Terminal-state cost weights (P) */
-    param_[7] = 1.0;  // [7] Px
-    param_[8] = 1.0;  // [8] Py
+    param_[7] = 100.0;  // [7] Px
+    param_[8] = 100.0;  // [8] Py
     param_[9] = 1.0;  // [9] Ptheta
-    param_[10] = 1.0; // [10] Pkappa
+    param_[10] = 2.0; // [10] Pkappa
     param_[11] = 1.0; // [11] Pv
 
     /* Control cost weights (R) */
-    param_[12] = 0.01; // [12] R_steer_rate (weight on u[0])
-    param_[13] = 0.01; // [13] R_accel (weight on u[1])
+    param_[12] = 1.0; // [12] R_steer_rate (weight on u[0])
+    param_[13] = 200.0; // [13] R_accel (weight on u[1])
 
     /********* grampc init *********/
     grampc_ = nullptr;
@@ -277,27 +277,9 @@ void MPCCGrampcNode::controlLoop()
         /* update state and time */
 
         double kappa_dot = grampc_->sol->unext[0];    // u[0] = steering_rate (curvature rate) [1/s]
-        double acceleration = grampc_->sol->unext[1]; // u[1] = acceleration [m/s^2]
-
+        throttle_cmd = grampc_->sol->unext[1]; // u[1] = acceleration [m/s^2]
         kappa_ = kappa_ + kappa_dot * dt_;
-        double steer_angle = std::atan(L_ * kappa_);
-
-        double max_steer_angle = M_PI / 6.0;
-        if (steer_angle > max_steer_angle)
-            steer_angle = max_steer_angle;
-        if (steer_angle < -max_steer_angle)
-            steer_angle = -max_steer_angle;
-
-        // map acceleration to throttle (simple linear mapping; tune/replace with mapping or PID)
-        double max_acc = 3.0; // m/s^2
-        double throttle_out = acceleration / max_acc;
-        if (throttle_out > 1.0)
-            throttle_out = 1.0;
-        if (throttle_out < -1.0)
-            throttle_out = -1.0;
-
-        throttle_cmd = throttle_out;
-        steer_cmd = steer_angle;
+        steer_cmd = std::atan(L_ * kappa_);
 
         // Update previous commands for fallback case of next iteration
         prev_steer_ = steer_cmd;
