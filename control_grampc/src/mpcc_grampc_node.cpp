@@ -113,12 +113,12 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum udes[NU] = {0.0, 0.0};
     ctypeRNum umax[NU] = {M_PI / 6, 1.0};
     ctypeRNum umin[NU] = {-M_PI / 6, 0.01};
-    ctypeRNum Thor = 2.0; /* Prediction horizon */
-    dt_ = 0.05;           // Default 50ms for 20Hz timer
-    typeRNum t0 = 0.0;    /* time at the current sampling step */
+    ctypeRNum Thor = 2.0;       /* Prediction horizon */
+    dt_ = 0.05;                 // Default 50ms for 20Hz timer
+    ctypeInt Nhor = Thor / dt_; /* Number of steps for the system integration */
+    typeRNum t0 = 0.0;          /* time at the current sampling step */
 
     /********* Option definition *********/
-    ctypeInt Nhor = 40; /* Number of steps for the system integration */
     ctypeInt MaxGradIter = 5;
     ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
