@@ -10,7 +10,7 @@ import configparser
 import pkg_resources
 import helper_funcs_glob
 import yaml
-
+from scipy.interpolate import interp1d
 """
 Created by:
 Alexander Heilmeier
@@ -604,6 +604,54 @@ helper_funcs_glob.src.result_plots.result_plots(plot_opts=plot_opts,
                                                 trajectory=trajectory_opt)
 
 # save another copy of lane_optimal.csv
+
+# Make t_profile_cl a numpy array
+t_profile_cl = np.array(t_profile_cl)
+
+
+
+# ------------------------------
+# Parameters for uniform time grid
+# ------------------------------
+dt = 0.05  # desired sampling time in seconds
+t_uniform = np.arange(0, t_profile_cl[-1], dt)
+output_file = "traj_time_based.csv"
+# ------------------------------
+# Interpolation functions
+# ------------------------------
+# Ensure raceline_interp has same number of points as el_lengths_opt_interp
+# Typically: len(t_profile_cl) == len(vx_profile_opt)
+interp_x  = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     raceline_interp[:, 0], kind='cubic', fill_value="extrapolate")
+interp_y  = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     raceline_interp[:, 1], kind='cubic', fill_value="extrapolate")
+interp_psi= interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     psi_vel_opt, kind='cubic', fill_value="extrapolate")
+interp_kappa = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                        kappa_opt, kind='cubic', fill_value="extrapolate")
+interp_vx= interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     vx_profile_opt, kind='cubic', fill_value="extrapolate")
+interp_ax = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                        ax_profile_opt, kind='cubic', fill_value="extrapolate")
+
+# ------------------------------
+# Create time-based trajectory
+# ------------------------------
+x_time = interp_x(t_uniform)
+y_time = interp_y(t_uniform)
+psi_time = interp_psi(t_uniform)
+kappa_time = interp_kappa(t_uniform)
+vx_time = interp_vx(t_uniform)
+ax_time = interp_ax(t_uniform)
+
+# Combine into a trajectory array
+trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, kappa_time, vx_time, ax_time))
+
+# Optional: print first few rows to check
+header = "time_s,x_m,y_m,psi_rad,kappa_radpm,vx_mps,ax_mps2"
+np.savetxt(output_file, trajectory_time_based, delimiter=",", header=header, comments='', fmt='%.6f')
+
+print(f"INFO: Time-based trajectory saved to {os.path.abspath(output_file)}")
 
 with open(file_paths["lane_optimal_export"], 'w') as f:
     for x, y, v in zip(trajectory_opt[:, 1], trajectory_opt[:, 2], trajectory_opt[:, 5]):
