@@ -54,7 +54,7 @@ void MPCCGrampcNode::publishPath()
 
     nav_msgs::msg::Path path_msg;
     path_msg.header.stamp = this->now();
-    path_msg.header.frame_id = "map"; // keep consistent with RViz fixed frame
+    path_msg.header.frame_id = "map";
 
     path_msg.poses.reserve(path_->getWaypointCount());
     for (size_t i = 0; i < path_->getWaypointCount(); ++i)
@@ -127,22 +127,22 @@ void MPCCGrampcNode::initGrampcParams()
     param_[1] = 1.0; // [1] Velocity scaling factor (stabilization term)
 
     /* Running-state cost weights (Q) */
-    param_[2] = 100.0; // [2] Qx
-    param_[3] = 100.0; // [3] Qy
-    param_[4] = 1.0;   // [4] Qtheta
-    param_[5] = 2.0;   // [5] Qkappa
-    param_[6] = 1.0;   // [6] Qv
+    param_[2] = 1.0; // [2] Qx
+    param_[3] = 1.0; // [3] Qy
+    param_[4] = 1.0; // [4] Qtheta
+    param_[5] = 1.0; // [5] Qkappa
+    param_[6] = 1.0; // [6] Qv
 
     /* Terminal-state cost weights (P) */
-    param_[7] = 100.0; // [7] Px
-    param_[8] = 100.0; // [8] Py
-    param_[9] = 1.0;   // [9] Ptheta
-    param_[10] = 2.0;  // [10] Pkappa
-    param_[11] = 1.0;  // [11] Pv
+    param_[7] = 1.0;  // [7] Px
+    param_[8] = 1.0;  // [8] Py
+    param_[9] = 1.0;  // [9] Ptheta
+    param_[10] = 1.0; // [10] Pkappa
+    param_[11] = 1.0; // [11] Pv
 
     /* Control cost weights (R) */
-    param_[12] = 1.0;   // [12] R_steer_rate (weight on u[0])
-    param_[13] = 200.0; // [13] R_accel (weight on u[1])
+    param_[12] = 0.1; // [12] R_steer_rate (weight on u[0])
+    param_[13] = 0.1; // [13] R_accel (weight on u[1])
 
     /********* grampc init *********/
     grampc_ = nullptr;
@@ -249,11 +249,6 @@ void MPCCGrampcNode::controlLoop()
     grampc_setparam_real_vector(grampc_, "x0", current_state.data());
     grampc_setparam_real_vector(grampc_, "xdes", target_state.data());
 
-    // print target state for debugging
-    RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, yaw=%.2f, kappa=%.4f, v=%.2f",
-                target_state[0], target_state[1], target_state[2], target_state[3], target_state[4]);
-    RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, yaw=%.2f, kappa=%.4f, v=%.2f",
-                current_state[0], current_state[1], current_state[2], current_state[3], current_state[4]);
     double steer_cmd = 0.0;
     double throttle_cmd = 0.0;
 
@@ -271,9 +266,6 @@ void MPCCGrampcNode::controlLoop()
     else
     {
         /* update state and time */
-        // log grampc_>sol->status and sol->unext
-        RCLCPP_INFO(this->get_logger(), "Next control inputs: unext[0]=%.4f, unext[1]=%.4f",
-                    grampc_->sol->unext[0], grampc_->sol->unext[1]);
         double kappa_dot = grampc_->sol->unext[0]; // u[0] = steering_rate (curvature rate) [1/s]
         throttle_cmd = grampc_->sol->unext[1];     // u[1] = acceleration [m/s^2]
         kappa_ = kappa_ + kappa_dot * dt_;

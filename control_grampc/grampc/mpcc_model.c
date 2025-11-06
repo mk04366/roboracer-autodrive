@@ -30,30 +30,57 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
 
-    out[0] = COS(x[2]) * x[4];
-    out[1] = SIN(x[2]) * x[4];
-    out[2] = (x[3] * x[4]) / (param[0] * (1 + 1 / POW2(param[1]) * POW2(x[4])));
-    out[3] = u[0]; // kappa_dot = steering_rate
-    out[4] = u[1]; // v_dot = acceleration
+    out[0] = COS(x[2]) * x[4]; // cos(theta) * v
+    out[1] = SIN(x[2]) * x[4]; // sin(theta) * v
+    out[2] = x[3] * x[4];      // kappa * v
+    out[3] = u[0];             // kappa_dot
+    out[4] = u[1];             // v_dot/acceleration
 }
 
 /** Jacobian df/dx multiplied by vector vec, i.e. (df/dx)^T*vec or vec^T*(df/dx) **/
-void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
-{
-    ctypeRNum *param = (ctypeRNum *)userparam;
+void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x,
+              ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p,
+              typeUSERPARAM *userparam)
 
+{
+
+    /*
+Based on the matrix A=∂f/∂x: ​
+
+|    | x | y | θ         | κ | v      |
+| -- | - | - | --------- | - | ------ |
+| ẋ  | 0 | 0 | −v sin(θ) | 0 | cos(θ) |
+| ẏ  | 0 | 0 | v cos(θ)  | 0 | sin(θ) |
+| θ̇  | 0 | 0 | 0         | v | κappa  |
+| κ̇  | 0 | 0 | 0         | 0 | 0      |
+| v̇  | 0 | 0 | 0         | 0 | 0      |
+
+
+The equations below are a vector of 5x1 (out) i.e., A*v
+*/
     out[0] = 0;
     out[1] = 0;
     out[2] = (vec[1] * COS(x[2]) - vec[0] * SIN(x[2])) * x[4];
-    out[3] = (vec[2] * POW2(param[1]) * x[4]) / (param[0] * POW2(param[1]) + param[0] * POW2(x[4]));
-    out[4] = vec[0] * COS(x[2]) + vec[1] * SIN(x[2]) + (vec[2] * POW2(param[1]) / POW2(POW2(param[1]) + POW2(x[4])) * x[3] * (param[1] - x[4]) * (param[1] + x[4])) / param[0];
+    out[3] = vec[2] * x[4];
+    out[4] = vec[0] * COS(x[2]) + vec[1] * SIN(x[2]) + vec[2] * x[3];
 }
 
 /** Jacobian df/du multiplied by vector vec, i.e. (df/du)^T*vec or vec^T*(df/du) **/
 void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    out[0] = vec[3]; // derivative of f wrt u0 (accel) is in f4 -> vec4
-    out[1] = vec[4]; // derivative wrt u1 (steer rate) is in f3 -> vec3
+
+    /*
+    | f component           | derivative wrt (u_0) | derivative wrt (u_1) |
+    | --------------------- | -------------------- | -------------------- |
+    | (f_0 = v\cos(\theta)) | 0                    | 0                    |
+    | (f_1 = v\sin(\theta)) | 0                    | 0                    |
+    | (f_2 = v\kappa)       | 0                    | 0                    |
+    | (f_3 = u_0)           | 1                    | 0                    |
+    | (f_4 = u_1)           | 0                    | 1                    |
+
+    */
+    out[0] = vec[3]; // derivative wrt u₀ (curvature rate) -> affects κ̇ = f₃
+    out[1] = vec[4]; // derivative wrt u₁ (acceleration)   -> affects v̇ = f₄
 }
 
 /** Jacobian df/dp multiplied by vector vec, i.e. (df/dp)^T*vec or vec^T*(df/dp) **/
@@ -67,7 +94,14 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
 
-    out[0] = param[12] * POW2(u[0] - udes[0]) + param[13] * POW2(u[1] - udes[1]) + param[2] * POW2(x[0] - xdes[0]) + param[3] * POW2(x[1] - xdes[1]) + param[4] * POW2(x[2] - xdes[2]) + param[5] * POW2(x[3] - xdes[3]) + param[6] * POW2(x[4] - xdes[4]);
+    out[0] =
+        param[12] * POW2(u[0] - udes[0]) + // control effort weight for u₀ = κ̇
+        param[13] * POW2(u[1] - udes[1]) + // control effort weight for u₁ = v̇
+        param[2] * POW2(x[0] - xdes[0]) +  // position x error weight
+        param[3] * POW2(x[1] - xdes[1]) +  // position y error weight
+        param[4] * POW2(x[2] - xdes[2]) +  // heading error weight
+        param[5] * POW2(x[3] - xdes[3]) +  // curvature error weight
+        param[6] * POW2(x[4] - xdes[4]);   // velocity error weight
 }
 
 /** Gradient dl/dx **/
@@ -75,6 +109,8 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
 
+    // gradient of the stage cost w.r.t. state x:
+    // dl/dx = 2Q(x - x_{des})
     out[0] = 2 * param[2] * (x[0] - xdes[0]);
     out[1] = 2 * param[3] * (x[1] - xdes[1]);
     out[2] = 2 * param[4] * (x[2] - xdes[2]);
@@ -87,6 +123,8 @@ void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
 
+    // gradient of the stage cost w.r.t. state u:
+    // dl/dx = 2R(u - u_{des})
     out[0] = 2 * param[12] * (u[0] - udes[0]);
     out[1] = 2 * param[13] * (u[1] - udes[1]);
 }
@@ -102,14 +140,20 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xde
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
 
-    out[0] = param[7] * POW2(x[0] - xdes[0]) + param[8] * POW2(x[1] - xdes[1]) + param[9] * POW2(x[2] - xdes[2]) + param[10] * POW2(x[3] - xdes[3]) + param[11] * POW2(x[4] - xdes[4]);
+    out[0] =
+        param[7] * POW2(x[0] - xdes[0]) +
+        param[8] * POW2(x[1] - xdes[1]) +
+        param[9] * POW2(x[2] - xdes[2]) +
+        param[10] * POW2(x[3] - xdes[3]) +
+        param[11] * POW2(x[4] - xdes[4]);
 }
 
-/** Gradient dV/dx **/
+/** Gradient dV/dx : Terminal Cost Function V(x(T))**/
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
     ctypeRNum *param = (ctypeRNum *)userparam;
 
+    // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
     out[0] = 2 * param[7] * (x[0] - xdes[0]);
     out[1] = 2 * param[8] * (x[1] - xdes[1]);
     out[2] = 2 * param[9] * (x[2] - xdes[2]);
@@ -121,7 +165,7 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xde
 void dVdp(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
 }
-/** Gradient dV/dT **/
+
 /** Gradient dV/dT **/
 void dVdT(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
@@ -150,25 +194,15 @@ void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     ------------------------------------------------------ **/
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    /* Inequality constraints disabled for now. If you re-enable inequalities,
-       set *Nh in ocp_dim accordingly and implement hfct/dhdx_vec/dhdu_vec.
-    */
 }
 /** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
 void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    /* No inequality constraints -> no dh/dx entries to compute. Keep zeros. */
-    out[0] = 0;
-    out[1] = 0;
-    out[2] = 0;
-    out[3] = 0;
-    out[4] = 0;
 }
+
 /** Jacobian dh/du multiplied by vector vec, i.e. (dh/du)^T*vec or vec^T*(dg/du) **/
 void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
 {
-    out[0] = 0;
-    out[1] = 0;
 }
 /** Jacobian dh/dp multiplied by vector vec, i.e. (dh/dp)^T*vec or vec^T*(dg/dp) **/
 void dhdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
