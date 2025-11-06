@@ -10,6 +10,7 @@
 #include "control_grampc/mpcc_model.h"
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include "autodrive_msgs/msg/vehiclestate.hpp"
 
 extern "C"
 {
@@ -33,39 +34,27 @@ class MPCCGrampcNode : public rclcpp::Node
 {
 public:
     MPCCGrampcNode();
+    ~MPCCGrampcNode();
 
 private:
     void initializePathPosition();
     void initGrampcParams();
     void controlLoop();
     void publishPath();
+    void publishTarget(const Eigen::Vector2d &point, double heading);
     double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
-    double computeCurvature(const geometry_msgs::msg::Point::ConstSharedPtr &ips_msg, double current_yaw);
-    void ipsCallback(const geometry_msgs::msg::Point::SharedPtr msg);
-    void speedCallback(const std_msgs::msg::Float32::SharedPtr msg);
-    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
-    void processIfReady();
-
+    void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
     // ROS publishers/subscribers
-    rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr ips_sub_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_; 
-    rclcpp::TimerBase::SharedPtr path_timer_;  
-
-    geometry_msgs::msg::Point::SharedPtr latest_ips;
-    std_msgs::msg::Float32::SharedPtr latest_speed;
-    sensor_msgs::msg::Imu::SharedPtr latest_imu;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
+    rclcpp::TimerBase::SharedPtr path_timer_;
+    rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
 
     std::shared_ptr<mpcc::Path> path_;
-
     // Vehicle state - 5D [x, y, theta, kappa, v]
-    double x_, y_, yaw_, v_;
-    double kappa_ = 0.0;
-    double steering_angle_ = 0.0;
-    double last_time_ = 0.0;
+    double x_ = 0.0, y_ = 0.0, yaw_ = 0.0, v_ = 0.0, kappa_ = 0.0;
 
     // Path following state
     size_t current_path_idx_ = 0;
@@ -78,14 +67,12 @@ private:
     TYPE_GRAMPC_POINTER(grampc_);
     double param_[14];
     double dt_ = 0.0;
-    typeRNum t_ = 0.0;
 
     // Vehicle parameters
-    double L_, delta_max_, v_max_;
+    double L_;
     double last_yaw_ = 0.0;
     bool first_pose_ = true;
     geometry_msgs::msg::Point last_pos_;
-    typeRNum rwsReferenceIntegration[2 * NX];
 };
 
 #endif // CONTROL_GRAMPC__MPCC_GRAMPC_NODE_HPP_
