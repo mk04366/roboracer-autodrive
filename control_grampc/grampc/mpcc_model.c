@@ -7,7 +7,6 @@
 #define SIN(a) sin(a)
 #define COS(a) cos(a)
 #endif
-#define DT 0.05
 /* square macro */
 #define POW2(a) ((a) * (a))
 
@@ -25,38 +24,30 @@ static void get_reference_at_time(const double *t_array,
                                   double *kappa_out,
                                   double *v_out)
 {
-    // Round current time to nearest 20 Hz step
-    double t_currstep = round(t / DT) * DT;
-
-    // Wrap around if time exceeds trajectory duration
+    // Wrap time if beyond trajectory duration
     double t_max = t_array[N - 1];
-    if (t_currstep > t_max)
-        t_currstep = fmod(t_currstep, t_max);
+    double t_wrapped = fmod(t, t_max);
 
-    // 🔍 Find index in time array that matches t_currstep
-    int idx = 0;
-    for (int i = 0; i < N - 1; ++i)
-    {
-        // If t_currstep falls between t_array[i] and t_array[i+1], choose the closer one
-        if (t_array[i] <= t_currstep && t_currstep < t_array[i + 1])
-        {
-            double d1 = fabs(t_currstep - t_array[i]);
-            double d2 = fabs(t_currstep - t_array[i + 1]);
-            idx = (d1 < d2) ? i : (i + 1);
-            break;
-        }
-    }
+    // Find interval where t_wrapped lies
+    int i = 0;
+    while (i < N - 1 && t_array[i + 1] <= t_wrapped)
+        ++i;
 
-    // Clamp to valid range
-    if (idx >= N)
-        idx = N - 1;
+    // Clamp index just in case
+    if (i >= N - 1)
+        i = N - 2;
 
-    // Output corresponding reference values
-    *x_out = x_ref[idx];
-    *y_out = y_ref[idx];
-    *theta_out = theta_ref[idx];
-    *kappa_out = kappa_ref[idx];
-    *v_out = v_ref[idx];
+    // Linear interpolation factor
+    double t0 = t_array[i];
+    double t1 = t_array[i + 1];
+    double alpha = (t_wrapped - t0) / (t1 - t0);
+
+    // Interpolate each state
+    *x_out = x_ref[i] + alpha * (x_ref[i + 1] - x_ref[i]);
+    *y_out = y_ref[i] + alpha * (y_ref[i + 1] - y_ref[i]);
+    *theta_out = theta_ref[i] + alpha * (theta_ref[i + 1] - theta_ref[i]);
+    *kappa_out = kappa_ref[i] + alpha * (kappa_ref[i + 1] - kappa_ref[i]);
+    *v_out = v_ref[i] + alpha * (v_ref[i + 1] - v_ref[i]);
 }
 
 /** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),
