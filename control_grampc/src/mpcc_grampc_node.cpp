@@ -19,7 +19,7 @@ MPCCGrampcNode::MPCCGrampcNode()
 
     if (path_ && path_->getTotalLength() > 1e-3)
     {
-        RCLCPP_INFO(this->get_logger(), "Path loaded successfully: %s, length: %f", csv_file.c_str(),
+        RCLCPP_INFO(this->get_logger(), "Path loaded successfully: %s, length: %ld", csv_file.c_str(),
                     path_->getTotalLength());
     }
     else
@@ -49,15 +49,15 @@ MPCCGrampcNode::MPCCGrampcNode()
 
 void MPCCGrampcNode::publishPath()
 {
-    if (!path_ || path_->getWaypointCount() == 0)
+    if (!path_ || path_->getTotalLength() == 0)
         return;
 
     nav_msgs::msg::Path path_msg;
     path_msg.header.stamp = this->now();
     path_msg.header.frame_id = "map";
 
-    path_msg.poses.reserve(path_->getWaypointCount());
-    for (size_t i = 0; i < path_->getWaypointCount(); ++i)
+    path_msg.poses.reserve(path_->getTotalLength());
+    for (size_t i = 0; i < path_->getTotalLength(); ++i)
     {
         Eigen::Vector2d wp = path_->getWaypoint(i);
         double heading = path_->getHeading(i);
@@ -77,7 +77,7 @@ void MPCCGrampcNode::publishPath()
 
     path_pub_->publish(path_msg);
     // optional throttle info:
-    RCLCPP_DEBUG(this->get_logger(), "Published path with %zu waypoints", path_->getWaypointCount());
+    RCLCPP_DEBUG(this->get_logger(), "Published path with %zu waypoints", path_->getTotalLength());
 }
 
 void MPCCGrampcNode::publishTarget(const Eigen::Vector2d &point, double heading)
@@ -113,7 +113,7 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum udes[NU] = {0.0, 0.0};
     ctypeRNum umax[NU] = {M_PI / 6, 1.0};
     ctypeRNum umin[NU] = {-M_PI / 6, 0.01};
-    ctypeRNum Thor = 2.0;       /* Prediction horizon */
+    ctypeRNum Thor = 1.0;       /* Prediction horizon */
     dt_ = 0.05;                 // Default 50ms for 20Hz timer
     ctypeInt Nhor = Thor / dt_; /* Number of steps for the system integration */
     typeRNum t0 = 0.0;          /* time at the current sampling step */
@@ -179,7 +179,7 @@ void MPCCGrampcNode::initializePathPosition()
     Eigen::Vector2d vehicle_pos(x_, y_);
     current_path_idx_ = 0;
     double min_dist = (vehicle_pos - path_->getWaypoint(0)).norm();
-    for (size_t i = 1; i < path_->getWaypointCount(); ++i)
+    for (size_t i = 1; i < path_->getTotalLength(); ++i)
     {
         double dist = (vehicle_pos - path_->getWaypoint(i)).norm();
         if (dist < min_dist)
@@ -188,7 +188,7 @@ void MPCCGrampcNode::initializePathPosition()
             current_path_idx_ = i;
         }
     }
-    current_s_ = path_->getArcLength(current_path_idx_);
+    current_time_ = path_->getTimeFromIndex(current_path_idx_);
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
@@ -228,7 +228,7 @@ void MPCCGrampcNode::controlLoop()
 {
     initializePathPosition();
     // Find current waypoint using arc length and get next waypoint
-    size_t nextIdx = path_->findNextWaypointIdx(current_s_);
+    size_t nextIdx = path_->findNextWaypointIdx(current_time_);
     RCLCPP_INFO(this->get_logger(), "next_idx=%zu",
                 nextIdx);
 
@@ -251,6 +251,12 @@ void MPCCGrampcNode::controlLoop()
 
     double steer_cmd = 0.0;
     double throttle_cmd = 0.0;
+
+    // print target state for debugging
+    RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, yaw=%.2f, kappa=%.4f, v=%.2f",
+                target_state[0], target_state[1], target_state[2], target_state[3], target_state[4]);
+    RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, yaw=%.2f, kappa=%.4f, v=%.2f",
+                current_state[0], current_state[1], current_state[2], current_state[3], current_state[4]);
 
     grampc_run(grampc_);
 
@@ -275,6 +281,8 @@ void MPCCGrampcNode::controlLoop()
         prev_steer_ = steer_cmd;
         prev_throttle_ = throttle_cmd;
     }
+
+    current_time_ += dt_;
 
     // Publish steering command
     auto s_msg = std_msgs::msg::Float32();

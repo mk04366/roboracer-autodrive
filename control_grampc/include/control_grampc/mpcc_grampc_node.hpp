@@ -58,7 +58,7 @@ private:
 
     // Path following state
     size_t current_path_idx_ = 0;
-    double current_s_ = 0.0;
+    double current_time_ = 0.0;
 
     // Control history
     double prev_steer_, prev_throttle_;

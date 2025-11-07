@@ -8,41 +8,34 @@ namespace mpcc
 {
 
     Path::Path(const std::vector<Eigen::Vector4d> &waypoints,
-               const std::vector<double> &arc_lengths,
+               const std::vector<double> &time_profile,
                const std::vector<double> &velocities)
-        : waypoints_(waypoints), arc_lengths_(arc_lengths), velocities_(velocities), total_length_(0.0)
+        : waypoints_(waypoints), time_profile_(time_profile), velocities_(velocities)
     {
-        if (!arc_lengths_.empty())
-            total_length_ = arc_lengths_.back();
-        else
-        {
-            for (size_t i = 1; i < waypoints_.size(); ++i)
-                total_length_ += (waypoints_[i].head<2>() - waypoints_[i - 1].head<2>()).norm();
-        }
-
-        // If velocities not provided, fill with zeros
-        if (velocities_.empty())
-            velocities_ = std::vector<double>(waypoints_.size(), 0.0);
     }
-
-    // Find closest waypoint using arc length (s_m value)
-    size_t Path::findNextWaypointIdx(double current_s) const
+    size_t Path::findNextWaypointIdx(double current_time) const
     {
-        if (arc_lengths_.empty())
+        if (time_profile_.empty())
             return 0;
 
-        // Find the first waypoint whose arc length is strictly greater than current_s
-        for (size_t i = 0; i < arc_lengths_.size(); ++i)
+        double max_time = time_profile_.back();
+
+        if (current_time > max_time)
         {
-            if (arc_lengths_[i] > current_s)
+            current_time = std::fmod(current_time, max_time);
+        }
+
+        for (size_t i = 0; i < time_profile_.size(); ++i)
+        {
+            if (time_profile_[i] > current_time)
             {
-                int target_idx = i  + 20; // Lookahead of 1 waypoint
-                if(target_idx > waypoints_.size() - 1)
-                    return target_idx - waypoints_.size() - 1;
+                size_t target_idx = i + 20;
+                if (target_idx >= waypoints_.size())
+                    target_idx = target_idx % waypoints_.size();
                 return target_idx;
             }
         }
-        // If none is greater, return the start of the path to loop around
+
         return 0;
     }
 
@@ -53,6 +46,13 @@ namespace mpcc
         return waypoints_[index].head<2>();
     }
 
+    double Path::getTimeFromIndex(size_t index) const
+    {
+        if (index >= time_profile_.size())
+            return time_profile_.empty() ? 0.0 : time_profile_.back();
+        return time_profile_[index];
+    }
+
     double Path::getHeading(size_t index) const
     {
         if (index >= waypoints_.size())
@@ -60,9 +60,9 @@ namespace mpcc
         return waypoints_[index](2);
     }
 
-    double Path::getTotalLength() const
+    size_t Path::getTotalLength() const
     {
-        return total_length_;
+        return waypoints_.size();
     }
 
     double Path::getVelocity(size_t index) const
@@ -79,24 +79,12 @@ namespace mpcc
         return waypoints_[index](3);
     }
 
-    double Path::getArcLength(size_t index) const
-    {
-        if (index >= arc_lengths_.size())
-            return arc_lengths_.empty() ? 0.0 : arc_lengths_.back();
-        return arc_lengths_[index];
-    }
-
-    size_t Path::getWaypointCount() const
-    {
-        return waypoints_.size();
-    }
-
     Path load_path_from_csv(const std::string &filename)
     {
         std::ifstream file(filename);
         std::string line;
         std::vector<Eigen::Vector4d> waypoints;
-        std::vector<double> arc_lengths;
+        std::vector<double> time_profile;
         std::vector<double> velocities;
 
         while (std::getline(file, line))
@@ -108,14 +96,14 @@ namespace mpcc
             std::string token;
             std::vector<std::string> tokens;
 
-            while (std::getline(ss, token, ';'))
+            while (std::getline(ss, token, ','))
                 tokens.push_back(token);
 
             if (tokens.size() >= 6) // we need at least 6 columns now
             {
                 try
                 {
-                    double s = std::stod(tokens[0]);
+                    double t = std::stod(tokens[0]);
                     double x = std::stod(tokens[1]);
                     double y = std::stod(tokens[2]);
                     double heading = std::stod(tokens[3]);
@@ -123,7 +111,7 @@ namespace mpcc
                     double vx = std::stod(tokens[5]);
 
                     waypoints.emplace_back(x, y, heading, curvature);
-                    arc_lengths.push_back(s);
+                    time_profile.push_back(t);
                     velocities.push_back(vx);
                 }
                 catch (const std::exception &e)
@@ -133,7 +121,7 @@ namespace mpcc
             }
         }
 
-        return Path(waypoints, arc_lengths, velocities);
+        return Path(waypoints, time_profile, velocities);
     }
 
 } // namespace mpcc
