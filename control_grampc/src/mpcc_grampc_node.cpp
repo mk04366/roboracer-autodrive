@@ -101,6 +101,26 @@ void MPCCGrampcNode::publishTarget(const Eigen::Vector2d &point, double heading)
 
 void MPCCGrampcNode::initGrampcParams()
 {
+    // allocate vectors from Path
+    std::vector<double> t, x, y, theta, kappa, v;
+    size_t N = path_->getTotalLength();
+    t.reserve(N);
+    x.reserve(N);
+    y.reserve(N);
+    theta.reserve(N);
+    kappa.reserve(N);
+    v.reserve(N);
+
+    for (size_t i = 0; i < N; ++i)
+    {
+        t.push_back(path_->getTimeFromIndex(i));
+        Eigen::Vector2d xy = path_->getWaypoint(i);
+        x.push_back(xy.x());
+        y.push_back(xy.y());
+        theta.push_back(path_->getHeading(i));
+        kappa.push_back(path_->getCurvature(i));
+        v.push_back(path_->getVelocity(i));
+    }
     L_ = 0.32;
 
     /********* Parameter definition *********/
@@ -111,8 +131,8 @@ void MPCCGrampcNode::initGrampcParams()
     /* Initial values, setpoints and limits of the inputs */
     ctypeRNum u0[NU] = {0.0, 0.0};
     ctypeRNum udes[NU] = {0.0, 0.0};
-    ctypeRNum umax[NU] = {M_PI / 6, 1.0};
-    ctypeRNum umin[NU] = {-M_PI / 6, 0.01};
+    ctypeRNum umax[NU] = {M_PI / 3, 1.0};
+    ctypeRNum umin[NU] = {-M_PI / 3, 0.01};
     ctypeRNum Thor = 1.0;       /* Prediction horizon */
     dt_ = 0.05;                 // Default 50ms for 20Hz timer
     ctypeInt Nhor = Thor / dt_; /* Number of steps for the system integration */
@@ -123,30 +143,40 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
     /********* userparam *********/
-    param_[0] = L_;  // [0] Wheelbase length
-    param_[1] = 1.0; // [1] Velocity scaling factor (stabilization term)
+    param_.L = L_;  // [0] Wheelbase length
+    param_.v_scale = 1.0; // [1] Velocity scaling factor (stabilization term)
 
     /* Running-state cost weights (Q) */
-    param_[2] = 1.0; // [2] Qx
-    param_[3] = 1.0; // [3] Qy
-    param_[4] = 1.0; // [4] Qtheta
-    param_[5] = 1.0; // [5] Qkappa
-    param_[6] = 1.0; // [6] Qv
+    param_.Q[0] = 10.0; // [2] Qx
+    param_.Q[1] = 10.0; // [3] Qy
+    param_.Q[2] = 10.0; // [4] Qtheta
+    param_.Q[3] = 1.0; // [5] Qkappa
+    param_.Q[4] = 1.0; // [6] Qv
 
     /* Terminal-state cost weights (P) */
-    param_[7] = 1.0;  // [7] Px
-    param_[8] = 1.0;  // [8] Py
-    param_[9] = 1.0;  // [9] Ptheta
-    param_[10] = 1.0; // [10] Pkappa
-    param_[11] = 1.0; // [11] Pv
+    param_.P[0] = 1.0;  // [7] Px
+    param_.P[1] = 1.0;  // [8] Py
+    param_.P[2] = 1.0;  // [9] Ptheta
+    param_.P[3] = 1.0; // [10] Pkappa
+    param_.P[4] = 1.0; // [11] Pv
 
     /* Control cost weights (R) */
-    param_[12] = 0.1; // [12] R_steer_rate (weight on u[0])
-    param_[13] = 0.1; // [13] R_accel (weight on u[1])
+    param_.R[0] = 0.01; // [12] R_steer_rate (weight on u[0])
+    param_.R[1] = 0.01; // [13] R_accel (weight on u[1])
+
+    /* attach trajectory data */
+    param_.t = t.data();
+    param_.x = x.data();
+    param_.y = y.data();
+    param_.theta = theta.data();
+    param_.kappa = kappa.data();
+    param_.v = v.data();
+    param_.N = N;
+    param_.current_time = 0.0;
 
     /********* grampc init *********/
     grampc_ = nullptr;
-    grampc_init(&grampc_, (typeUSERPARAM *)param_);
+    grampc_init(&grampc_, (typeUSERPARAM *)&param_);
 
     if (!grampc_)
     {
@@ -283,6 +313,8 @@ void MPCCGrampcNode::controlLoop()
     }
 
     current_time_ += dt_;
+    grampc_setparam_real(grampc_, "t0", current_time_);
+    grampc_->userparam->current_time = current_time_;
 
     // Publish steering command
     auto s_msg = std_msgs::msg::Float32();

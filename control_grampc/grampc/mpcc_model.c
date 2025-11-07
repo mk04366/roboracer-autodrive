@@ -1,5 +1,5 @@
 #include "control_grampc/mpcc_model.h"
-
+#include <stdio.h>
 #if USE_typeRNum == USE_FLOAT
 #define SIN(a) sinf(a)
 #define COS(a) cosf(a)
@@ -7,9 +7,57 @@
 #define SIN(a) sin(a)
 #define COS(a) cos(a)
 #endif
-
+#define DT 0.05
 /* square macro */
 #define POW2(a) ((a) * (a))
+
+static void get_reference_at_time(const double *t_array,
+                                  const double *x_ref,
+                                  const double *y_ref,
+                                  const double *theta_ref,
+                                  const double *kappa_ref,
+                                  const double *v_ref,
+                                  int N,
+                                  double t,
+                                  double *x_out,
+                                  double *y_out,
+                                  double *theta_out,
+                                  double *kappa_out,
+                                  double *v_out)
+{
+    // Round current time to nearest 20 Hz step
+    double t_currstep = round(t / DT) * DT;
+
+    // Wrap around if time exceeds trajectory duration
+    double t_max = t_array[N - 1];
+    if (t_currstep > t_max)
+        t_currstep = fmod(t_currstep, t_max);
+
+    // 🔍 Find index in time array that matches t_currstep
+    int idx = 0;
+    for (int i = 0; i < N - 1; ++i)
+    {
+        // If t_currstep falls between t_array[i] and t_array[i+1], choose the closer one
+        if (t_array[i] <= t_currstep && t_currstep < t_array[i + 1])
+        {
+            double d1 = fabs(t_currstep - t_array[i]);
+            double d2 = fabs(t_currstep - t_array[i + 1]);
+            idx = (d1 < d2) ? i : (i + 1);
+            break;
+        }
+    }
+
+    // Clamp to valid range
+    if (idx >= N)
+        idx = N - 1;
+
+    // Output corresponding reference values
+    *x_out = x_ref[idx];
+    *y_out = y_ref[idx];
+    *theta_out = theta_ref[idx];
+    *kappa_out = kappa_ref[idx];
+    *v_out = v_ref[idx];
+}
 
 /** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),
     inequalities (Nh), terminal equalities (NgT), terminal inequalities (NhT) **/
@@ -28,7 +76,6 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     ------------------------------------ **/
 void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
-    ctypeRNum *param = (ctypeRNum *)userparam;
 
     out[0] = COS(x[2]) * x[4]; // cos(theta) * v
     out[1] = SIN(x[2]) * x[4]; // sin(theta) * v
@@ -92,41 +139,64 @@ void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNu
     -------------------------------------------------- **/
 void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
-    ctypeRNum *param = (ctypeRNum *)userparam;
+
+    double x_ref_t, y_ref_t, theta_ref_t, kappa_ref_t, v_ref_t;
+
+    get_reference_at_time(userparam->t,
+                          userparam->x,
+                          userparam->y,
+                          userparam->theta,
+                          userparam->kappa,
+                          userparam->v,
+                          userparam->N,
+                          userparam->current_time + t, // I am doing this here since the value t here is horizon time
+                          &x_ref_t, &y_ref_t, &theta_ref_t,
+                          &kappa_ref_t, &v_ref_t);
 
     out[0] =
-        param[12] * POW2(u[0] - udes[0]) + // control effort weight for u₀ = κ̇
-        param[13] * POW2(u[1] - udes[1]) + // control effort weight for u₁ = v̇
-        param[2] * POW2(x[0] - xdes[0]) +  // position x error weight
-        param[3] * POW2(x[1] - xdes[1]) +  // position y error weight
-        param[4] * POW2(x[2] - xdes[2]) +  // heading error weight
-        param[5] * POW2(x[3] - xdes[3]) +  // curvature error weight
-        param[6] * POW2(x[4] - xdes[4]);   // velocity error weight
+        userparam->R[0] * POW2(u[0] - udes[0]) +     // control effort weight for u₀ = κ̇
+        userparam->R[1] * POW2(u[1] - udes[1]) +     // control effort weight for u₁ = v̇
+        userparam->Q[0] * POW2(x[0] - x_ref_t) +     // position x error weight
+        userparam->Q[1] * POW2(x[1] - y_ref_t) +     // position y error weight
+        userparam->Q[2] * POW2(x[2] - theta_ref_t) + // heading error weight
+        userparam->Q[3] * POW2(x[3] - kappa_ref_t) + // curvature error weight
+        userparam->Q[4] * POW2(x[4] - v_ref_t);      // velocity error weight
 }
 
 /** Gradient dl/dx **/
 void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
-    ctypeRNum *param = (ctypeRNum *)userparam;
+
+    double x_ref_t, y_ref_t, theta_ref_t, kappa_ref_t, v_ref_t;
+
+    get_reference_at_time(userparam->t,
+                          userparam->x,
+                          userparam->y,
+                          userparam->theta,
+                          userparam->kappa,
+                          userparam->v,
+                          userparam->N,
+                          userparam->current_time + t, // I am doing this here since the value t here is horizon time rather system time
+                          &x_ref_t, &y_ref_t, &theta_ref_t,
+                          &kappa_ref_t, &v_ref_t);
 
     // gradient of the stage cost w.r.t. state x:
     // dl/dx = 2Q(x - x_{des})
-    out[0] = 2 * param[2] * (x[0] - xdes[0]);
-    out[1] = 2 * param[3] * (x[1] - xdes[1]);
-    out[2] = 2 * param[4] * (x[2] - xdes[2]);
-    out[3] = 2 * param[5] * (x[3] - xdes[3]);
-    out[4] = 2 * param[6] * (x[4] - xdes[4]);
+    out[0] = 2 * userparam->Q[0] * (x[0] - x_ref_t);
+    out[1] = 2 * userparam->Q[1] * (x[1] - y_ref_t);
+    out[2] = 2 * userparam->Q[2] * (x[2] - theta_ref_t);
+    out[3] = 2 * userparam->Q[3] * (x[3] - kappa_ref_t);
+    out[4] = 2 * userparam->Q[4] * (x[4] - v_ref_t);
 }
 
 /** Gradient dl/du **/
 void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
-    ctypeRNum *param = (ctypeRNum *)userparam;
 
     // gradient of the stage cost w.r.t. state u:
     // dl/dx = 2R(u - u_{des})
-    out[0] = 2 * param[12] * (u[0] - udes[0]);
-    out[1] = 2 * param[13] * (u[1] - udes[1]);
+    out[0] = 2 * userparam->R[0] * (u[0] - udes[0]);
+    out[1] = 2 * userparam->R[1] * (u[1] - udes[1]);
 }
 
 /** Gradient dl/dp **/
@@ -138,27 +208,25 @@ void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     ---------------------------------------- **/
 void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
-    ctypeRNum *param = (ctypeRNum *)userparam;
 
     out[0] =
-        param[7] * POW2(x[0] - xdes[0]) +
-        param[8] * POW2(x[1] - xdes[1]) +
-        param[9] * POW2(x[2] - xdes[2]) +
-        param[10] * POW2(x[3] - xdes[3]) +
-        param[11] * POW2(x[4] - xdes[4]);
+        userparam->P[0] * POW2(x[0] - xdes[0]) +
+        userparam->P[1] * POW2(x[1] - xdes[1]) +
+        userparam->P[2] * POW2(x[2] - xdes[2]) +
+        userparam->P[3] * POW2(x[3] - xdes[3]) +
+        userparam->P[4] * POW2(x[4] - xdes[4]);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
-    ctypeRNum *param = (ctypeRNum *)userparam;
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
-    out[0] = 2 * param[7] * (x[0] - xdes[0]);
-    out[1] = 2 * param[8] * (x[1] - xdes[1]);
-    out[2] = 2 * param[9] * (x[2] - xdes[2]);
-    out[3] = 2 * param[10] * (x[3] - xdes[3]);
-    out[4] = 2 * param[11] * (x[4] - xdes[4]);
+    out[0] = 2 * userparam->P[0] * (x[0] - xdes[0]);
+    out[1] = 2 * userparam->P[1] * (x[1] - xdes[1]);
+    out[2] = 2 * userparam->P[2] * (x[2] - xdes[2]);
+    out[3] = 2 * userparam->P[3] * (x[3] - xdes[3]);
+    out[4] = 2 * userparam->P[4] * (x[4] - xdes[4]);
 }
 
 /** Gradient dV/dp **/

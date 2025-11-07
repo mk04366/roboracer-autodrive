@@ -65,7 +65,7 @@ private:
 
     // GRAMPC solver and parameter array
     TYPE_GRAMPC_POINTER(grampc_);
-    double param_[14];
+    typeUSERPARAM param_ = {};
     double dt_ = 0.0;
 
     // Vehicle parameters
