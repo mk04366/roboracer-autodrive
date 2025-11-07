@@ -12,7 +12,7 @@ namespace mpcc
         Path(const std::vector<Eigen::Vector4d> &waypoints,
              const std::vector<double> &time_profile,
              const std::vector<double> &velocities = std::vector<double>());
-        size_t findNextWaypointIdx(double current_s) const;
+        size_t findNextWaypointIdx(double current_time, double horizon_time) const;
         Eigen::Vector2d getWaypoint(size_t index) const;
         double getHeading(size_t index) const;
         double getCurvature(size_t index) const;

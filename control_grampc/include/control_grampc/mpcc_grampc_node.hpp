@@ -67,6 +67,7 @@ private:
     TYPE_GRAMPC_POINTER(grampc_);
     typeUSERPARAM param_ = {};
     double dt_ = 0.0;
+    double Thor_ = 0.0;
 
     // Vehicle parameters
     double L_;

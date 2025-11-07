@@ -133,9 +133,9 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum udes[NU] = {0.0, 0.0};
     ctypeRNum umax[NU] = {M_PI / 3, 1.0};
     ctypeRNum umin[NU] = {-M_PI / 3, 0.01};
-    ctypeRNum Thor = 1.0;       /* Prediction horizon */
+    Thor_ = 1.0;                /* Prediction horizon */
     dt_ = 0.05;                 // Default 50ms for 20Hz timer
-    ctypeInt Nhor = Thor / dt_; /* Number of steps for the system integration */
+    ctypeInt Nhor = Thor_ / dt_; /* Number of steps for the system integration */
     typeRNum t0 = 0.0;          /* time at the current sampling step */
 
     /********* Option definition *********/
@@ -143,20 +143,20 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
     /********* userparam *********/
-    param_.L = L_;  // [0] Wheelbase length
+    param_.L = L_;        // [0] Wheelbase length
     param_.v_scale = 1.0; // [1] Velocity scaling factor (stabilization term)
 
     /* Running-state cost weights (Q) */
-    param_.Q[0] = 10.0; // [2] Qx
-    param_.Q[1] = 10.0; // [3] Qy
-    param_.Q[2] = 10.0; // [4] Qtheta
+    param_.Q[0] = 1.0; // [2] Qx
+    param_.Q[1] = 1.0; // [3] Qy
+    param_.Q[2] = 1.0; // [4] Qtheta
     param_.Q[3] = 1.0; // [5] Qkappa
     param_.Q[4] = 1.0; // [6] Qv
 
     /* Terminal-state cost weights (P) */
-    param_.P[0] = 1.0;  // [7] Px
-    param_.P[1] = 1.0;  // [8] Py
-    param_.P[2] = 1.0;  // [9] Ptheta
+    param_.P[0] = 1.0; // [7] Px
+    param_.P[1] = 1.0; // [8] Py
+    param_.P[2] = 1.0; // [9] Ptheta
     param_.P[3] = 1.0; // [10] Pkappa
     param_.P[4] = 1.0; // [11] Pv
 
@@ -194,7 +194,7 @@ void MPCCGrampcNode::initGrampcParams()
     grampc_setparam_real_vector(grampc_, "umin", umin);
     grampc_setparam_real_vector(grampc_, "umax", umax);
 
-    grampc_setparam_real(grampc_, "Thor", Thor);
+    grampc_setparam_real(grampc_, "Thor", Thor_);
     grampc_setparam_real(grampc_, "t0", t0);
     grampc_setparam_real(grampc_, "dt", dt_);
 
@@ -258,7 +258,7 @@ void MPCCGrampcNode::controlLoop()
 {
     initializePathPosition();
     // Find current waypoint using arc length and get next waypoint
-    size_t nextIdx = path_->findNextWaypointIdx(current_time_);
+    size_t nextIdx = path_->findNextWaypointIdx(current_time_,Thor_ );
     RCLCPP_INFO(this->get_logger(), "next_idx=%zu",
                 nextIdx);
 

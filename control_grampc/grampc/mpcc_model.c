@@ -208,25 +208,48 @@ void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     ---------------------------------------- **/
 void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
+    double x_ref_t, y_ref_t, theta_ref_t, kappa_ref_t, v_ref_t;
 
-    out[0] =
-        userparam->P[0] * POW2(x[0] - xdes[0]) +
-        userparam->P[1] * POW2(x[1] - xdes[1]) +
-        userparam->P[2] * POW2(x[2] - xdes[2]) +
-        userparam->P[3] * POW2(x[3] - xdes[3]) +
-        userparam->P[4] * POW2(x[4] - xdes[4]);
+    get_reference_at_time(userparam->t,
+                          userparam->x,
+                          userparam->y,
+                          userparam->theta,
+                          userparam->kappa,
+                          userparam->v,
+                          userparam->N,
+                          userparam->current_time + T, // I am doing this here since the value t here is horizon time rather system time
+                          &x_ref_t, &y_ref_t, &theta_ref_t,
+                          &kappa_ref_t, &v_ref_t);
+
+    out[0] = userparam->P[0] * POW2(x[0] - x_ref_t) +
+             userparam->P[1] * POW2(x[1] - y_ref_t) +
+             userparam->P[2] * POW2(x[2] - theta_ref_t) +
+             userparam->P[3] * POW2(x[3] - kappa_ref_t) +
+             userparam->P[4] * POW2(x[4] - v_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
+    double x_ref_t, y_ref_t, theta_ref_t, kappa_ref_t, v_ref_t;
+
+    get_reference_at_time(userparam->t,
+                          userparam->x,
+                          userparam->y,
+                          userparam->theta,
+                          userparam->kappa,
+                          userparam->v,
+                          userparam->N,
+                          userparam->current_time + T, // I am doing this here since the value t here is horizon time rather system time
+                          &x_ref_t, &y_ref_t, &theta_ref_t,
+                          &kappa_ref_t, &v_ref_t);
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
-    out[0] = 2 * userparam->P[0] * (x[0] - xdes[0]);
-    out[1] = 2 * userparam->P[1] * (x[1] - xdes[1]);
-    out[2] = 2 * userparam->P[2] * (x[2] - xdes[2]);
-    out[3] = 2 * userparam->P[3] * (x[3] - xdes[3]);
-    out[4] = 2 * userparam->P[4] * (x[4] - xdes[4]);
+    out[0] = 2 * userparam->P[0] * (x[0] - x_ref_t);
+    out[1] = 2 * userparam->P[1] * (x[1] - y_ref_t);
+    out[2] = 2 * userparam->P[2] * (x[2] - theta_ref_t);
+    out[3] = 2 * userparam->P[3] * (x[3] - kappa_ref_t);
+    out[4] = 2 * userparam->P[4] * (x[4] - v_ref_t);
 }
 
 /** Gradient dV/dp **/

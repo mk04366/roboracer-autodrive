@@ -13,26 +13,25 @@ namespace mpcc
         : waypoints_(waypoints), time_profile_(time_profile), velocities_(velocities)
     {
     }
-    size_t Path::findNextWaypointIdx(double current_time) const
+    size_t Path::findNextWaypointIdx(double current_time, double horizon_time) const
     {
         if (time_profile_.empty())
             return 0;
 
         double max_time = time_profile_.back();
 
-        if (current_time > max_time)
+        double target_time = current_time + horizon_time;
+
+        if (target_time > max_time)
         {
-            current_time = std::fmod(current_time, max_time);
+            target_time = std::fmod(target_time, max_time);
         }
 
         for (size_t i = 0; i < time_profile_.size(); ++i)
         {
-            if (time_profile_[i] > current_time)
+            if (time_profile_[i] >= target_time)
             {
-                size_t target_idx = i + 20;
-                if (target_idx >= waypoints_.size())
-                    target_idx = target_idx % waypoints_.size();
-                return target_idx;
+                return i;
             }
         }
 
