@@ -644,20 +644,6 @@ kappa_time = interp_kappa(t_uniform)
 vx_time = interp_vx(t_uniform)
 ax_time = interp_ax(t_uniform)
 
-# ------------------------------
-# Apply same 90° rotation
-# ------------------------------
-# Rotate heading by +90° (pi/2 radians)
-psi_time += np.pi / 2
-# Wrap psi back to [-pi, pi]
-psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi
-
-# Rotate positions (x, y) by +90° counterclockwise
-x_rot = -y_time
-y_rot = x_time
-
-x_time, y_time = x_rot, y_rot
-
 # Combine into a trajectory array
 trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, kappa_time, vx_time, ax_time))
 
