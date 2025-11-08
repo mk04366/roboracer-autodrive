@@ -243,6 +243,9 @@ void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::Sh
     // Extract speed
     v_ = static_cast<double>(msg->speed);
 
+    // Extract steering angle
+    steering_ = static_cast<double>(msg->steering_angle);
+
     // Extract yaw/psi from IMU
     auto imu_ptr = std::make_shared<sensor_msgs::msg::Imu>(msg->imu);
     psi_ = getYawFromImu(imu_ptr);

@@ -243,6 +243,7 @@ def publish_vehicle_state():
         msg.imu = imu_msg
         # speed
         msg.speed = float(autodrive.speed)
+        msg.steering_angle = float(autodrive.steering)
 
         publishers['pub_vehicle_state'].publish(msg)
     except Exception:

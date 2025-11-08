@@ -15,15 +15,15 @@
 static void get_reference_at_time(const double *t_array,
                                   const double *x_ref,
                                   const double *y_ref,
-                                  const double *theta_ref,
-                                  const double *kappa_ref,
+                                  const double *psi_ref,
+                                  const double *delta_ref,
                                   const double *v_ref,
                                   int N,
                                   double t,
                                   double *x_out,
                                   double *y_out,
-                                  double *theta_out,
-                                  double *kappa_out,
+                                  double *psi_out,
+                                  double *delta_out,
                                   double *v_out)
 {
     // Wrap time if beyond trajectory duration
@@ -47,8 +47,8 @@ static void get_reference_at_time(const double *t_array,
     // Interpolate each state
     *x_out = x_ref[i] + alpha * (x_ref[i + 1] - x_ref[i]);
     *y_out = y_ref[i] + alpha * (y_ref[i + 1] - y_ref[i]);
-    *theta_out = theta_ref[i] + alpha * (theta_ref[i + 1] - theta_ref[i]);
-    *kappa_out = kappa_ref[i] + alpha * (kappa_ref[i + 1] - kappa_ref[i]);
+    *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
+    *delta_out = delta_ref[i] + alpha * (delta_ref[i + 1] - delta_ref[i]);
     *v_out = v_ref[i] + alpha * (v_ref[i + 1] - v_ref[i]);
 }
 
@@ -145,53 +145,53 @@ void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNu
 void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
 
-    double x_ref_t, y_ref_t, theta_ref_t, kappa_ref_t, v_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
 
     get_reference_at_time(userparam->t,
                           userparam->x,
                           userparam->y,
-                          userparam->theta,
-                          userparam->kappa,
+                          userparam->psi,
+                          userparam->delta,
                           userparam->v,
                           userparam->N,
                           userparam->current_time + t, // I am doing this here since the value t here is horizon time
-                          &x_ref_t, &y_ref_t, &theta_ref_t,
-                          &kappa_ref_t, &v_ref_t);
+                          &x_ref_t, &y_ref_t, &psi_ref_t,
+                          &delta_ref_t, &v_ref_t);
 
     out[0] =
-        userparam->R[0] * POW2(u[0] - udes[0]) +     // control effort weight for u₀ = κ̇
-        userparam->R[1] * POW2(u[1] - udes[1]) +     // control effort weight for u₁ = v̇
-        userparam->Q[0] * POW2(x[0] - x_ref_t) +     // position x error weight
-        userparam->Q[1] * POW2(x[1] - y_ref_t) +     // position y error weight
-        userparam->Q[2] * POW2(x[2] - theta_ref_t) + // heading error weight
-        userparam->Q[3] * POW2(x[3] - kappa_ref_t) + // curvature error weight
-        userparam->Q[4] * POW2(x[4] - v_ref_t);      // velocity error weight
+        userparam->R[0] * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
+        userparam->R[1] * POW2(u[1] - udes[1]) +    // control effort weight for u₁ = v̇
+        userparam->Q[0] * POW2(x[0] - x_ref_t) +    // position x error weight
+        userparam->Q[1] * POW2(x[1] - y_ref_t) +    // position y error weight
+        userparam->Q[2] * POW2(x[2] - psi_ref_t) +  // heading error weight
+        userparam->Q[3] * POW2(x[3] - v_ref_t) +    // curvature error weight
+        userparam->Q[4] * POW2(x[4] - delta_ref_t); // velocity error weight
 }
 
 /** Gradient dl/dx **/
 void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
 {
 
-    double x_ref_t, y_ref_t, theta_ref_t, kappa_ref_t, v_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
 
     get_reference_at_time(userparam->t,
                           userparam->x,
                           userparam->y,
-                          userparam->theta,
-                          userparam->kappa,
+                          userparam->psi,
+                          userparam->delta,
                           userparam->v,
                           userparam->N,
                           userparam->current_time + t, // I am doing this here since the value t here is horizon time rather system time
-                          &x_ref_t, &y_ref_t, &theta_ref_t,
-                          &kappa_ref_t, &v_ref_t);
+                          &x_ref_t, &y_ref_t, &psi_ref_t,
+                          &delta_ref_t, &v_ref_t);
 
     // gradient of the stage cost w.r.t. state x:
     // dl/dx = 2Q(x - x_{des})
     out[0] = 2 * userparam->Q[0] * (x[0] - x_ref_t);
     out[1] = 2 * userparam->Q[1] * (x[1] - y_ref_t);
-    out[2] = 2 * userparam->Q[2] * (x[2] - theta_ref_t);
-    out[3] = 2 * userparam->Q[3] * (x[3] - kappa_ref_t);
-    out[4] = 2 * userparam->Q[4] * (x[4] - v_ref_t);
+    out[2] = 2 * userparam->Q[2] * (x[2] - psi_ref_t);
+    out[3] = 2 * userparam->Q[3] * (x[3] - v_ref_t);
+    out[4] = 2 * userparam->Q[4] * (x[4] - delta_ref_t);
 }
 
 /** Gradient dl/du **/
@@ -213,48 +213,48 @@ void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     ---------------------------------------- **/
 void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
-    double x_ref_t, y_ref_t, theta_ref_t, kappa_ref_t, v_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
 
     get_reference_at_time(userparam->t,
                           userparam->x,
                           userparam->y,
-                          userparam->theta,
-                          userparam->kappa,
+                          userparam->psi,
+                          userparam->delta,
                           userparam->v,
                           userparam->N,
                           userparam->current_time + T, // I am doing this here since the value t here is horizon time rather system time
-                          &x_ref_t, &y_ref_t, &theta_ref_t,
-                          &kappa_ref_t, &v_ref_t);
+                          &x_ref_t, &y_ref_t, &psi_ref_t,
+                          &delta_ref_t, &v_ref_t);
 
     out[0] = userparam->P[0] * POW2(x[0] - x_ref_t) +
              userparam->P[1] * POW2(x[1] - y_ref_t) +
-             userparam->P[2] * POW2(x[2] - theta_ref_t) +
-             userparam->P[3] * POW2(x[3] - kappa_ref_t) +
-             userparam->P[4] * POW2(x[4] - v_ref_t);
+             userparam->P[2] * POW2(x[2] - psi_ref_t) +
+             userparam->P[3] * POW2(x[3] - v_ref_t) +
+             userparam->P[4] * POW2(x[4] - delta_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
 {
-    double x_ref_t, y_ref_t, theta_ref_t, kappa_ref_t, v_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
 
     get_reference_at_time(userparam->t,
                           userparam->x,
                           userparam->y,
-                          userparam->theta,
-                          userparam->kappa,
+                          userparam->psi,
+                          userparam->delta,
                           userparam->v,
                           userparam->N,
                           userparam->current_time + T, // I am doing this here since the value t here is horizon time rather system time
-                          &x_ref_t, &y_ref_t, &theta_ref_t,
-                          &kappa_ref_t, &v_ref_t);
+                          &x_ref_t, &y_ref_t, &psi_ref_t,
+                          &delta_ref_t, &v_ref_t);
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
     out[0] = 2 * userparam->P[0] * (x[0] - x_ref_t);
     out[1] = 2 * userparam->P[1] * (x[1] - y_ref_t);
-    out[2] = 2 * userparam->P[2] * (x[2] - theta_ref_t);
-    out[3] = 2 * userparam->P[3] * (x[3] - kappa_ref_t);
-    out[4] = 2 * userparam->P[4] * (x[4] - v_ref_t);
+    out[2] = 2 * userparam->P[2] * (x[2] - psi_ref_t);
+    out[3] = 2 * userparam->P[3] * (x[3] - v_ref_t);
+    out[4] = 2 * userparam->P[4] * (x[4] - delta_ref_t);
 }
 
 /** Gradient dV/dp **/
