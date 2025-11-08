@@ -617,7 +617,7 @@ t_profile_cl = np.array(t_profile_cl)
 # ------------------------------
 # Parameters for uniform time grid
 # ------------------------------
-dt = 0.05  # desired sampling time in seconds
+dt = 0.01  # desired sampling time in seconds
 t_uniform = np.arange(0, t_profile_cl[-1], dt)
 output_file = "traj_time_based.csv"
 # ------------------------------
@@ -650,6 +650,12 @@ kappa_time = interp_kappa(t_uniform)
 vx_time = interp_vx(t_uniform)
 ax_time = interp_ax(t_uniform)
 delta_time = interp_delta(t_uniform)
+
+# ------------------------------
+# Rotate psi_time by 90° around z-axis
+# ------------------------------
+psi_time += np.pi / 2  # rotate +90 degrees
+psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
 
 # Combine into a trajectory array
 trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, delta_time, vx_time, ax_time))
