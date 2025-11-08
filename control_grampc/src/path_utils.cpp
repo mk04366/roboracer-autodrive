@@ -71,7 +71,7 @@ namespace mpcc
         return velocities_[index];
     }
 
-    double Path::getCurvature(size_t index) const
+    double Path::getSteering(size_t index) const
     {
         if (index >= waypoints_.size())
             return waypoints_.back()(3);
@@ -105,11 +105,11 @@ namespace mpcc
                     double t = std::stod(tokens[0]);
                     double x = std::stod(tokens[1]);
                     double y = std::stod(tokens[2]);
-                    double heading = std::stod(tokens[3]);
-                    double curvature = std::stod(tokens[4]);
+                    double psi = std::stod(tokens[3]);
+                    double steering = std::stod(tokens[4]);
                     double vx = std::stod(tokens[5]);
 
-                    waypoints.emplace_back(x, y, heading, curvature);
+                    waypoints.emplace_back(x, y, psi, steering);
                     time_profile.push_back(t);
                     velocities.push_back(vx);
                 }

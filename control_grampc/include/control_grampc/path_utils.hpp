@@ -15,7 +15,7 @@ namespace mpcc
         size_t findNextWaypointIdx(double current_time, double horizon_time) const;
         Eigen::Vector2d getWaypoint(size_t index) const;
         double getHeading(size_t index) const;
-        double getCurvature(size_t index) const;
+        double getSteering(size_t index) const;
         double getTimeFromIndex(size_t index) const;
         size_t getTotalLength() const;
         double getVelocity(size_t index) const;

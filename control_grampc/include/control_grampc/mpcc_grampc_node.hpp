@@ -53,8 +53,8 @@ private:
     rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
 
     std::shared_ptr<mpcc::Path> path_;
-    // Vehicle state - 5D [x, y, theta, kappa, v]
-    double x_ = 0.0, y_ = 0.0, yaw_ = 0.0, v_ = 0.0, kappa_ = 0.0;
+    // Vehicle state - 5D [x, y, psi, v, steering]
+    double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_ = 0.0, steering_ = 0.0;
 
     // Path following state
     size_t current_path_idx_ = 0;
