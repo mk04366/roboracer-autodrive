@@ -11,7 +11,19 @@
 #endif
 /* square macro */
 #define POW2(a) ((a) * (a))
+#define M_PI 3.14159265358979323846
 
+static double wrapAngle(double a)
+{
+    // wrap angle to [-pi, pi)
+    while (a >= M_PI)
+        a -= 2.0 * M_PI;
+    while (a < -M_PI)
+        a += 2.0 * M_PI;
+    return a;
+}
+
+/** Linear interpolation with angle-safe interpolation for psi */
 static void get_reference_at_time(const double *t_array,
                                   const double *x_ref,
                                   const double *y_ref,
@@ -26,30 +38,75 @@ static void get_reference_at_time(const double *t_array,
                                   double *delta_out,
                                   double *v_out)
 {
-    // Wrap time if beyond trajectory duration
-    double t_max = t_array[N - 1];
-    double t_wrapped = fmod(t, t_max);
+    if (N <= 0)
+        return;
 
-    // Find interval where t_wrapped lies
+    if (N == 1)
+    {
+        *x_out = x_ref[0];
+        *y_out = y_ref[0];
+        *psi_out = psi_ref[0];
+        *delta_out = delta_ref[0];
+        *v_out = v_ref[0];
+        return;
+    }
+
+    double t_max = t_array[N - 1];
+    if (t_max <= 0.0)
+    {
+        // degenerate, fallback to first point
+        *x_out = x_ref[0];
+        *y_out = y_ref[0];
+        *psi_out = psi_ref[0];
+        *delta_out = delta_ref[0];
+        *v_out = v_ref[0];
+        return;
+    }
+
+    // wrap t into [0, t_max)
+    double t_wrapped = fmod(t, t_max);
+    if (t_wrapped < 0.0)
+        t_wrapped += t_max;
+
+    // find index i such that t_array[i] <= t_wrapped < t_array[i+1]
     int i = 0;
+    // fast path: if monotonic and uniformly sampled you could compute idx directly,
+    // but we keep safe linear scan here
     while (i < N - 1 && t_array[i + 1] <= t_wrapped)
         ++i;
 
-    // Clamp index just in case
     if (i >= N - 1)
-        i = N - 2;
+        i = N - 2; // clamp to penultimate
 
-    // Linear interpolation factor
     double t0 = t_array[i];
     double t1 = t_array[i + 1];
-    double alpha = (t_wrapped - t0) / (t1 - t0);
 
-    // Interpolate each state
+    // If due to numerical reasons t1==t0, avoid division by zero
+    double alpha = 0.0;
+    if (t1 > t0)
+        alpha = (t_wrapped - t0) / (t1 - t0);
+    if (alpha < 0.0)
+        alpha = 0.0;
+    if (alpha > 1.0)
+        alpha = 1.0;
+
+    // linear interpolation for x,y,delta,v
     *x_out = x_ref[i] + alpha * (x_ref[i + 1] - x_ref[i]);
     *y_out = y_ref[i] + alpha * (y_ref[i + 1] - y_ref[i]);
-    *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
     *delta_out = delta_ref[i] + alpha * (delta_ref[i + 1] - delta_ref[i]);
     *v_out = v_ref[i] + alpha * (v_ref[i + 1] - v_ref[i]);
+
+    // special handling for psi (heading) to interpolate across the -pi/pi boundary
+    double psi0 = psi_ref[i];
+    double psi1 = psi_ref[i + 1];
+    double dpsi = psi1 - psi0;
+    // wrap dpsi to [-pi, pi)
+    if (dpsi > M_PI)
+        dpsi -= 2.0 * M_PI;
+    else if (dpsi < -M_PI)
+        dpsi += 2.0 * M_PI;
+    double psi_interp = psi0 + alpha * dpsi;
+    *psi_out = wrapAngle(psi_interp);
 }
 
 /** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),

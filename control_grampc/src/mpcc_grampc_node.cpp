@@ -108,31 +108,30 @@ void MPCCGrampcNode::publishTarget(const Eigen::Vector2d& point, double heading)
 void MPCCGrampcNode::initGrampcParams()
 {
   // allocate vectors from Path
-  std::vector<double> t, x, y, psi, delta, v;
   size_t N = path_->getTotalLength();
-  t.reserve(N);
-  x.reserve(N);
-  y.reserve(N);
-  psi.reserve(N);
-  delta.reserve(N);
-  v.reserve(N);
+  t_ref_.reserve(N);
+  x_ref_.reserve(N);
+  y_ref_.reserve(N);
+  psi_ref_.reserve(N);
+  delta_ref_.reserve(N);
+  v_ref_.reserve(N);
 
   for (size_t i = 0; i < N; ++i)
   {
-    t.push_back(path_->getTimeFromIndex(i));
+    t_ref_.push_back(path_->getTimeFromIndex(i));
     Eigen::Vector2d xy = path_->getWaypoint(i);
-    x.push_back(xy.x());
-    y.push_back(xy.y());
-    psi.push_back(path_->getHeading(i));
-    delta.push_back(path_->getSteering(i));
-    v.push_back(path_->getVelocity(i));
+    x_ref_.push_back(xy.x());
+    y_ref_.push_back(xy.y());
+    psi_ref_.push_back(path_->getHeading(i));
+    delta_ref_.push_back(path_->getSteering(i));
+    v_ref_.push_back(path_->getVelocity(i));
   }
   L_ = 0.32;
 
   /********* Parameter definition *********/
   /* Initial values and setpoints of the states, inputs, parameters, penalties and Lagrangian mmultipliers, setpoints
    * for the states and inputs */
-  ctypeRNum x0[NX] = { 0.0, 0.0, 0.0, 0.0, 0.5 };
+  ctypeRNum x0[NX] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
   ctypeRNum xdes[NX] = { 0.0, 0.0, 0.0, 1.0, 0.0 };  // [x, y, psi, v, delta]
 
   /* Initial values, setpoints and limits of the inputs */
@@ -154,36 +153,36 @@ void MPCCGrampcNode::initGrampcParams()
   param_.v_scale = 1.0;  // [1] Velocity scaling factor (stabilization term)
 
   /* Running-state cost weights (Q) */
-  param_.Q[0] = 10.0;  // [2] Qx
-  param_.Q[1] = 10.0;  // [3] Qy
-  param_.Q[2] = 10.0;  // [4] Qpsi
-  param_.Q[3] = 10.0;  // [5] Qv
-  param_.Q[4] = 10.0;  // [6] Qdelta
+  param_.Q[0] = 1.0;  // [2] Qx
+  param_.Q[1] = 1.0;  // [3] Qy
+  param_.Q[2] = 1.0;  // [4] Qpsi
+  param_.Q[3] = 1.0;  // [5] Qv
+  param_.Q[4] = 1.0;  // [6] Qdelta
 
   /* Terminal-state cost weights (P) */
-  param_.P[0] = 10.0;  // [7] Px
-  param_.P[1] = 10.0;  // [8] Py
-  param_.P[2] = 10.0;  // [9] Ppsi
-  param_.P[3] = 1.0;   // [10] Pv
-  param_.P[4] = 1.0;   // [11] Pdelta
+  param_.P[0] = 1.0;  // [7] Px
+  param_.P[1] = 1.0;  // [8] Py
+  param_.P[2] = 1.0;  // [9] Ppsi
+  param_.P[3] = 1.0;  // [10] Pv
+  param_.P[4] = 1.0;  // [11] Pdelta
 
   /* Control cost weights (R) */
   param_.R[0] = 0.01;  // [12] R Longitudinal acceleration (weight on u[0])
   param_.R[1] = 0.01;  // [13] R Steering rate (weight on u[1])
 
   /* attach trajectory data */
-  param_.t = t.data();
-  param_.x = x.data();
-  param_.y = y.data();
-  param_.psi = psi.data();
-  param_.delta = delta.data();
-  param_.v = v.data();
+  param_.t = t_ref_.data();
+  param_.x = x_ref_.data();
+  param_.y = y_ref_.data();
+  param_.psi = psi_ref_.data();
+  param_.delta = delta_ref_.data();
+  param_.v = v_ref_.data();
   param_.N = N;
-  param_.current_time = 0.0;
+  param_.current_time = current_time_;
 
   /********* grampc init *********/
   grampc_ = nullptr;
-  grampc_init(&grampc_, (typeUSERPARAM*)&param_);
+  grampc_init(&grampc_, &param_);
 
   if (!grampc_)
   {

@@ -12,8 +12,7 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include "autodrive_msgs/msg/vehiclestate.hpp"
 
-extern "C"
-{
+extern "C" {
 #include "grampc.h"
 #include "grampc_mess.h"
 }
@@ -33,47 +32,48 @@ extern "C"
 class MPCCGrampcNode : public rclcpp::Node
 {
 public:
-    MPCCGrampcNode();
-    ~MPCCGrampcNode();
+  MPCCGrampcNode();
+  ~MPCCGrampcNode();
 
 private:
-    void initializePathPosition();
-    void initGrampcParams();
-    void controlLoop();
-    void publishPath();
-    void publishTarget(const Eigen::Vector2d &point, double heading);
-    double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
-    void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
-    // ROS publishers/subscribers
-    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
-    rclcpp::TimerBase::SharedPtr path_timer_;
-    rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
+  void initializePathPosition();
+  void initGrampcParams();
+  void controlLoop();
+  void publishPath();
+  void publishTarget(const Eigen::Vector2d& point, double heading);
+  double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr& imu_msg);
+  void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
+  // ROS publishers/subscribers
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
+  rclcpp::TimerBase::SharedPtr path_timer_;
+  rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
 
-    std::shared_ptr<mpcc::Path> path_;
-    // Vehicle state - 5D [x, y, psi, v, steering]
-    double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_ = 0.0, steering_ = 0.0;
+  std::shared_ptr<mpcc::Path> path_;
+  // Vehicle state - 5D [x, y, psi, v, steering]
+  double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_ = 0.0, steering_ = 0.0;
 
-    // Path following state
-    size_t current_path_idx_ = 0;
-    double current_time_ = 0.0;
+  std::vector<double> t_ref_, x_ref_, y_ref_, psi_ref_, delta_ref_, v_ref_;
+  // Path following state
+  size_t current_path_idx_ = 0;
+  double current_time_ = 0.0;
 
-    // Control history
-    double prev_steer_, prev_throttle_;
+  // Control history
+  double prev_steer_, prev_throttle_;
 
-    // GRAMPC solver and parameter array
-    TYPE_GRAMPC_POINTER(grampc_);
-    typeUSERPARAM param_ = {};
-    double dt_ = 0.0;
-    double Thor_ = 0.0;
+  // GRAMPC solver and parameter array
+  TYPE_GRAMPC_POINTER(grampc_);
+  typeUSERPARAM param_ = {};
+  double dt_ = 0.0;
+  double Thor_ = 0.0;
 
-    // Vehicle parameters
-    double L_;
-    double last_yaw_ = 0.0;
-    bool first_pose_ = true;
-    geometry_msgs::msg::Point last_pos_;
+  // Vehicle parameters
+  double L_;
+  double last_yaw_ = 0.0;
+  bool first_pose_ = true;
+  geometry_msgs::msg::Point last_pos_;
 };
 
-#endif // CONTROL_GRAMPC__MPCC_GRAMPC_NODE_HPP_
+#endif  // CONTROL_GRAMPC__MPCC_GRAMPC_NODE_HPP_
