@@ -121,18 +121,8 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x,
 void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
 
-    /*
-    | f component           | derivative wrt (u_0) | derivative wrt (u_1) |
-    | --------------------- | -------------------- | -------------------- |
-    | (f_0 = v\cos(\theta)) | 0                    | 0                    |
-    | (f_1 = v\sin(\theta)) | 0                    | 0                    |
-    | (f_2 = v\kappa)       | 0                    | 0                    |
-    | (f_3 = u_0)           | 1                    | 0                    |
-    | (f_4 = u_1)           | 0                    | 1                    |
-
-    */
-    out[0] = vec[4]; // derivative wrt u₀ (curvature rate) -> affects κ̇ = f₃
-    out[1] = vec[5]; // derivative wrt u₁ (acceleration)   -> affects v̇ = f₄
+    out[0] = vec[3]; // derivative wrt u₀ (curvature rate) -> affects κ̇ = f₃
+    out[1] = vec[4]; // derivative wrt u₁ (acceleration)   -> affects v̇ = f₄
 }
 
 /** Jacobian df/dp multiplied by vector vec, i.e. (df/dp)^T*vec or vec^T*(df/dp) **/

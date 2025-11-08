@@ -131,8 +131,8 @@ void MPCCGrampcNode::initGrampcParams()
     /* Initial values, setpoints and limits of the inputs */
     ctypeRNum u0[NU] = {0.0, 0.0};
     ctypeRNum udes[NU] = {0.0, 0.0};
-    ctypeRNum umax[NU] = {1.0, M_PI / 3 };
-    ctypeRNum umin[NU] = {0.01, -M_PI / 3 };
+    ctypeRNum umax[NU] = {1.0, M_PI / 3};
+    ctypeRNum umin[NU] = {0.01, -M_PI / 3};
     Thor_ = 1.0;                 /* Prediction horizon */
     dt_ = 0.01;                  // Default 50ms for 20Hz timer
     ctypeInt Nhor = Thor_ / dt_; /* Number of steps for the system integration */
@@ -161,7 +161,7 @@ void MPCCGrampcNode::initGrampcParams()
     param_.P[4] = 1.0;  // [11] Pdelta
 
     /* Control cost weights (R) */
-    param_.R[0] = 0.01;   // [12] R Longitudinal acceleration (weight on u[0])
+    param_.R[0] = 0.01; // [12] R Longitudinal acceleration (weight on u[0])
     param_.R[1] = 0.01; // [13] R Steering rate (weight on u[1])
 
     /* attach trajectory data */
@@ -276,7 +276,7 @@ void MPCCGrampcNode::controlLoop()
 
     // Current state and target state
     std::vector<double> current_state = {x_, y_, psi_, steering_, v_};
-    std::vector<double> target_state = {target_point.x(), target_point.y(), target_heading, target_speed, target_steering};
+    std::vector<double> target_state = {target_point.x(), target_point.y(), target_heading, target_steering, target_speed};
 
     // Set current state as initial & desired condition
     grampc_setparam_real_vector(grampc_, "x0", current_state.data());
@@ -306,7 +306,7 @@ void MPCCGrampcNode::controlLoop()
     {
         /* update state and time */
         double steering_dot = grampc_->sol->unext[0]; // u[0] = steering_rate (curvature rate) [1/s]
-        throttle_cmd = grampc_->sol->unext[1];     // u[1] = acceleration [m/s^2]
+        throttle_cmd = grampc_->sol->unext[1];        // u[1] = acceleration [m/s^2]
         RCLCPP_INFO(this->get_logger(), "Control Commands: steering_rate=%.4f [1/s], acceleration=%.4f [m/s^2]",
                     steering_dot, throttle_cmd);
         steer_cmd = steering_ + steering_dot * dt_;
