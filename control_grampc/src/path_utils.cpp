@@ -56,13 +56,7 @@ namespace mpcc
     {
         if (index >= waypoints_.size())
             return waypoints_.back()(2);
-        double adjusted_heading = waypoints_[index](2) + M_PI / 2.0; // adjust for Eigen frame
-        // wrap to [-pi, pi]
-        while (adjusted_heading > M_PI)
-            adjusted_heading -= 2.0 * M_PI;
-        while (adjusted_heading < -M_PI)
-            adjusted_heading += 2.0 * M_PI;
-        return adjusted_heading;
+       return waypoints_[index](2);        
     }
 
     size_t Path::getTotalLength() const

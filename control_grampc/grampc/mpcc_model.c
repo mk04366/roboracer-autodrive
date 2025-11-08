@@ -84,6 +84,11 @@ static void get_reference_at_time(const double *t_array,
         dpsi += 2.0 * M_PI;
     double psi_interp = psi0 + alpha * dpsi;
     *psi_out = wrapAngle(psi_interp);
+
+    printf("Ref at t=%.2f: x=%.2f, y=%.2f, psi=%.2f, delta=%.2f, v=%.2f\n",
+           t, *x_out, *y_out, *psi_out, *delta_out, *v_out);
+
+    fflush(stdout);
 }
 
 /** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),
@@ -119,9 +124,7 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 }
 
 /** Jacobian df/dx multiplied by vector vec, i.e. (df/dx)^T*vec or vec^T*(df/dx) **/
-void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x,
-              ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec,
-              typeUSERPARAM *userparam)
+void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
     const double L = userparam->L;
 

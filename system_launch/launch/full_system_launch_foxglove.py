@@ -13,11 +13,11 @@ def generate_launch_description():
         'simulator_bringup_headless.launch.py'
     )
 
-    waypoints_loader_launch_path = os.path.join(
-        get_package_share_directory('control'),
-        'launch',
-        'waypoints_loader_launch.py'
-    )
+    # waypoints_loader_launch_path = os.path.join(
+    #     get_package_share_directory('control'),
+    #     'launch',
+    #     'waypoints_loader_launch.py'
+    # )
 
     # control_launch_path = os.path.join(
     #     get_package_share_directory('control_grampc'),
@@ -68,9 +68,9 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(localization_launch_path)
         ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(waypoints_loader_launch_path)
-        ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(waypoints_loader_launch_path)
+        # ),
         mpcc_node,
         foxglove_node,
         # initial_pose_node
