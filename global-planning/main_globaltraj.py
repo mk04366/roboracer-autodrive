@@ -613,7 +613,7 @@ t_profile_cl = np.array(t_profile_cl)
 # ------------------------------
 # Parameters for uniform time grid
 # ------------------------------
-dt = 0.05  # desired sampling time in seconds
+dt = 0.01  # desired sampling time in seconds
 t_uniform = np.arange(0, t_profile_cl[-1], dt)
 output_file = "traj_time_based.csv"
 # ------------------------------
