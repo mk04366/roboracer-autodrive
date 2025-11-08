@@ -38,31 +38,8 @@ static void get_reference_at_time(const double *t_array,
                                   double *delta_out,
                                   double *v_out)
 {
-    if (N <= 0)
-        return;
-
-    if (N == 1)
-    {
-        *x_out = x_ref[0];
-        *y_out = y_ref[0];
-        *psi_out = psi_ref[0];
-        *delta_out = delta_ref[0];
-        *v_out = v_ref[0];
-        return;
-    }
 
     double t_max = t_array[N - 1];
-    if (t_max <= 0.0)
-    {
-        // degenerate, fallback to first point
-        *x_out = x_ref[0];
-        *y_out = y_ref[0];
-        *psi_out = psi_ref[0];
-        *delta_out = delta_ref[0];
-        *v_out = v_ref[0];
-        return;
-    }
-
     // wrap t into [0, t_max)
     double t_wrapped = fmod(t, t_max);
     if (t_wrapped < 0.0)
@@ -148,31 +125,15 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x,
 {
     const double L = userparam->L;
 
-    const double psi = x[2];
-    const double v = x[3];
-    const double delta = x[4];
-
-    const double cospsi = COS(psi);
-    const double sinpsi = SIN(psi);
-    const double tan_delta = TAN(delta);
-    const double sec2_delta = 1.0 / (COS(delta) * COS(delta));
-
-    // Unpack vector
-    const double v1 = vec[0];
-    const double v2 = vec[1];
-    const double v3 = vec[2];
-    const double v4 = vec[3];
-    const double v5 = vec[4];
-
     // Compute out = (df/dx)^T * vec
     out[0] = 0.0; // ∂f/∂x
     out[1] = 0.0; // ∂f/∂y
 
-    out[2] = (-v * sinpsi) * v1 + (v * cospsi) * v2; // wrt ψ
+    out[2] = (-x[3] * SIN(x[2])) * vec[0] + (x[3] * COS(x[2])) * vec[1]; // wrt ψ
 
-    out[3] = (cospsi)*v1 + (sinpsi)*v2 + (tan_delta / L) * v3; // wrt v
+    out[3] = COS(x[2]) * vec[2] + (SIN(x[2])) * vec[3] + (TAN(x[4]) / L) * vec[4]; // wrt v
 
-    out[4] = (v / L) * sec2_delta * v3; // wrt δ
+    out[4] = (x[3] / L) * (1.0 / (COS(x[4]) * COS(x[4]))) * vec[4]; // wrt δ
 }
 /** Jacobian df/du multiplied by vector vec, i.e. (df/du)^T*vec or vec^T*(df/du) **/
 void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
