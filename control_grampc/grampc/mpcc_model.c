@@ -3,9 +3,11 @@
 #if USE_typeRNum == USE_FLOAT
 #define SIN(a) sinf(a)
 #define COS(a) cosf(a)
+#define TAN(a) tanf(a)
 #else
 #define SIN(a) sin(a)
 #define COS(a) cos(a)
+#define TAN(a) tan(a)
 #endif
 /* square macro */
 #define POW2(a) ((a) * (a))
@@ -54,8 +56,8 @@ static void get_reference_at_time(const double *t_array,
     inequalities (Nh), terminal equalities (NgT), terminal inequalities (NhT) **/
 void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, typeInt *NgT, typeInt *NhT, typeUSERPARAM *userparam)
 {
-    *Nx = 5; // x, y, theta, kappa, v
-    *Nu = 2; // acceleration, steering_rate
+    *Nx = 5; // [x, y, psi, v, delta]
+    *Nu = 2; // [a, delta_dot]
     *Np = 0;
     *Nh = 0;
     *Ng = 0;
@@ -67,42 +69,54 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     ------------------------------------ **/
 void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
+    const double L = userparam->L; // wheelbase
 
-    out[0] = COS(x[2]) * x[4]; // cos(theta) * v
-    out[1] = SIN(x[2]) * x[4]; // sin(theta) * v
-    out[2] = x[3] * x[4];      // kappa * v
-    out[3] = u[0];             // kappa_dot
-    out[4] = u[1];             // v_dot/acceleration
+    double psi = x[2];
+    double v = x[3];
+    double delta = x[4];
+    double a = u[0];
+    double delta_dot = u[1];
+
+    out[0] = v * COS(psi);
+    out[1] = v * SIN(psi);
+    out[2] = (v / L) * TAN(delta);
+    out[3] = a;
+    out[4] = delta_dot;
 }
 
 /** Jacobian df/dx multiplied by vector vec, i.e. (df/dx)^T*vec or vec^T*(df/dx) **/
 void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x,
-              ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p,
+              ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec,
               typeUSERPARAM *userparam)
-
 {
+    const double L = userparam->L;
 
-    /*
-Based on the matrix A=∂f/∂x: ​
+    const double psi = x[2];
+    const double v = x[3];
+    const double delta = x[4];
 
-|    | x | y | θ         | κ | v      |
-| -- | - | - | --------- | - | ------ |
-| ẋ  | 0 | 0 | −v sin(θ) | 0 | cos(θ) |
-| ẏ  | 0 | 0 | v cos(θ)  | 0 | sin(θ) |
-| θ̇  | 0 | 0 | 0         | v | κappa  |
-| κ̇  | 0 | 0 | 0         | 0 | 0      |
-| v̇  | 0 | 0 | 0         | 0 | 0      |
+    const double cospsi = COS(psi);
+    const double sinpsi = SIN(psi);
+    const double tan_delta = TAN(delta);
+    const double sec2_delta = 1.0 / (COS(delta) * COS(delta));
 
+    // Unpack vector
+    const double v1 = vec[0];
+    const double v2 = vec[1];
+    const double v3 = vec[2];
+    const double v4 = vec[3];
+    const double v5 = vec[4];
 
-The equations below are a vector of 5x1 (out) i.e., A*v
-*/
-    out[0] = 0;
-    out[1] = 0;
-    out[2] = (vec[1] * COS(x[2]) - vec[0] * SIN(x[2])) * x[4];
-    out[3] = vec[2] * x[4];
-    out[4] = vec[0] * COS(x[2]) + vec[1] * SIN(x[2]) + vec[2] * x[3];
+    // Compute out = (df/dx)^T * vec
+    out[0] = 0.0; // ∂f/∂x
+    out[1] = 0.0; // ∂f/∂y
+
+    out[2] = (-v * sinpsi) * v1 + (v * cospsi) * v2; // wrt ψ
+
+    out[3] = (cospsi)*v1 + (sinpsi)*v2 + (tan_delta / L) * v3; // wrt v
+
+    out[4] = (v / L) * sec2_delta * v3; // wrt δ
 }
-
 /** Jacobian df/du multiplied by vector vec, i.e. (df/du)^T*vec or vec^T*(df/du) **/
 void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
 {
@@ -117,8 +131,8 @@ void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNu
     | (f_4 = u_1)           | 0                    | 1                    |
 
     */
-    out[0] = vec[3]; // derivative wrt u₀ (curvature rate) -> affects κ̇ = f₃
-    out[1] = vec[4]; // derivative wrt u₁ (acceleration)   -> affects v̇ = f₄
+    out[0] = vec[4]; // derivative wrt u₀ (curvature rate) -> affects κ̇ = f₃
+    out[1] = vec[5]; // derivative wrt u₁ (acceleration)   -> affects v̇ = f₄
 }
 
 /** Jacobian df/dp multiplied by vector vec, i.e. (df/dp)^T*vec or vec^T*(df/dp) **/

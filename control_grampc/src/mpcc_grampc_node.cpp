@@ -14,7 +14,7 @@ MPCCGrampcNode::MPCCGrampcNode()
 {
     // Load path from CSV file
     std::string csv_file = this->declare_parameter<std::string>("path_csv",
-                                                                "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl.csv");
+                                                                "/home/ammar/ros2_ws/src/global-planning/outputs/map5/traj_race_cl_low_sampled.csv");
     path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
 
     if (path_ && path_->getTotalLength() > 1e-3)
@@ -133,10 +133,10 @@ void MPCCGrampcNode::initGrampcParams()
     ctypeRNum udes[NU] = {0.0, 0.0};
     ctypeRNum umax[NU] = {M_PI / 3, 1.0};
     ctypeRNum umin[NU] = {-M_PI / 3, 0.01};
-    Thor_ = 1.0;                /* Prediction horizon */
-    dt_ = 0.01;                 // Default 50ms for 20Hz timer
+    Thor_ = 1.0;                 /* Prediction horizon */
+    dt_ = 0.01;                  // Default 50ms for 20Hz timer
     ctypeInt Nhor = Thor_ / dt_; /* Number of steps for the system integration */
-    typeRNum t0 = 0.0;          /* time at the current sampling step */
+    typeRNum t0 = 0.0;           /* time at the current sampling step */
 
     /********* Option definition *********/
     ctypeInt MaxGradIter = 5;
@@ -147,22 +147,22 @@ void MPCCGrampcNode::initGrampcParams()
     param_.v_scale = 1.0; // [1] Velocity scaling factor (stabilization term)
 
     /* Running-state cost weights (Q) */
-    param_.Q[0] = 1.0; // [2] Qx
-    param_.Q[1] = 1.0; // [3] Qy
-    param_.Q[2] = 1.0; // [4] Qtheta
-    param_.Q[3] = 1.0; // [5] Qkappa
-    param_.Q[4] = 1.0; // [6] Qv
+    param_.Q[0] = 10.0; // [2] Qx
+    param_.Q[1] = 10.0; // [3] Qy
+    param_.Q[2] = 10.0; // [4] Qtheta
+    param_.Q[3] = 10.0; // [5] Qkappa
+    param_.Q[4] = 10.0; // [6] Qv
 
     /* Terminal-state cost weights (P) */
-    param_.P[0] = 1.0; // [7] Px
-    param_.P[1] = 1.0; // [8] Py
-    param_.P[2] = 1.0; // [9] Ptheta
+    param_.P[0] = 10.0; // [7] Px
+    param_.P[1] = 10.0; // [8] Py
+    param_.P[2] = 10.0; // [9] Ptheta
     param_.P[3] = 1.0; // [10] Pkappa
     param_.P[4] = 1.0; // [11] Pv
 
     /* Control cost weights (R) */
     param_.R[0] = 0.01; // [12] R_steer_rate (weight on u[0])
-    param_.R[1] = 0.01; // [13] R_accel (weight on u[1])
+    param_.R[1] = 1000.0; // [13] R_accel (weight on u[1])
 
     /* attach trajectory data */
     param_.t = t.data();
@@ -258,7 +258,7 @@ void MPCCGrampcNode::controlLoop()
 {
     initializePathPosition();
     // Find current waypoint using arc length and get next waypoint
-    size_t nextIdx = path_->findNextWaypointIdx(current_time_,Thor_ );
+    size_t nextIdx = path_->findNextWaypointIdx(current_time_, Thor_);
     RCLCPP_INFO(this->get_logger(), "next_idx=%zu",
                 nextIdx);
 
@@ -304,7 +304,9 @@ void MPCCGrampcNode::controlLoop()
         /* update state and time */
         double kappa_dot = grampc_->sol->unext[0]; // u[0] = steering_rate (curvature rate) [1/s]
         throttle_cmd = grampc_->sol->unext[1];     // u[1] = acceleration [m/s^2]
-        kappa_ = kappa_ + kappa_dot * dt_;
+        RCLCPP_INFO(this->get_logger(), "Control Commands: steering_rate=%.4f [1/s], acceleration=%.4f [m/s^2]",
+                    kappa_dot, throttle_cmd);
+        kappa_ = grampc_->sol->xnext[3]; // x[3] = curvature
         steer_cmd = std::atan(L_ * kappa_);
 
         // Update previous commands for fallback case of next iteration
