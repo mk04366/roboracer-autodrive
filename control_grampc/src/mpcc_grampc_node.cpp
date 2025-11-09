@@ -130,12 +130,12 @@ void MPCCGrampcNode::initGrampcParams()
   /* Initial values, setpoints and limits of the inputs */
   ctypeRNum u0[NU] = {0.0, 0.0};
   ctypeRNum udes[NU] = {0.0, 0.0};
-  ctypeRNum umax[NU] = {1.0, M_PI / 6};
+  ctypeRNum umax[NU] = {0.5, M_PI / 6};
   ctypeRNum umin[NU] = {0.01, -M_PI / 6};
-  Thor_ = 1.0;                 /* Prediction horizon */
-  dt_ = 0.05;                  // Default 50ms for 20Hz timer
-  ctypeInt Nhor = Thor_ / dt_; /* Number of steps for the system integration */
-  typeRNum t0 = 0.0;           /* time at the current sampling step */
+  Thor_ = 1.0;        /* Prediction horizon */
+  dt_ = 1.0 / 17.0;   /* Sampling time */
+  ctypeInt Nhor = 15; /* Number of steps for the system integration */
+  typeRNum t0 = 0.0;  /* time at the current sampling step */
 
   /********* Option definition *********/
   ctypeInt MaxGradIter = 5;
@@ -143,25 +143,24 @@ void MPCCGrampcNode::initGrampcParams()
 
   /********* userparam *********/
   param_.L = L_;        // [0] Wheelbase length
-  param_.v_scale = 1.0; // [1] Velocity scaling factor (stabilization term)
 
   /* Running-state cost weights (Q) */
   param_.Q[0] = 100.0; // [2] Qx
   param_.Q[1] = 100.0; // [3] Qy
-  param_.Q[2] = 1.0;   // [4] Qpsi
-  param_.Q[3] = 1.0;   // [5] Qv
-  param_.Q[4] = 1.0;   // [6] Qdelta
+  param_.Q[2] = 100.0; // [4] Qpsi
+  param_.Q[3] = 100.0; // [5] Qv
+  param_.Q[4] = 100.0; // [6] Qdelta
 
   /* Terminal-state cost weights (P) */
-  param_.P[0] = 100.0; // [7] Px
-  param_.P[1] = 100.0; // [8] Py
-  param_.P[2] = 1.0;   // [9] Ppsi
-  param_.P[3] = 1.0;   // [10] Pv
-  param_.P[4] = 1.0;   // [11] Pdelta
+  param_.P[0] = 0.1; // [7] Px
+  param_.P[1] = 0.1; // [8] Py
+  param_.P[2] = 0.1; // [9] Ppsi
+  param_.P[3] = 0.1; // [10] Pv
+  param_.P[4] = 0.1; // [11] Pdelta
 
   /* Control cost weights (R) */
   param_.R[0] = 0.1; // [12] R Longitudinal acceleration (weight on u[0])
-  param_.R[1] = 0.1; // [13] R Steering rate (weight on u[1])
+  param_.R[1] = 0.01; // [13] R Steering rate (weight on u[1])
 
   /* attach trajectory data */
   param_.t = t_ref_.data();
@@ -259,7 +258,6 @@ void MPCCGrampcNode::controlLoop()
   initializePathPosition();
   // Find current waypoint using arc length and get next waypoint
   size_t nextIdx = path_->findNextWaypointIdx(current_time_, Thor_);
-  RCLCPP_INFO(this->get_logger(), "next_idx=%zu", nextIdx);
 
   // Get target waypoint and reference states
   Eigen::Vector2d target_point = path_->getWaypoint(nextIdx);
@@ -285,8 +283,8 @@ void MPCCGrampcNode::controlLoop()
   // print target state for debugging
   RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, steering=%.2f", target_state[0],
               target_state[1], target_state[2], target_state[3], target_state[4]);
-  RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, v=%.4f, steering=%.2f", current_state[0],
-              current_state[1], current_state[2], current_state[3], current_state[4]);
+  // RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, v=%.4f, steering=%.2f", current_state[0],
+  //             current_state[1], current_state[2], current_state[3], current_state[4]);
 
   grampc_run(grampc_);
 
@@ -302,10 +300,12 @@ void MPCCGrampcNode::controlLoop()
   else
   {
     /* update state and time */
-    double steering_dot = grampc_->sol->unext[1];
-    throttle_cmd = grampc_->sol->unext[0]; // scale down acceleration command
-    steer_cmd = steering_ + steering_dot * dt_; // assuming control loop at 20Hz
-    steering_ = steer_cmd;
+    throttle_cmd = grampc_->sol->unext[0] / 10; // scale down acceleration command
+    double steering_rate_cmd = grampc_->sol->unext[1];
+    steer_cmd = prev_steer_ + steering_rate_cmd * dt_;
+
+    RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
+                steer_cmd);
 
     // Update previous commands for fallback case of next iteration
     prev_steer_ = steer_cmd;

@@ -47,48 +47,25 @@ static void get_reference_at_time(const double *t_array,
 
     // find index i such that t_array[i] <= t_wrapped < t_array[i+1]
     int i = 0;
-    // fast path: if monotonic and uniformly sampled you could compute idx directly,
-    // but we keep safe linear scan here
     while (i < N - 1 && t_array[i + 1] <= t_wrapped)
         ++i;
 
     if (i >= N - 1)
-        i = N - 2; // clamp to penultimate
+        i = N - 2;
 
     double t0 = t_array[i];
     double t1 = t_array[i + 1];
 
-    // If due to numerical reasons t1==t0, avoid division by zero
-    double alpha = 0.0;
-    if (t1 > t0)
-        alpha = (t_wrapped - t0) / (t1 - t0);
-    if (alpha < 0.0)
-        alpha = 0.0;
-    if (alpha > 1.0)
-        alpha = 1.0;
+    double alpha = (t_wrapped - t0) / (t1 - t0);
 
     // linear interpolation for x,y,delta,v
     *x_out = x_ref[i] + alpha * (x_ref[i + 1] - x_ref[i]);
     *y_out = y_ref[i] + alpha * (y_ref[i + 1] - y_ref[i]);
     *delta_out = delta_ref[i] + alpha * (delta_ref[i + 1] - delta_ref[i]);
     *v_out = v_ref[i] + alpha * (v_ref[i + 1] - v_ref[i]);
+    *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
 
-    // special handling for psi (heading) to interpolate across the -pi/pi boundary
-    double psi0 = psi_ref[i];
-    double psi1 = psi_ref[i + 1];
-    double dpsi = psi1 - psi0;
-    // wrap dpsi to [-pi, pi)
-    if (dpsi > M_PI)
-        dpsi -= 2.0 * M_PI;
-    else if (dpsi < -M_PI)
-        dpsi += 2.0 * M_PI;
-    double psi_interp = psi0 + alpha * dpsi;
-    *psi_out = wrapAngle(psi_interp);
-
-    printf("Ref at t=%.2f: x=%.2f, y=%.2f, psi=%.2f, delta=%.2f, v=%.2f\n",
-           t, *x_out, *y_out, *psi_out, *delta_out, *v_out);
-
-    fflush(stdout);
+    // fflush(stdout);
 }
 
 /** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),
