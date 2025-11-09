@@ -56,7 +56,7 @@ void MPCCGrampcNode::publishPath()
   path_msg.header.frame_id = "map";
 
   path_msg.poses.reserve(path_->getTotalLength());
-  for (size_t i = 0; i < path_->getTotalLength(); ++i)
+  for (double i = 0; i < path_->getTotalLength(); ++i)
   {
     Eigen::Vector2d wp = path_->getWaypoint(i);
     double heading = path_->getHeading(i);
@@ -101,7 +101,7 @@ void MPCCGrampcNode::publishTarget(const Eigen::Vector2d &point, double heading)
 void MPCCGrampcNode::initGrampcParams()
 {
   // allocate vectors from Path
-  size_t N = path_->getTotalLength();
+  double N = path_->getTotalLength();
   t_ref_.reserve(N);
   x_ref_.reserve(N);
   y_ref_.reserve(N);
@@ -109,7 +109,7 @@ void MPCCGrampcNode::initGrampcParams()
   delta_ref_.reserve(N);
   v_ref_.reserve(N);
 
-  for (size_t i = 0; i < N; ++i)
+  for (double i = 0; i < N; ++i)
   {
     t_ref_.push_back(path_->getTimeFromIndex(i));
     Eigen::Vector2d xy = path_->getWaypoint(i);
@@ -142,39 +142,39 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
   /********* userparam *********/
-  param_.L = L_;        // [0] Wheelbase length
+  static double pvals[21] = {
+    L_,
+    100.0, 100.0, 100.0, 100.0, 100.0,
+    0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.01,
+    0.0, 0.0, 0.0, 0.0, 0.0,
+    N, current_time_
+  };
 
-  /* Running-state cost weights (Q) */
-  param_.Q[0] = 100.0; // [2] Qx
-  param_.Q[1] = 100.0; // [3] Qy
-  param_.Q[2] = 100.0; // [4] Qpsi
-  param_.Q[3] = 100.0; // [5] Qv
-  param_.Q[4] = 100.0; // [6] Qdelta
+  void *pSys[21] = {nullptr};
 
-  /* Terminal-state cost weights (P) */
-  param_.P[0] = 0.1; // [7] Px
-  param_.P[1] = 0.1; // [8] Py
-  param_.P[2] = 0.1; // [9] Ppsi
-  param_.P[3] = 0.1; // [10] Pv
-  param_.P[4] = 0.1; // [11] Pdelta
+  // Point scalar slots to pvals entries (indices 0..12 and 19..20)
+  for (size_t i = 0; i <= 12; ++i)
+  {
+    pSys[i] = &pvals[i];
+  }
+  pSys[19] = &pvals[19];
+  pSys[20] = &pvals[20];
 
-  /* Control cost weights (R) */
-  param_.R[0] = 0.1; // [12] R Longitudinal acceleration (weight on u[0])
-  param_.R[1] = 0.01; // [13] R Steering rate (weight on u[1])
+  // Fill pointer slots with the reference array data pointers (indices 13..18)
+  pSys[13] = t_ref_.data();
+  pSys[14] = x_ref_.data();
+  pSys[15] = y_ref_.data();
+  pSys[16] = psi_ref_.data();
+  pSys[17] = delta_ref_.data();
+  pSys[18] = v_ref_.data();
 
-  /* attach trajectory data */
-  param_.t = t_ref_.data();
-  param_.x = x_ref_.data();
-  param_.y = y_ref_.data();
-  param_.psi = psi_ref_.data();
-  param_.delta = delta_ref_.data();
-  param_.v = v_ref_.data();
-  param_.N = N;
-  param_.current_time = current_time_;
+  // Cast the void* array to the expected USERPARAM pointer type for GRAMPC
+  typeUSERPARAM *userparam = reinterpret_cast<typeUSERPARAM *>(pSys);
 
   /********* grampc init *********/
   grampc_ = nullptr;
-  grampc_init(&grampc_, &param_);
+  grampc_init(&grampc_, userparam);
 
   if (!grampc_)
   {
@@ -207,7 +207,7 @@ void MPCCGrampcNode::initializePathPosition()
   Eigen::Vector2d vehicle_pos(x_, y_);
   current_path_idx_ = 0;
   double min_dist = (vehicle_pos - path_->getWaypoint(0)).norm();
-  for (size_t i = 1; i < path_->getTotalLength(); ++i)
+  for (double i = 1; i < path_->getTotalLength(); ++i)
   {
     double dist = (vehicle_pos - path_->getWaypoint(i)).norm();
     if (dist < min_dist)
@@ -218,7 +218,6 @@ void MPCCGrampcNode::initializePathPosition()
   }
   current_time_ = path_->getTimeFromIndex(current_path_idx_);
   grampc_setparam_real(grampc_, "t0", current_time_);
-  grampc_->userparam->current_time = current_time_;
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
@@ -257,7 +256,7 @@ void MPCCGrampcNode::controlLoop()
 {
   initializePathPosition();
   // Find current waypoint using arc length and get next waypoint
-  size_t nextIdx = path_->findNextWaypointIdx(current_time_, Thor_);
+  double nextIdx = path_->findNextWaypointIdx(current_time_, Thor_);
 
   // Get target waypoint and reference states
   Eigen::Vector2d target_point = path_->getWaypoint(nextIdx);

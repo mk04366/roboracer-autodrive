@@ -20,15 +20,31 @@ find_package(message_filters REQUIRED)
 find_package(autodrive_msgs REQUIRED)
 
 # === Link GRAMPC ===
-set(GRAMPC_DIR "/home/ammar/ros2_ws/GRAMPC_v2.2")
+set(GRAMPC_DIR "/home/ammar/ros2_ws/GRAMPC_v2.3")
 
 set(GRAMPC_INCLUDE_DIR "${GRAMPC_DIR}/include")
-include_directories(${GRAMPC_INCLUDE_DIR})
 set(GRAMPC_LIB "${GRAMPC_DIR}/libs/libgrampc.a")
 
+# If the v2.3 distribution hasn't been built/installed to ${GRAMPC_DIR}/libs,
+# fall back to the workspace-built grampc static library, but keep the v2.3
+# include directory to ensure we compile against v2.3 headers (user request).
+if(NOT EXISTS "${GRAMPC_LIB}")
+  # Absolute workspace build path (explicit) to avoid path issues when building
+  # this package in isolation. Adjust if your workspace root differs.
+  set(WORKSPACE_GRAMPC_LIB "/home/ammar/ros2_ws/build/grampc/libgrampc.a")
+
+  if(EXISTS "${WORKSPACE_GRAMPC_LIB}")
+    message(STATUS "Using workspace-built libgrampc.a at ${WORKSPACE_GRAMPC_LIB} (headers from ${GRAMPC_INCLUDE_DIR})")
+    set(GRAMPC_LIB "${WORKSPACE_GRAMPC_LIB}")
+  else()
+    message(FATAL_ERROR "libgrampc.a not found in ${GRAMPC_DIR}/libs and no workspace build present. Build GRAMPC v2.3 first.")
+  endif()
+endif()
+
+# Prefer target-specific includes so we don't accidentally pick up other
+# GRAMPC installations (e.g., v2.2) via global include paths.
 include_directories(
   include
-  ${GRAMPC_INCLUDE_DIR}
   ${EIGEN3_INCLUDE_DIRS}
 )
 
@@ -37,11 +53,14 @@ add_library(mpcc_model STATIC
   grampc/mpcc_model.c
 )
 
+target_include_directories(mpcc_model PRIVATE ${GRAMPC_INCLUDE_DIR})
+
 add_library(path_utils STATIC
   src/path_utils.cpp
 )
 
 target_include_directories(path_utils PUBLIC include)
+target_include_directories(path_utils PRIVATE ${GRAMPC_INCLUDE_DIR})
 
 # === Executables ===
 # Original MPCC node (keep for compatibility)
@@ -54,6 +73,8 @@ target_link_libraries(mpcc_grampc_node
   mpcc_model
   path_utils
 )
+
+target_include_directories(mpcc_grampc_node PRIVATE ${GRAMPC_INCLUDE_DIR})
 
 ament_target_dependencies(mpcc_grampc_node
   rclcpp

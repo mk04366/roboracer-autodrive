@@ -1,5 +1,6 @@
 #include "control_grampc/mpcc_model.h"
 #include <stdio.h>
+#include <stdint.h>
 #if USE_typeRNum == USE_FLOAT
 #define SIN(a) sinf(a)
 #define COS(a) cosf(a)
@@ -83,9 +84,11 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
 
 /** System Dynamics function f(t,x,u,p,userparam)
     ------------------------------------ **/
-void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-    const double L = userparam->L; // wheelbase
+
+    ctypeRNum *pSys = (ctypeRNum *)userparam;
+    const double L = pSys[0]; // wheelbase
 
     double psi = x[2];
     double v = x[3];
@@ -101,9 +104,11 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 }
 
 /** Jacobian df/dx multiplied by vector vec, i.e. (df/dx)^T*vec or vec^T*(df/dx) **/
-void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-    const double L = userparam->L;
+
+    ctypeRNum *pSys = (ctypeRNum *)userparam;
+    const double L = pSys[0]; // wheelbase
 
     // Compute out = (df/dx)^T * vec
     out[0] = 0.0; // ∂f/∂x
@@ -116,7 +121,7 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNu
     out[4] = (x[3] / L) * (1.0 / (COS(x[4]) * COS(x[4]))) * vec[4]; // wrt δ
 }
 /** Jacobian df/du multiplied by vector vec, i.e. (df/du)^T*vec or vec^T*(df/du) **/
-void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
     out[0] = vec[3]; // derivative wrt u₀ (curvature rate) -> affects κ̇ = f₃
@@ -124,235 +129,243 @@ void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNu
 }
 
 /** Jacobian df/dp multiplied by vector vec, i.e. (df/dp)^T*vec or vec^T*(df/dp) **/
-void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *vec, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 
 /** Integral cost l(t,x(t),u(t),p,xdes,udes,userparam)
     -------------------------------------------------- **/
-void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
+void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
 
-    get_reference_at_time(userparam->t,
-                          userparam->x,
-                          userparam->y,
-                          userparam->psi,
-                          userparam->delta,
-                          userparam->v,
-                          userparam->N,
-                          userparam->current_time + t, // I am doing this here since the value t here is horizon time
+    ctypeRNum *pSys = (ctypeRNum *)userparam;
+    ctypeRNum *xdes = param->xdes;
+    ctypeRNum *udes = param->udes;
+
+    get_reference_at_time((const double *)(uintptr_t)pSys[13],
+                          (const double *)(uintptr_t)pSys[14],
+                          (const double *)(uintptr_t)pSys[15],
+                          (const double *)(uintptr_t)pSys[16],
+                          (const double *)(uintptr_t)pSys[17],
+                          (const double *)(uintptr_t)pSys[18],
+                          (int)pSys[19],
+                          t,
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
     out[0] =
-        userparam->R[0] * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
-        userparam->R[1] * POW2(u[1] - udes[1]) +    // control effort weight for u₁ = v̇
-        userparam->Q[0] * POW2(x[0] - x_ref_t) +    // position x error weight
-        userparam->Q[1] * POW2(x[1] - y_ref_t) +    // position y error weight
-        userparam->Q[2] * POW2(x[2] - psi_ref_t) +  // heading error weight
-        userparam->Q[3] * POW2(x[3] - v_ref_t) +    // curvature error weight
-        userparam->Q[4] * POW2(x[4] - delta_ref_t); // velocity error weight
+        pSys[11] * POW2(u[0] - udes[0]) +   // control effort weight for u₀ = κ̇
+        pSys[12] * POW2(u[1] - udes[1]) +   // control effort weight for u₁ = v̇
+        pSys[1] * POW2(x[0] - x_ref_t) +    // position x error weight
+        pSys[2] * POW2(x[1] - y_ref_t) +    // position y error weight
+        pSys[3] * POW2(x[2] - psi_ref_t) +  // heading error weight
+        pSys[4] * POW2(x[3] - v_ref_t) +    // curvature error weight
+        pSys[5] * POW2(x[4] - delta_ref_t); // velocity error weight
 }
 
 /** Gradient dl/dx **/
-void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
+void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
 
-    get_reference_at_time(userparam->t,
-                          userparam->x,
-                          userparam->y,
-                          userparam->psi,
-                          userparam->delta,
-                          userparam->v,
-                          userparam->N,
-                          userparam->current_time + t, // I am doing this here since the value t here is horizon time rather system time
+    ctypeRNum *pSys = (ctypeRNum *)userparam;
+
+    get_reference_at_time((const double *)(uintptr_t)pSys[13],
+                          (const double *)(uintptr_t)pSys[14],
+                          (const double *)(uintptr_t)pSys[15],
+                          (const double *)(uintptr_t)pSys[16],
+                          (const double *)(uintptr_t)pSys[17],
+                          (const double *)(uintptr_t)pSys[18],
+                          (int)pSys[19],
+                          t,
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
     // gradient of the stage cost w.r.t. state x:
     // dl/dx = 2Q(x - x_{des})
-    out[0] = 2 * userparam->Q[0] * (x[0] - x_ref_t);
-    out[1] = 2 * userparam->Q[1] * (x[1] - y_ref_t);
-    out[2] = 2 * userparam->Q[2] * (x[2] - psi_ref_t);
-    out[3] = 2 * userparam->Q[3] * (x[3] - v_ref_t);
-    out[4] = 2 * userparam->Q[4] * (x[4] - delta_ref_t);
+    out[0] = 2 * pSys[1] * (x[0] - x_ref_t);
+    out[1] = 2 * pSys[2] * (x[1] - y_ref_t);
+    out[2] = 2 * pSys[3] * (x[2] - psi_ref_t);
+    out[3] = 2 * pSys[4] * (x[3] - v_ref_t);
+    out[4] = 2 * pSys[5] * (x[4] - delta_ref_t);
 }
 
 /** Gradient dl/du **/
-void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
+void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
+    ctypeRNum *pSys = (ctypeRNum *)userparam;
+    ctypeRNum *udes = param->udes;
     // gradient of the stage cost w.r.t. state u:
     // dl/dx = 2R(u - u_{des})
-    out[0] = 2 * userparam->R[0] * (u[0] - udes[0]);
-    out[1] = 2 * userparam->R[1] * (u[1] - udes[1]);
+    out[0] = 2 * pSys[11] * (u[0] - udes[0]);
+    out[1] = 2 * pSys[12] * (u[1] - udes[1]);
 }
 
 /** Gradient dl/dp **/
-void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *xdes, ctypeRNum *udes, typeUSERPARAM *userparam)
+void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 
 /** Terminal cost V(T,x(T),p,xdes,userparam)
     ---------------------------------------- **/
-void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
+void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
-
-    get_reference_at_time(userparam->t,
-                          userparam->x,
-                          userparam->y,
-                          userparam->psi,
-                          userparam->delta,
-                          userparam->v,
-                          userparam->N,
-                          userparam->current_time + T, // I am doing this here since the value t here is horizon time rather system time
+    ctypeRNum *pSys = (ctypeRNum *)userparam;
+    get_reference_at_time((const double *)(uintptr_t)pSys[13],
+                          (const double *)(uintptr_t)pSys[14],
+                          (const double *)(uintptr_t)pSys[15],
+                          (const double *)(uintptr_t)pSys[16],
+                          (const double *)(uintptr_t)pSys[17],
+                          (const double *)(uintptr_t)pSys[18],
+                          (int)pSys[19],
+                          T,
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
-    out[0] = userparam->P[0] * POW2(x[0] - x_ref_t) +
-             userparam->P[1] * POW2(x[1] - y_ref_t) +
-             userparam->P[2] * POW2(x[2] - psi_ref_t) +
-             userparam->P[3] * POW2(x[3] - v_ref_t) +
-             userparam->P[4] * POW2(x[4] - delta_ref_t);
+    out[0] = pSys[6] * POW2(x[0] - x_ref_t) +
+             pSys[7] * POW2(x[1] - y_ref_t) +
+             pSys[8] * POW2(x[2] - psi_ref_t) +
+             pSys[9] * POW2(x[3] - v_ref_t) +
+             pSys[10] * POW2(x[4] - delta_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
-void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
+void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
 
-    get_reference_at_time(userparam->t,
-                          userparam->x,
-                          userparam->y,
-                          userparam->psi,
-                          userparam->delta,
-                          userparam->v,
-                          userparam->N,
-                          userparam->current_time + T, // I am doing this here since the value t here is horizon time rather system time
+    ctypeRNum *pSys = (ctypeRNum *)userparam;
+    get_reference_at_time((const double *)(uintptr_t)pSys[13],
+                          (const double *)(uintptr_t)pSys[14],
+                          (const double *)(uintptr_t)pSys[15],
+                          (const double *)(uintptr_t)pSys[16],
+                          (const double *)(uintptr_t)pSys[17],
+                          (const double *)(uintptr_t)pSys[18],
+                          (int)pSys[19],
+                          T,
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
-    out[0] = 2 * userparam->P[0] * (x[0] - x_ref_t);
-    out[1] = 2 * userparam->P[1] * (x[1] - y_ref_t);
-    out[2] = 2 * userparam->P[2] * (x[2] - psi_ref_t);
-    out[3] = 2 * userparam->P[3] * (x[3] - v_ref_t);
-    out[4] = 2 * userparam->P[4] * (x[4] - delta_ref_t);
+    out[0] = 2 * pSys[6] * (x[0] - x_ref_t);
+    out[1] = 2 * pSys[7] * (x[1] - y_ref_t);
+    out[2] = 2 * pSys[8] * (x[2] - psi_ref_t);
+    out[3] = 2 * pSys[9] * (x[3] - v_ref_t);
+    out[4] = 2 * pSys[10] * (x[4] - delta_ref_t);
 }
 
 /** Gradient dV/dp **/
-void dVdp(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
+void dVdp(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 
 /** Gradient dV/dT **/
-void dVdT(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *xdes, typeUSERPARAM *userparam)
+void dVdT(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     out[0] = 0;
 }
 
-/** Equality constraints g(t,x(t),u(t),p,uperparam) = 0
+/** Equality constraints g(t,x(t),u(t),p,param,userparam) = 0
     --------------------------------------------------- **/
-void gfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void gfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dg/dx multiplied by vector vec, i.e. (dg/dx)^T*vec or vec^T*(dg/dx) **/
-void dgdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dgdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dg/du multiplied by vector vec, i.e. (dg/du)^T*vec or vec^T*(dg/du) **/
-void dgdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dgdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dg/dp multiplied by vector vec, i.e. (dg/dp)^T*vec or vec^T*(dg/dp) **/
-void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 
-/** Inequality constraints h(t,x(t),u(t),p,uperparam) <= 0
+/** Inequality constraints h(t,x(t),u(t),p,param,userparam) <= 0
     ------------------------------------------------------ **/
-void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
-void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
-
 /** Jacobian dh/du multiplied by vector vec, i.e. (dh/du)^T*vec or vec^T*(dg/du) **/
-void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dh/dp multiplied by vector vec, i.e. (dh/dp)^T*vec or vec^T*(dg/dp) **/
-void dhdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dhdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 
-/** Terminal equality constraints gT(T,x(T),p,uperparam) = 0
+/** Terminal equality constraints gT(T,x(T),p,param,userparam) = 0
     -------------------------------------------------------- **/
-void gTfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, typeUSERPARAM *userparam)
+void gTfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dgT/dx multiplied by vector vec, i.e. (dgT/dx)^T*vec or vec^T*(dgT/dx) **/
-void dgTdx_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dgTdx_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dgT/dp multiplied by vector vec, i.e. (dgT/dp)^T*vec or vec^T*(dgT/dp) **/
-void dgTdp_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dgTdp_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dgT/dT multiplied by vector vec, i.e. (dgT/dT)^T*vec or vec^T*(dgT/dT) **/
-void dgTdT_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dgTdT_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 
-/** Terminal inequality constraints hT(T,x(T),p,uperparam) <= 0
+/** Terminal inequality constraints hT(T,x(T),p,param,userparam) <= 0
     ----------------------------------------------------------- **/
-void hTfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, typeUSERPARAM *userparam)
+void hTfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dhT/dx multiplied by vector vec, i.e. (dhT/dx)^T*vec or vec^T*(dhT/dx) **/
-void dhTdx_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dhTdx_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dhT/dp multiplied by vector vec, i.e. (dhT/dp)^T*vec or vec^T*(dhT/dp) **/
-void dhTdp_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dhTdp_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian dhT/dT multiplied by vector vec, i.e. (dhT/dT)^T*vec or vec^T*(dhT/dT) **/
-void dhTdT_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, typeUSERPARAM *userparam)
+void dhTdT_vec(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 
 /** Additional functions required for semi-implicit systems
-    M*dx/dt(t) = f(t0+t,x(t),u(t),p) using the solver RODAS
+    M*dx/dt(t) = f(t,x(t),u(t),p,param,userparam) using the solver RODAS
     ------------------------------------------------------- **/
 /** Jacobian df/dx in vector form (column-wise) **/
-void dfdx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void dfdx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian df/dx in vector form (column-wise) **/
-void dfdxtrans(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void dfdxtrans(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian df/dt **/
-void dfdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, typeUSERPARAM *userparam)
+void dfdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Jacobian d(dH/dx)/dt  **/
-void dHdxdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *vec, ctypeRNum *p, typeUSERPARAM *userparam)
+void dHdxdt(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Mass matrix in vector form (column-wise, either banded or full matrix) **/
-void Mfct(typeRNum *out, typeUSERPARAM *userparam)
+void Mfct(typeRNum *out, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
 /** Transposed mass matrix in vector form (column-wise, either banded or full matrix) **/
-void Mtrans(typeRNum *out, typeUSERPARAM *userparam)
+void Mtrans(typeRNum *out, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 }
