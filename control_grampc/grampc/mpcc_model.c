@@ -66,6 +66,10 @@ static void get_reference_at_time(const double *t_array,
     *v_out = v_ref[i] + alpha * (v_ref[i + 1] - v_ref[i]);
     *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
 
+    fprintf(stderr, "t: %.4f, t_wrapped: %.4f, i: %d, t0: %.4f, t1: %.4f, alpha: %.4f\n", t, t_wrapped, i, t0, t1, alpha);
+    fprintf(stderr, "x_ref: %.4f, y_ref: %.4f, psi_ref: %.4f, delta_ref: %.4f, v_ref: %.4f\n",
+            *x_out, *y_out, *psi_out, *delta_out, *v_out);
+
     // fflush(stdout);
 }
 
@@ -87,8 +91,8 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
 void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
-    ctypeRNum *pSys = (ctypeRNum *)userparam;
-    const double L = pSys[0]; // wheelbase
+    void **pSys = (void **)userparam;
+    const double L = *((double *)pSys[0]); // wheelbase
 
     double psi = x[2];
     double v = x[3];
@@ -107,8 +111,8 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
-    ctypeRNum *pSys = (ctypeRNum *)userparam;
-    const double L = pSys[0]; // wheelbase
+    void **pSys = (void **)userparam;
+    const double L = *((double *)pSys[0]); // wheelbase
 
     // Compute out = (df/dx)^T * vec
     out[0] = 0.0; // ∂f/∂x
@@ -139,30 +143,29 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
 
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
-
-    ctypeRNum *pSys = (ctypeRNum *)userparam;
+    void **pSys = (void **)userparam;
     ctypeRNum *xdes = param->xdes;
     ctypeRNum *udes = param->udes;
 
-    get_reference_at_time((const double *)(uintptr_t)pSys[13],
-                          (const double *)(uintptr_t)pSys[14],
-                          (const double *)(uintptr_t)pSys[15],
-                          (const double *)(uintptr_t)pSys[16],
-                          (const double *)(uintptr_t)pSys[17],
-                          (const double *)(uintptr_t)pSys[18],
-                          (int)pSys[19],
-                          t,
+    get_reference_at_time((const double *)pSys[13],
+                          (const double *)pSys[14],
+                          (const double *)pSys[15],
+                          (const double *)pSys[16],
+                          (const double *)pSys[17],
+                          (const double *)pSys[18],
+                          (int)(*((double *)pSys[19])),
+                          t + *((double *)pSys[20]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
     out[0] =
-        pSys[11] * POW2(u[0] - udes[0]) +   // control effort weight for u₀ = κ̇
-        pSys[12] * POW2(u[1] - udes[1]) +   // control effort weight for u₁ = v̇
-        pSys[1] * POW2(x[0] - x_ref_t) +    // position x error weight
-        pSys[2] * POW2(x[1] - y_ref_t) +    // position y error weight
-        pSys[3] * POW2(x[2] - psi_ref_t) +  // heading error weight
-        pSys[4] * POW2(x[3] - v_ref_t) +    // curvature error weight
-        pSys[5] * POW2(x[4] - delta_ref_t); // velocity error weight
+        (*((double *)pSys[11])) * POW2(u[0] - udes[0]) +   // control effort weight for u₀ = κ̇
+        (*((double *)pSys[12])) * POW2(u[1] - udes[1]) +   // control effort weight for u₁ = v̇
+        (*((double *)pSys[1])) * POW2(x[0] - x_ref_t) +    // position x error weight
+        (*((double *)pSys[2])) * POW2(x[1] - y_ref_t) +    // position y error weight
+        (*((double *)pSys[3])) * POW2(x[2] - psi_ref_t) +  // heading error weight
+        (*((double *)pSys[4])) * POW2(x[3] - v_ref_t) +    // curvature error weight
+        (*((double *)pSys[5])) * POW2(x[4] - delta_ref_t); // velocity error weight
 }
 
 /** Gradient dl/dx **/
@@ -170,39 +173,37 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
 
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
+    void **pSys = (void **)userparam;
 
-    ctypeRNum *pSys = (ctypeRNum *)userparam;
-
-    get_reference_at_time((const double *)(uintptr_t)pSys[13],
-                          (const double *)(uintptr_t)pSys[14],
-                          (const double *)(uintptr_t)pSys[15],
-                          (const double *)(uintptr_t)pSys[16],
-                          (const double *)(uintptr_t)pSys[17],
-                          (const double *)(uintptr_t)pSys[18],
-                          (int)pSys[19],
-                          t,
+    get_reference_at_time((const double *)pSys[13],
+                          (const double *)pSys[14],
+                          (const double *)pSys[15],
+                          (const double *)pSys[16],
+                          (const double *)pSys[17],
+                          (const double *)pSys[18],
+                          (int)(*((double *)pSys[19])),
+                          t + *((double *)pSys[20]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
     // gradient of the stage cost w.r.t. state x:
     // dl/dx = 2Q(x - x_{des})
-    out[0] = 2 * pSys[1] * (x[0] - x_ref_t);
-    out[1] = 2 * pSys[2] * (x[1] - y_ref_t);
-    out[2] = 2 * pSys[3] * (x[2] - psi_ref_t);
-    out[3] = 2 * pSys[4] * (x[3] - v_ref_t);
-    out[4] = 2 * pSys[5] * (x[4] - delta_ref_t);
+    out[0] = 2 * (*((double *)pSys[1])) * (x[0] - x_ref_t);
+    out[1] = 2 * (*((double *)pSys[2])) * (x[1] - y_ref_t);
+    out[2] = 2 * (*((double *)pSys[3])) * (x[2] - psi_ref_t);
+    out[3] = 2 * (*((double *)pSys[4])) * (x[3] - v_ref_t);
+    out[4] = 2 * (*((double *)pSys[5])) * (x[4] - delta_ref_t);
 }
 
 /** Gradient dl/du **/
 void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-
-    ctypeRNum *pSys = (ctypeRNum *)userparam;
+    void **pSys = (void **)userparam;
     ctypeRNum *udes = param->udes;
     // gradient of the stage cost w.r.t. state u:
     // dl/dx = 2R(u - u_{des})
-    out[0] = 2 * pSys[11] * (u[0] - udes[0]);
-    out[1] = 2 * pSys[12] * (u[1] - udes[1]);
+    out[0] = 2 * (*((double *)pSys[11])) * (u[0] - udes[0]);
+    out[1] = 2 * (*((double *)pSys[12])) * (u[1] - udes[1]);
 }
 
 /** Gradient dl/dp **/
@@ -215,48 +216,49 @@ void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
-    ctypeRNum *pSys = (ctypeRNum *)userparam;
-    get_reference_at_time((const double *)(uintptr_t)pSys[13],
-                          (const double *)(uintptr_t)pSys[14],
-                          (const double *)(uintptr_t)pSys[15],
-                          (const double *)(uintptr_t)pSys[16],
-                          (const double *)(uintptr_t)pSys[17],
-                          (const double *)(uintptr_t)pSys[18],
-                          (int)pSys[19],
-                          T,
+    void **pSys = (void **)userparam;
+
+    get_reference_at_time((const double *)pSys[13],
+                          (const double *)pSys[14],
+                          (const double *)pSys[15],
+                          (const double *)pSys[16],
+                          (const double *)pSys[17],
+                          (const double *)pSys[18],
+                          (int)(*((double *)pSys[19])),
+                          T + *((double *)pSys[20]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
-    out[0] = pSys[6] * POW2(x[0] - x_ref_t) +
-             pSys[7] * POW2(x[1] - y_ref_t) +
-             pSys[8] * POW2(x[2] - psi_ref_t) +
-             pSys[9] * POW2(x[3] - v_ref_t) +
-             pSys[10] * POW2(x[4] - delta_ref_t);
+    out[0] = (*((double *)pSys[6])) * POW2(x[0] - x_ref_t) +
+             (*((double *)pSys[7])) * POW2(x[1] - y_ref_t) +
+             (*((double *)pSys[8])) * POW2(x[2] - psi_ref_t) +
+             (*((double *)pSys[9])) * POW2(x[3] - v_ref_t) +
+             (*((double *)pSys[10])) * POW2(x[4] - delta_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
+    void **pSys = (void **)userparam;
 
-    ctypeRNum *pSys = (ctypeRNum *)userparam;
-    get_reference_at_time((const double *)(uintptr_t)pSys[13],
-                          (const double *)(uintptr_t)pSys[14],
-                          (const double *)(uintptr_t)pSys[15],
-                          (const double *)(uintptr_t)pSys[16],
-                          (const double *)(uintptr_t)pSys[17],
-                          (const double *)(uintptr_t)pSys[18],
-                          (int)pSys[19],
-                          T,
+    get_reference_at_time((const double *)pSys[13],
+                          (const double *)pSys[14],
+                          (const double *)pSys[15],
+                          (const double *)pSys[16],
+                          (const double *)pSys[17],
+                          (const double *)pSys[18],
+                          (int)(*((double *)pSys[19])),
+                          T + *((double *)pSys[20]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
-    out[0] = 2 * pSys[6] * (x[0] - x_ref_t);
-    out[1] = 2 * pSys[7] * (x[1] - y_ref_t);
-    out[2] = 2 * pSys[8] * (x[2] - psi_ref_t);
-    out[3] = 2 * pSys[9] * (x[3] - v_ref_t);
-    out[4] = 2 * pSys[10] * (x[4] - delta_ref_t);
+    out[0] = 2 * (*((double *)pSys[6])) * (x[0] - x_ref_t);
+    out[1] = 2 * (*((double *)pSys[7])) * (x[1] - y_ref_t);
+    out[2] = 2 * (*((double *)pSys[8])) * (x[2] - psi_ref_t);
+    out[3] = 2 * (*((double *)pSys[9])) * (x[3] - v_ref_t);
+    out[4] = 2 * (*((double *)pSys[10])) * (x[4] - delta_ref_t);
 }
 
 /** Gradient dV/dp **/

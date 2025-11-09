@@ -7,6 +7,8 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
+#include <cstdint>
+
 using std::placeholders::_1;
 
 MPCCGrampcNode::MPCCGrampcNode()
@@ -125,14 +127,47 @@ void MPCCGrampcNode::initGrampcParams()
   /* Initial values and setpoints of the states, inputs, parameters, penalties and Lagrangian mmultipliers, setpoints
    * for the states and inputs */
   ctypeRNum x0[NX] = {0.0, 0.0, 0.0, 0.0, 0.0};
-  ctypeRNum xdes[NX] = {0.0, 0.0, 0.0, 1.0, 0.0}; // [x, y, psi, v, delta]
-
+  ctypeRNum xdes[NX] = {0.0, 0.0, 0.0, 0.0, 0.0};
   /* Initial values, setpoints and limits of the inputs */
   ctypeRNum u0[NU] = {0.0, 0.0};
   ctypeRNum udes[NU] = {0.0, 0.0};
-  ctypeRNum umax[NU] = {0.5, M_PI / 6};
-  ctypeRNum umin[NU] = {0.01, -M_PI / 6};
-  Thor_ = 1.0;        /* Prediction horizon */
+  ctypeRNum umin[NU] = {-1.0, -0.5};
+  ctypeRNum umax[NU] = {1.0, 0.5};
+  Thor_ = 1.0;      /* Prediction horizon */
+  dt_ = 1.0 / 17.0; /* Sampling time */
+  /* Build a numeric userparam array that matches how the C model reads it.
+   * The model expects an array of typeRNum (double) where indices 0..12 are
+   * scalar parameters, indices 13..18 store pointer bit-patterns (cast into
+   * the numeric type), index 19 is N, and index 20 is the current time.
+   */
+  static double pvals[21];
+
+  // scalar parameters
+  pvals[0] = L_;
+  pvals[1] = 100.0;
+  pvals[2] = 100.0;
+  pvals[3] = 100.0;
+  pvals[4] = 100.0;
+  pvals[5] = 100.0;
+  pvals[6] = 0.1;
+  pvals[7] = 0.1;
+  pvals[8] = 0.1;
+  pvals[9] = 0.1;
+  pvals[10] = 0.1;
+  pvals[11] = 0.1;
+  pvals[12] = 0.01;
+
+  // store pointer bitpatterns (uintptr_t -> double)
+  pvals[13] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
+  pvals[14] = static_cast<double>(reinterpret_cast<uintptr_t>(x_ref_.data()));
+  pvals[15] = static_cast<double>(reinterpret_cast<uintptr_t>(y_ref_.data()));
+  pvals[16] = static_cast<double>(reinterpret_cast<uintptr_t>(psi_ref_.data()));
+  pvals[17] = static_cast<double>(reinterpret_cast<uintptr_t>(delta_ref_.data()));
+  pvals[18] = static_cast<double>(reinterpret_cast<uintptr_t>(v_ref_.data()));
+
+  // N and current_time_
+  pvals[19] = static_cast<double>(N);
+  pvals[20] = static_cast<double>(current_time_);
   dt_ = 1.0 / 17.0;   /* Sampling time */
   ctypeInt Nhor = 15; /* Number of steps for the system integration */
   typeRNum t0 = 0.0;  /* time at the current sampling step */
@@ -141,18 +176,8 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeInt MaxGradIter = 5;
   ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
-  /********* userparam *********/
-  static double pvals[21] = {
-    L_,
-    100.0, 100.0, 100.0, 100.0, 100.0,
-    0.1, 0.1, 0.1, 0.1, 0.1,
-    0.1, 0.01,
-    0.0, 0.0, 0.0, 0.0, 0.0,
-    N, current_time_
-  };
-
-  void *pSys[21] = {nullptr};
-
+  // Build pointer array pSys which GRAMPC model will interpret as userparam (array of pointers)
+  static void *pSys[21] = {nullptr};
   // Point scalar slots to pvals entries (indices 0..12 and 19..20)
   for (size_t i = 0; i <= 12; ++i)
   {
@@ -162,12 +187,12 @@ void MPCCGrampcNode::initGrampcParams()
   pSys[20] = &pvals[20];
 
   // Fill pointer slots with the reference array data pointers (indices 13..18)
-  pSys[13] = t_ref_.data();
-  pSys[14] = x_ref_.data();
-  pSys[15] = y_ref_.data();
-  pSys[16] = psi_ref_.data();
-  pSys[17] = delta_ref_.data();
-  pSys[18] = v_ref_.data();
+  pSys[13] = const_cast<double *>(t_ref_.data());
+  pSys[14] = const_cast<double *>(x_ref_.data());
+  pSys[15] = const_cast<double *>(y_ref_.data());
+  pSys[16] = const_cast<double *>(psi_ref_.data());
+  pSys[17] = const_cast<double *>(delta_ref_.data());
+  pSys[18] = const_cast<double *>(v_ref_.data());
 
   // Cast the void* array to the expected USERPARAM pointer type for GRAMPC
   typeUSERPARAM *userparam = reinterpret_cast<typeUSERPARAM *>(pSys);
@@ -218,6 +243,10 @@ void MPCCGrampcNode::initializePathPosition()
   }
   current_time_ = path_->getTimeFromIndex(current_path_idx_);
   grampc_setparam_real(grampc_, "t0", current_time_);
+  void **userparamUpdate = reinterpret_cast<void **>(grampc_->userparam);
+  userparamUpdate[20] = &current_time_;
+  grampc_->userparam = userparamUpdate;
+  
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
@@ -280,8 +309,8 @@ void MPCCGrampcNode::controlLoop()
   double throttle_cmd = 0.0;
 
   // print target state for debugging
-  RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, steering=%.2f", target_state[0],
-              target_state[1], target_state[2], target_state[3], target_state[4]);
+  // RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, steering=%.2f", target_state[0],
+  //             target_state[1], target_state[2], target_state[3], target_state[4]);
   // RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, v=%.4f, steering=%.2f", current_state[0],
   //             current_state[1], current_state[2], current_state[3], current_state[4]);
 
@@ -303,8 +332,8 @@ void MPCCGrampcNode::controlLoop()
     double steering_rate_cmd = grampc_->sol->unext[1];
     steer_cmd = prev_steer_ + steering_rate_cmd * dt_;
 
-    RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
-                steer_cmd);
+    // RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
+    //             steer_cmd);
 
     // Update previous commands for fallback case of next iteration
     prev_steer_ = steer_cmd;
