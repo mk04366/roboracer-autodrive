@@ -654,13 +654,13 @@ delta_time = interp_delta(t_uniform)
 # ------------------------------
 # Rotate psi_time by 90° around z-axis
 # ------------------------------
-psi_time += np.pi / 2  # rotate +90 degrees
-psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
+# psi_time += np.pi / 2  # rotate +90 degrees
+# psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
 
 # Combine into a trajectory array
-trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, delta_time, vx_time, ax_time))
+trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, kappa_time, vx_time, ax_time))
 
-header = "time_s,x_m,y_m,psi_rad,delta_rad,vx_mps,ax_mps2"
+header = "time_s,x_m,y_m,psi_rad,kappa_rad,vx_mps,ax_mps2"
 np.savetxt(output_file, trajectory_time_based, delimiter=",", header=header, comments='', fmt='%.6f')
 
 print(f"INFO: Time-based trajectory saved to {os.path.abspath(output_file)}")
