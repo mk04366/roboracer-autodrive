@@ -144,13 +144,13 @@ void MPCCGrampcNode::initGrampcParams()
   pvals[2] = 100.0;
   pvals[3] = 100.0;
   pvals[4] = 100.0;
-  pvals[5] = 100.0;
-  pvals[6] = 0.1;
-  pvals[7] = 0.1;
-  pvals[8] = 0.1;
-  pvals[9] = 0.1;
-  pvals[10] = 0.1;
-  pvals[11] = 0.1;
+  pvals[5] = 0.0;
+  pvals[6] = 100.0;
+  pvals[7] = 100.0;
+  pvals[8] = 100.0;
+  pvals[9] = 100.0;
+  pvals[10] = 0.0;
+  pvals[11] = 0.01;
   pvals[12] = 0.01;
 
   // store pointer bitpatterns (uintptr_t -> double)
@@ -242,6 +242,9 @@ void MPCCGrampcNode::initializePathPosition()
   auto **userparamUpdate = reinterpret_cast<void **>(grampc_->userparam);
   userparamUpdate[20] = &current_time_;
   grampc_->userparam = reinterpret_cast<typeUSERPARAM *>(userparamUpdate);
+
+  RCLCPP_INFO(this->get_logger(), "Initialized path position at index %.0f, time %.2f s", static_cast<double>(current_path_idx_),
+              current_time_);
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
@@ -303,10 +306,10 @@ void MPCCGrampcNode::controlLoop()
   double throttle_cmd = 0.0;
 
   // print target state for debugging
-  RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, steering=%.2f", target_state[0],
-              target_state[1], target_state[2], target_state[3], target_state[4]);
-  RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, v=%.4f, steering=%.2f", current_state[0],
-              current_state[1], current_state[2], current_state[3], current_state[4]);
+  // RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, steering=%.2f", target_state[0],
+  //             target_state[1], target_state[2], target_state[3], target_state[4]);
+  // RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, v=%.4f, steering=%.2f", current_state[0],
+  //             current_state[1], current_state[2], current_state[3], current_state[4]);
 
   grampc_run(grampc_);
 
@@ -322,12 +325,12 @@ void MPCCGrampcNode::controlLoop()
   else
   {
     /* update state and time */
-    throttle_cmd = grampc_->sol->unext[1] / 10; // scale down acceleration command
+    throttle_cmd = grampc_->sol->unext[1]; // scale down acceleration command
     double steering_rate_cmd = grampc_->sol->unext[0];
-    steer_cmd = prev_steer_ + steering_rate_cmd * dt_;
+    steer_cmd = grampc_->sol->xnext[3] + steering_rate_cmd * dt_;
 
-    RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
-                steer_cmd);
+    // RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
+    //             steer_cmd);
 
     // Update previous commands for fallback case of next iteration
     prev_steer_ = steer_cmd;
