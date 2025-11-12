@@ -17,7 +17,7 @@ MPCCGrampcNode::MPCCGrampcNode()
   // Load path from CSV file
   std::string csv_file = this->declare_parameter<std::string>("path_csv",
                                                               "/home/ammar/ros2_ws/src/global-planning/outputs/map5/"
-                                                              "traj_race_cl_low_sampled.csv");
+                                                              "time_traj_kappa_low_rotated.csv");
   path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
 
   if (path_ && path_->getTotalLength() > 1e-3)
@@ -127,27 +127,28 @@ void MPCCGrampcNode::initGrampcParams()
   /* Initial values and setpoints of the states, inputs, parameters, penalties and Lagrangian mmultipliers, setpoints
    * for the states and inputs */
   ctypeRNum x0[NX] = {0.0, 0.0, 0.0, 0.0, 0.0};
-  ctypeRNum xdes[NX] = {0.0, 0.0, 0.0, 0.0, 0.0};
   /* Initial values, setpoints and limits of the inputs */
   ctypeRNum u0[NU] = {0.0, 0.0};
   ctypeRNum udes[NU] = {0.0, 0.0};
-  ctypeRNum umin[NU] = {-M_PI / 6, 0.0};
-  ctypeRNum umax[NU] = {M_PI / 6, 1.0};
+  ctypeRNum umin[NU] = {-M_PI , 0.01};
+  ctypeRNum umax[NU] = {M_PI , 1.0};
   Thor_ = 1.0;      /* Prediction horizon */
   dt_ = 1.0 / 17.0; /* Sampling time */
+  ctypeInt Nhor = Thor_ / dt_; /* Number of steps for the system integration */
+  typeRNum t0 = 0.0;  /* time at the current sampling step */
 
   static double pvals[21];
 
   // scalar parameters
   pvals[0] = L_;
-  pvals[1] = 100.0;
-  pvals[2] = 100.0;
-  pvals[3] = 100.0;
+  pvals[1] = 1.0;
+  pvals[2] = 1.0;
+  pvals[3] = 1.0;
   pvals[4] = 100.0;
   pvals[5] = 0.0;
-  pvals[6] = 100.0;
-  pvals[7] = 100.0;
-  pvals[8] = 100.0;
+  pvals[6] = 1.0;
+  pvals[7] = 1.0;
+  pvals[8] = 1.0;
   pvals[9] = 100.0;
   pvals[10] = 0.0;
   pvals[11] = 0.01;
@@ -164,9 +165,6 @@ void MPCCGrampcNode::initGrampcParams()
   // N and current_time_
   pvals[19] = static_cast<double>(N);
   pvals[20] = static_cast<double>(current_time_);
-  dt_ = 1.0 / 17.0;   /* Sampling time */
-  ctypeInt Nhor = 15; /* Number of steps for the system integration */
-  typeRNum t0 = 0.0;  /* time at the current sampling step */
 
   /********* Option definition *********/
   ctypeInt MaxGradIter = 5;
@@ -206,7 +204,6 @@ void MPCCGrampcNode::initGrampcParams()
   /********* set parameters *********/
 
   grampc_setparam_real_vector(grampc_, "x0", x0);
-  grampc_setparam_real_vector(grampc_, "xdes", xdes);
 
   grampc_setparam_real_vector(grampc_, "udes", udes);
   grampc_setparam_real_vector(grampc_, "u0", u0);
@@ -238,13 +235,12 @@ void MPCCGrampcNode::initializePathPosition()
     }
   }
   current_time_ = path_->getTimeFromIndex(current_path_idx_);
-  grampc_setparam_real(grampc_, "t0", current_time_);
   auto **userparamUpdate = reinterpret_cast<void **>(grampc_->userparam);
   userparamUpdate[20] = &current_time_;
   grampc_->userparam = reinterpret_cast<typeUSERPARAM *>(userparamUpdate);
 
-  RCLCPP_INFO(this->get_logger(), "Initialized path position at index %.0f, time %.2f s", static_cast<double>(current_path_idx_),
-              current_time_);
+  // RCLCPP_INFO(this->get_logger(), "Initialized path position at index %.0f, time %.2f s", static_cast<double>(current_path_idx_),
+  //             current_time_);
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
@@ -283,7 +279,7 @@ void MPCCGrampcNode::controlLoop()
 {
   initializePathPosition();
   // Find current waypoint using arc length and get next waypoint
-  double nextIdx = path_->findNextWaypointIdx(current_time_, Thor_);
+  double nextIdx = path_->findNextWaypointIdx(current_time_, 0);
 
   // Get target waypoint and reference states
   Eigen::Vector2d target_point = path_->getWaypoint(nextIdx);
@@ -300,16 +296,15 @@ void MPCCGrampcNode::controlLoop()
 
   // Set current state as initial & desired condition
   grampc_setparam_real_vector(grampc_, "x0", current_state.data());
-  grampc_setparam_real_vector(grampc_, "xdes", target_state.data());
 
   double steer_cmd = 0.0;
   double throttle_cmd = 0.0;
 
   // print target state for debugging
-  // RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, steering=%.2f", target_state[0],
-  //             target_state[1], target_state[2], target_state[3], target_state[4]);
-  // RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, v=%.4f, steering=%.2f", current_state[0],
-  //             current_state[1], current_state[2], current_state[3], current_state[4]);
+  RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, steering=%.2f, v=%.2f", target_state[0],
+              target_state[1], target_state[2], target_state[3], target_state[4]);
+  RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, steering=%.4f, v=%.2f", current_state[0],
+              current_state[1], current_state[2], current_state[3], current_state[4]);
 
   grampc_run(grampc_);
 
