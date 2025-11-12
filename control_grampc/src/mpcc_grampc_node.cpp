@@ -131,15 +131,11 @@ void MPCCGrampcNode::initGrampcParams()
   /* Initial values, setpoints and limits of the inputs */
   ctypeRNum u0[NU] = {0.0, 0.0};
   ctypeRNum udes[NU] = {0.0, 0.0};
-  ctypeRNum umin[NU] = {-1.0, -0.5};
-  ctypeRNum umax[NU] = {1.0, 0.5};
+  ctypeRNum umin[NU] = {-M_PI / 6, 0.0};
+  ctypeRNum umax[NU] = {M_PI / 6, 1.0};
   Thor_ = 1.0;      /* Prediction horizon */
   dt_ = 1.0 / 17.0; /* Sampling time */
-  /* Build a numeric userparam array that matches how the C model reads it.
-   * The model expects an array of typeRNum (double) where indices 0..12 are
-   * scalar parameters, indices 13..18 store pointer bit-patterns (cast into
-   * the numeric type), index 19 is N, and index 20 is the current time.
-   */
+
   static double pvals[21];
 
   // scalar parameters
@@ -243,10 +239,9 @@ void MPCCGrampcNode::initializePathPosition()
   }
   current_time_ = path_->getTimeFromIndex(current_path_idx_);
   grampc_setparam_real(grampc_, "t0", current_time_);
-  void **userparamUpdate = reinterpret_cast<void **>(grampc_->userparam);
+  auto **userparamUpdate = reinterpret_cast<void **>(grampc_->userparam);
   userparamUpdate[20] = &current_time_;
-  grampc_->userparam = userparamUpdate;
-  
+  grampc_->userparam = reinterpret_cast<typeUSERPARAM *>(userparamUpdate);
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
@@ -297,9 +292,8 @@ void MPCCGrampcNode::controlLoop()
   publishTarget(target_point, target_heading);
 
   // Current state and target state
-  std::vector<double> current_state = {x_, y_, psi_, v_, steering_};
-  std::vector<double> target_state = {target_point.x(), target_point.y(), target_heading, target_speed,
-                                      target_steering};
+  std::vector<double> current_state = {x_, y_, psi_, steering_, v_};
+  std::vector<double> target_state = {target_point.x(), target_point.y(), target_heading, target_steering, target_speed};
 
   // Set current state as initial & desired condition
   grampc_setparam_real_vector(grampc_, "x0", current_state.data());
@@ -309,10 +303,10 @@ void MPCCGrampcNode::controlLoop()
   double throttle_cmd = 0.0;
 
   // print target state for debugging
-  // RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, steering=%.2f", target_state[0],
-  //             target_state[1], target_state[2], target_state[3], target_state[4]);
-  // RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, v=%.4f, steering=%.2f", current_state[0],
-  //             current_state[1], current_state[2], current_state[3], current_state[4]);
+  RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, steering=%.2f", target_state[0],
+              target_state[1], target_state[2], target_state[3], target_state[4]);
+  RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, v=%.4f, steering=%.2f", current_state[0],
+              current_state[1], current_state[2], current_state[3], current_state[4]);
 
   grampc_run(grampc_);
 
@@ -328,12 +322,12 @@ void MPCCGrampcNode::controlLoop()
   else
   {
     /* update state and time */
-    throttle_cmd = grampc_->sol->unext[0] / 10; // scale down acceleration command
-    double steering_rate_cmd = grampc_->sol->unext[1];
+    throttle_cmd = grampc_->sol->unext[1] / 10; // scale down acceleration command
+    double steering_rate_cmd = grampc_->sol->unext[0];
     steer_cmd = prev_steer_ + steering_rate_cmd * dt_;
 
-    // RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
-    //             steer_cmd);
+    RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
+                steer_cmd);
 
     // Update previous commands for fallback case of next iteration
     prev_steer_ = steer_cmd;

@@ -65,20 +65,17 @@ static void get_reference_at_time(const double *t_array,
     *delta_out = delta_ref[i] + alpha * (delta_ref[i + 1] - delta_ref[i]);
     *v_out = v_ref[i] + alpha * (v_ref[i + 1] - v_ref[i]);
     *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
-
-    fprintf(stderr, "t: %.4f, t_wrapped: %.4f, i: %d, t0: %.4f, t1: %.4f, alpha: %.4f\n", t, t_wrapped, i, t0, t1, alpha);
-    fprintf(stderr, "x_ref: %.4f, y_ref: %.4f, psi_ref: %.4f, delta_ref: %.4f, v_ref: %.4f\n",
-            *x_out, *y_out, *psi_out, *delta_out, *v_out);
-
-    // fflush(stdout);
+    // fprintf(stderr, "t: %.4f, t_wrapped: %.4f, i: %d, t0: %.4f, t1: %.4f, alpha: %.4f\n", t, t_wrapped, i, t0, t1, alpha);
+    // fprintf(stderr, "x_out: %.4f, y_out: %.4f, psi_out: %.4f, delta_out: %.4f, v_out: %.4f\n",
+    //         *x_out, *y_out, *psi_out, *delta_out, *v_out);
 }
 
 /** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),
     inequalities (Nh), terminal equalities (NgT), terminal inequalities (NhT) **/
 void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, typeInt *NgT, typeInt *NhT, typeUSERPARAM *userparam)
 {
-    *Nx = 5; // [x, y, psi, v, delta]
-    *Nu = 2; // [a, delta_dot]
+    *Nx = 5; // [x, y, psi, delta(steering), v]
+    *Nu = 2; // [delta_dot, a]
     *Np = 0;
     *Nh = 0;
     *Ng = 0;
@@ -90,48 +87,50 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     ------------------------------------ **/
 void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-
     void **pSys = (void **)userparam;
-    const double L = *((double *)pSys[0]); // wheelbase
+    ctypeRNum L = *((ctypeRNum *)pSys[0]);
 
-    double psi = x[2];
-    double v = x[3];
-    double delta = x[4];
-    double a = u[0];
-    double delta_dot = u[1];
+    ctypeRNum psi = x[2];
+    ctypeRNum delta = x[3];
+    ctypeRNum v = x[4];
 
-    out[0] = v * COS(psi);
-    out[1] = v * SIN(psi);
-    out[2] = (v / L) * TAN(delta);
-    out[3] = a;
-    out[4] = delta_dot;
+    /* state ordering: [x, y, psi, delta, v] */
+    out[0] = v * COS(psi);         // ẋ
+    out[1] = v * SIN(psi);         // ẏ
+    out[2] = (v / L) * TAN(delta); // ψ̇
+    out[3] = u[0];                 // δ̇ = delta_dot
+    out[4] = u[1];                 // v̇ = a
 }
 
-/** Jacobian df/dx multiplied by vector vec, i.e. (df/dx)^T*vec or vec^T*(df/dx) **/
-void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
+/** Jacobian df/dx multiplied by vector vec: out = (df/dx)^T * vec **/
+void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p,
+              ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-
     void **pSys = (void **)userparam;
-    const double L = *((double *)pSys[0]); // wheelbase
+    ctypeRNum L = *((ctypeRNum *)pSys[0]);
 
-    // Compute out = (df/dx)^T * vec
-    out[0] = 0.0; // ∂f/∂x
-    out[1] = 0.0; // ∂f/∂y
+    ctypeRNum psi = x[2];
+    ctypeRNum delta = x[3];
+    ctypeRNum v = x[4];
 
-    out[2] = (-x[3] * SIN(x[2])) * vec[0] + (x[3] * COS(x[2])) * vec[1]; // wrt ψ
-
-    out[3] = COS(x[2]) * vec[2] + (SIN(x[2])) * vec[3] + (TAN(x[4]) / L) * vec[4]; // wrt v
-
-    out[4] = (x[3] / L) * (1.0 / (COS(x[4]) * COS(x[4]))) * vec[4]; // wrt δ
+    out[0] = 0;                                                                         // df1/dx * vec
+    out[1] = 0;                                                                         // df2/dx * vec
+    out[2] = (-v * SIN(psi)) * vec[0] + (v * COS(psi)) * vec[1];                        // df3/dx * vec
+    out[3] = (v / L) * (1.0 / (COS(delta) * COS(delta))) * vec[2];                      // df4/dx * vec
+    out[4] = COS(psi) * vec[0] + SIN(psi) * vec[1] + ((1.0 / L) * TAN(delta)) * vec[2]; // df5/dx * vec
 }
-/** Jacobian df/du multiplied by vector vec, i.e. (df/du)^T*vec or vec^T*(df/du) **/
-void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
+
+/** Jacobian df/du multiplied by vector vec: out = (df/du)^T * vec **/
+void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p,
+              ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-
-    out[0] = vec[3]; // derivative wrt u₀ (curvature rate) -> affects κ̇ = f₃
-    out[1] = vec[4]; // derivative wrt u₁ (acceleration)   -> affects v̇ = f₄
+    /* u0 = delta_dot  -> appears in f3
+       u1 = a          -> appears in f4
+       So (df/du)^T * vec = [vec[3]; vec[4]]
+    */
+    out[0] = vec[3];
+    out[1] = vec[4];
 }
-
 /** Jacobian df/dp multiplied by vector vec, i.e. (df/dp)^T*vec or vec^T*(df/dp) **/
 void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
@@ -159,13 +158,13 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
                           &delta_ref_t, &v_ref_t);
 
     out[0] =
-        (*((double *)pSys[11])) * POW2(u[0] - udes[0]) +   // control effort weight for u₀ = κ̇
-        (*((double *)pSys[12])) * POW2(u[1] - udes[1]) +   // control effort weight for u₁ = v̇
-        (*((double *)pSys[1])) * POW2(x[0] - x_ref_t) +    // position x error weight
-        (*((double *)pSys[2])) * POW2(x[1] - y_ref_t) +    // position y error weight
-        (*((double *)pSys[3])) * POW2(x[2] - psi_ref_t) +  // heading error weight
-        (*((double *)pSys[4])) * POW2(x[3] - v_ref_t) +    // curvature error weight
-        (*((double *)pSys[5])) * POW2(x[4] - delta_ref_t); // velocity error weight
+        (*((double *)pSys[11])) * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
+        (*((double *)pSys[12])) * POW2(u[1] - udes[1]) +    // control effort weight for u₁ = v̇
+        (*((double *)pSys[1])) * POW2(x[0] - x_ref_t) +     // position x error weight
+        (*((double *)pSys[2])) * POW2(x[1] - y_ref_t) +     // position y error weight
+        (*((double *)pSys[3])) * POW2(x[2] - psi_ref_t) +   // heading error weight
+        (*((double *)pSys[4])) * POW2(x[3] - delta_ref_t) + // steering error weight
+        (*((double *)pSys[5])) * POW2(x[4] - v_ref_t);      // velocity error weight
 }
 
 /** Gradient dl/dx **/
@@ -191,8 +190,8 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     out[0] = 2 * (*((double *)pSys[1])) * (x[0] - x_ref_t);
     out[1] = 2 * (*((double *)pSys[2])) * (x[1] - y_ref_t);
     out[2] = 2 * (*((double *)pSys[3])) * (x[2] - psi_ref_t);
-    out[3] = 2 * (*((double *)pSys[4])) * (x[3] - v_ref_t);
-    out[4] = 2 * (*((double *)pSys[5])) * (x[4] - delta_ref_t);
+    out[3] = 2 * (*((double *)pSys[4])) * (x[3] - delta_ref_t);
+    out[4] = 2 * (*((double *)pSys[5])) * (x[4] - v_ref_t);
 }
 
 /** Gradient dl/du **/
@@ -232,8 +231,8 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
     out[0] = (*((double *)pSys[6])) * POW2(x[0] - x_ref_t) +
              (*((double *)pSys[7])) * POW2(x[1] - y_ref_t) +
              (*((double *)pSys[8])) * POW2(x[2] - psi_ref_t) +
-             (*((double *)pSys[9])) * POW2(x[3] - v_ref_t) +
-             (*((double *)pSys[10])) * POW2(x[4] - delta_ref_t);
+             (*((double *)pSys[9])) * POW2(x[3] - delta_ref_t) +
+             (*((double *)pSys[10])) * POW2(x[4] - v_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
@@ -257,8 +256,8 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
     out[0] = 2 * (*((double *)pSys[6])) * (x[0] - x_ref_t);
     out[1] = 2 * (*((double *)pSys[7])) * (x[1] - y_ref_t);
     out[2] = 2 * (*((double *)pSys[8])) * (x[2] - psi_ref_t);
-    out[3] = 2 * (*((double *)pSys[9])) * (x[3] - v_ref_t);
-    out[4] = 2 * (*((double *)pSys[10])) * (x[4] - delta_ref_t);
+    out[3] = 2 * (*((double *)pSys[9])) * (x[3] - delta_ref_t);
+    out[4] = 2 * (*((double *)pSys[10])) * (x[4] - v_ref_t);
 }
 
 /** Gradient dV/dp **/
