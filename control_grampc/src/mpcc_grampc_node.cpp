@@ -134,7 +134,7 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeRNum umax[NU] = {M_PI , 1.0};
   Thor_ = 1.0;      /* Prediction horizon */
   dt_ = 1.0 / 17.0; /* Sampling time */
-  ctypeInt Nhor = Thor_ / dt_; /* Number of steps for the system integration */
+  ctypeInt Nhor = Thor_ / dt_ + 1; /* Number of steps for the system integration */
   typeRNum t0 = 0.0;  /* time at the current sampling step */
 
   static double pvals[21];
