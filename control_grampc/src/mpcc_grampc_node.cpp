@@ -38,6 +38,7 @@ MPCCGrampcNode::MPCCGrampcNode()
 
   throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
   steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
+  steering_rate_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_rate_command", 10);
 
   path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/planned_path", 10);
   target_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/mpcc_target", 10);
@@ -130,29 +131,29 @@ void MPCCGrampcNode::initGrampcParams()
   /* Initial values, setpoints and limits of the inputs */
   ctypeRNum u0[NU] = {0.0, 0.0};
   ctypeRNum udes[NU] = {0.0, 0.0};
-  ctypeRNum umin[NU] = {-M_PI , 0.01};
-  ctypeRNum umax[NU] = {M_PI , 1.0};
-  Thor_ = 1.0;      /* Prediction horizon */
-  dt_ = 1.0 / 17.0; /* Sampling time */
+  ctypeRNum umin[NU] = {-M_PI, -1.0};
+  ctypeRNum umax[NU] = {M_PI, 1.0};
+  Thor_ = 1.0;                     /* Prediction horizon */
+  dt_ = 1.0 / 17.0;                /* Sampling time */
   ctypeInt Nhor = Thor_ / dt_ + 1; /* Number of steps for the system integration */
-  typeRNum t0 = 0.0;  /* time at the current sampling step */
+  typeRNum t0 = 0.0;               /* time at the current sampling step */
 
   static double pvals[21];
 
   // scalar parameters
   pvals[0] = L_;
-  pvals[1] = 1.0;
-  pvals[2] = 1.0;
+  pvals[1] = 100.0;
+  pvals[2] = 100.0;
   pvals[3] = 1.0;
-  pvals[4] = 100.0;
-  pvals[5] = 0.0;
-  pvals[6] = 1.0;
-  pvals[7] = 1.0;
+  pvals[4] = 1.0;
+  pvals[5] = 1.0;
+  pvals[6] = 100.0;
+  pvals[7] = 100.0;
   pvals[8] = 1.0;
-  pvals[9] = 100.0;
-  pvals[10] = 0.0;
+  pvals[9] = 1.0;
+  pvals[10] = 1.0;
   pvals[11] = 0.01;
-  pvals[12] = 0.01;
+  pvals[12] = 100.0;
 
   // store pointer bitpatterns (uintptr_t -> double)
   pvals[13] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
@@ -297,6 +298,7 @@ void MPCCGrampcNode::controlLoop()
   // Set current state as initial & desired condition
   grampc_setparam_real_vector(grampc_, "x0", current_state.data());
 
+  double steer_rate_cmd = 0.0;
   double steer_cmd = 0.0;
   double throttle_cmd = 0.0;
 
@@ -323,6 +325,7 @@ void MPCCGrampcNode::controlLoop()
     throttle_cmd = grampc_->sol->unext[1]; // scale down acceleration command
     double steering_rate_cmd = grampc_->sol->unext[0];
     steer_cmd = grampc_->sol->xnext[3] + steering_rate_cmd * dt_;
+    steer_rate_cmd = steering_rate_cmd;
 
     // RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
     //             steer_cmd);
@@ -341,6 +344,11 @@ void MPCCGrampcNode::controlLoop()
   auto t_msg = std_msgs::msg::Float32();
   t_msg.data = static_cast<float>(throttle_cmd);
   throttle_pub_->publish(t_msg);
+
+  // Publish steering rate command
+  auto sr_msg = std_msgs::msg::Float32();
+  sr_msg.data = static_cast<float>(steer_rate_cmd);
+  steering_rate_pub_->publish(sr_msg);
 }
 
 MPCCGrampcNode::~MPCCGrampcNode()

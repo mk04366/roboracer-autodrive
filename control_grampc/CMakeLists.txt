@@ -18,6 +18,7 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(autodrive_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 # === Link GRAMPC ===
 set(GRAMPC_DIR "/home/ammar/ros2_ws/GRAMPC_v2.3")
@@ -74,6 +75,23 @@ target_link_libraries(mpcc_grampc_node
   path_utils
 )
 
+add_executable(mpcc_model_tester_node
+  src/mpcc_model_tester_node.cpp
+)
+
+# add_executable and target_link_libraries...
+target_include_directories(mpcc_model_tester_node PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${GRAMPC_INCLUDE_DIR})
+target_link_libraries(mpcc_model_tester_node
+  ${rclcpp_LIBRARIES}
+  ${std_msgs_LIBRARIES}
+  ${geometry_msgs_LIBRARIES}
+  tf2::tf2
+  tf2_ros::tf2_ros
+  tf2_geometry_msgs::tf2_geometry_msgs
+  mpcc_model
+  ${GRAMPC_LIB}
+)
+
 target_include_directories(mpcc_grampc_node PRIVATE ${GRAMPC_INCLUDE_DIR})
 
 ament_target_dependencies(mpcc_grampc_node
@@ -90,9 +108,21 @@ ament_target_dependencies(mpcc_grampc_node
 
 ament_target_dependencies(path_utils Eigen3)
 
+ament_target_dependencies(mpcc_model_tester_node
+  rclcpp
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  tf2
+  tf2_geometry_msgs
+  tf2_ros
+  autodrive_msgs
+)
+
 # === Install ===
 install(TARGETS
   mpcc_grampc_node
+  mpcc_model_tester_node
   mpcc_model
   path_utils
   ARCHIVE DESTINATION lib

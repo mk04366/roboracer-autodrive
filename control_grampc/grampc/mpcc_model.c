@@ -13,7 +13,7 @@
 /* square macro */
 #define POW2(a) ((a) * (a))
 #define M_PI 3.14159265358979323846
-
+#define THOR 1.5
 static double wrapAngle(double a)
 {
     // wrap angle to [-pi, pi)
@@ -145,6 +145,7 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     void **pSys = (void **)userparam;
     ctypeRNum *xdes = param->xdes;
     ctypeRNum *udes = param->udes;
+    double time_scale = (THOR - t) / THOR;
 
     get_reference_at_time((const double *)pSys[13],
                           (const double *)pSys[14],
@@ -158,13 +159,14 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
                           &delta_ref_t, &v_ref_t);
 
     out[0] =
-        (*((double *)pSys[11])) * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
-        (*((double *)pSys[12])) * POW2(u[1] - udes[1]) +    // control effort weight for u₁ = v̇
-        (*((double *)pSys[1])) * POW2(x[0] - x_ref_t) +     // position x error weight
-        (*((double *)pSys[2])) * POW2(x[1] - y_ref_t) +     // position y error weight
-        (*((double *)pSys[3])) * POW2(x[2] - psi_ref_t) +   // heading error weight
-        (*((double *)pSys[4])) * POW2(x[3] - delta_ref_t) + // steering error weight
-        (*((double *)pSys[5])) * POW2(x[4] - v_ref_t);      // velocity error weight
+        ((*((double *)pSys[11])) * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
+         (*((double *)pSys[12])) * POW2(u[1] - udes[1]) +    // control effort weight for u₁ = v̇
+         (*((double *)pSys[1])) * POW2(x[0] - x_ref_t) +     // position x error weight
+         (*((double *)pSys[2])) * POW2(x[1] - y_ref_t) +     // position y error weight
+         (*((double *)pSys[3])) * POW2(x[2] - psi_ref_t) +   // heading error weight
+         (*((double *)pSys[4])) * POW2(x[3] - delta_ref_t) + // steering error weight
+         (*((double *)pSys[5])) * POW2(x[4] - v_ref_t))      // velocity error weight
+        * time_scale;                                        // time-varying scaling
 }
 
 /** Gradient dl/dx **/
@@ -173,6 +175,7 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
+    double time_scale = (THOR - t) / THOR;
 
     get_reference_at_time((const double *)pSys[13],
                           (const double *)pSys[14],
@@ -187,11 +190,11 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 
     // gradient of the stage cost w.r.t. state x:
     // dl/dx = 2Q(x - x_{des})
-    out[0] = 2 * (*((double *)pSys[1])) * (x[0] - x_ref_t);
-    out[1] = 2 * (*((double *)pSys[2])) * (x[1] - y_ref_t);
-    out[2] = 2 * (*((double *)pSys[3])) * (x[2] - psi_ref_t);
-    out[3] = 2 * (*((double *)pSys[4])) * (x[3] - delta_ref_t);
-    out[4] = 2 * (*((double *)pSys[5])) * (x[4] - v_ref_t);
+    out[0] = time_scale * 2 * (*((double *)pSys[1])) * (x[0] - x_ref_t);
+    out[1] = time_scale * 2 * (*((double *)pSys[2])) * (x[1] - y_ref_t);
+    out[2] = time_scale * 2 * (*((double *)pSys[3])) * (x[2] - psi_ref_t);
+    out[3] = time_scale * 2 * (*((double *)pSys[4])) * (x[3] - delta_ref_t);
+    out[4] = time_scale * 2 * (*((double *)pSys[5])) * (x[4] - v_ref_t);
 }
 
 /** Gradient dl/du **/
@@ -216,6 +219,7 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
 {
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
+    double time_scale = (THOR - T) / THOR;
 
     get_reference_at_time((const double *)pSys[13],
                           (const double *)pSys[14],
@@ -228,11 +232,11 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &v_ref_t);
 
-    out[0] = (*((double *)pSys[6])) * POW2(x[0] - x_ref_t) +
-             (*((double *)pSys[7])) * POW2(x[1] - y_ref_t) +
-             (*((double *)pSys[8])) * POW2(x[2] - psi_ref_t) +
-             (*((double *)pSys[9])) * POW2(x[3] - delta_ref_t) +
-             (*((double *)pSys[10])) * POW2(x[4] - v_ref_t);
+    out[0] = time_scale * (*((double *)pSys[6])) * POW2(x[0] - x_ref_t) +
+             time_scale * (*((double *)pSys[7])) * POW2(x[1] - y_ref_t) +
+             time_scale * (*((double *)pSys[8])) * POW2(x[2] - psi_ref_t) +
+             time_scale * (*((double *)pSys[9])) * POW2(x[3] - delta_ref_t) +
+             time_scale * (*((double *)pSys[10])) * POW2(x[4] - v_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
@@ -240,6 +244,7 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
 {
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
+    double time_scale = (THOR - T) / THOR;
 
     get_reference_at_time((const double *)pSys[13],
                           (const double *)pSys[14],
@@ -253,11 +258,11 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
                           &delta_ref_t, &v_ref_t);
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
-    out[0] = 2 * (*((double *)pSys[6])) * (x[0] - x_ref_t);
-    out[1] = 2 * (*((double *)pSys[7])) * (x[1] - y_ref_t);
-    out[2] = 2 * (*((double *)pSys[8])) * (x[2] - psi_ref_t);
-    out[3] = 2 * (*((double *)pSys[9])) * (x[3] - delta_ref_t);
-    out[4] = 2 * (*((double *)pSys[10])) * (x[4] - v_ref_t);
+    out[0] = time_scale * 2 * (*((double *)pSys[6])) * (x[0] - x_ref_t);
+    out[1] = time_scale * 2 * (*((double *)pSys[7])) * (x[1] - y_ref_t);
+    out[2] = time_scale * 2 * (*((double *)pSys[8])) * (x[2] - psi_ref_t);
+    out[3] = time_scale * 2 * (*((double *)pSys[9])) * (x[3] - delta_ref_t);
+    out[4] = time_scale * 2 * (*((double *)pSys[10])) * (x[4] - v_ref_t);
 }
 
 /** Gradient dV/dp **/
@@ -294,7 +299,7 @@ void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     ctypeRNum delta = x[3];
-    const double delta_max = M_PI / 6.0;
+    const double delta_max = M_PI / 4.0;
 
     // Constraint 1: delta - delta_max ≤ 0
     out[0] = delta - delta_max;

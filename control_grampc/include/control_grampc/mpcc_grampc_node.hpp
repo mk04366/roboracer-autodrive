@@ -46,6 +46,7 @@ private:
   // ROS publishers/subscribers
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_rate_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
   rclcpp::TimerBase::SharedPtr path_timer_;

@@ -35,6 +35,14 @@ def generate_launch_description():
         output="screen",
     )
 
+    mpcc_tester_node = Node(
+        package="control_grampc",
+        executable="mpcc_model_tester_node",
+        name="mpcc_controller_tester",
+        output="screen",
+    )
+
+
     localization_launch_path = os.path.join(
         get_package_share_directory('localization'),
         'launch',
@@ -73,5 +81,6 @@ def generate_launch_description():
         # ),
         mpcc_node,
         foxglove_node,
+        # mpcc_tester_node
         # initial_pose_node
     ])
