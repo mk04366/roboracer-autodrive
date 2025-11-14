@@ -77,7 +77,7 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     *Nx = 5; // [x, y, psi, delta(steering), v]
     *Nu = 2; // [delta_dot, a]
     *Np = 0;
-    *Nh = 0;
+    *Nh = 2;
     *Ng = 0;
     *NgT = 0;
     *NhT = 0;
@@ -293,14 +293,33 @@ void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     ------------------------------------------------------ **/
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
+    ctypeRNum delta = x[3];
+    const double delta_max = M_PI / 6.0;
+
+    // Constraint 1: delta - delta_max ≤ 0
+    out[0] = delta - delta_max;
+
+    // Constraint 2: -delta - delta_max ≤ 0
+    out[1] = -delta - delta_max;
 }
 /** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
 void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
+    // h0 = delta - delta_max → ∂h0/∂delta = +1
+    // h1 = -delta - delta_max → ∂h1/∂delta = -1
+    // vec = [v0, v1]^T selecting combination
+
+    out[0] = 0;                              // x
+    out[1] = 0;                              // y
+    out[2] = 0;                              // psi
+    out[3] = vec[0] * 1.0 + vec[1] * (-1.0); // only delta component contributes
+    out[4] = 0;                              // v
 }
 /** Jacobian dh/du multiplied by vector vec, i.e. (dh/du)^T*vec or vec^T*(dg/du) **/
 void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
+    out[0] = 0;
+    out[1] = 0;
 }
 /** Jacobian dh/dp multiplied by vector vec, i.e. (dh/dp)^T*vec or vec^T*(dg/dp) **/
 void dhdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
