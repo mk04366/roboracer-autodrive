@@ -651,6 +651,16 @@ vx_time = interp_vx(t_uniform)
 ax_time = interp_ax(t_uniform)
 delta_time = interp_delta(t_uniform)
 
+wheelbase_front = 0.16
+
+r_time = vx_time * kappa_time
+
+# Steering angle
+delta_time = np.arctan(L * kappa_time)
+
+# Lateral velocity (approximation)
+vy_time = r_time * wheelbase_front
+
 # ------------------------------
 # Rotate psi_time by 90° around z-axis
 # ------------------------------
@@ -658,8 +668,17 @@ delta_time = interp_delta(t_uniform)
 # psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
 
 # Combine into a trajectory array
-trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, kappa_time, vx_time, ax_time))
-
+trajectory_time_based = np.column_stack((
+    t_uniform,    # 0: time
+    x_time,       # 1: x
+    y_time,       # 2: y
+    psi_time,     # 3: psi
+    delta_time,   # 4: delta
+    vx_time,      # 5: vx
+    vy_time,      # 6: vy
+    r_time        # 7: r
+))
+# ------------------------------
 header = "time_s,x_m,y_m,psi_rad,kappa_rad,vx_mps,ax_mps2"
 np.savetxt(output_file, trajectory_time_based, delimiter=",", header=header, comments='', fmt='%.6f')
 
