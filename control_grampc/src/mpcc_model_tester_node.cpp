@@ -54,6 +54,8 @@ public:
         x_[2] = static_cast<typeRNum>(-0.046640);
         x_[3] = static_cast<typeRNum>(-0.816011);
         x_[4] = static_cast<typeRNum>(3.355342);
+        x_[5] = static_cast<typeRNum>(0.0);
+        x_[6] = static_cast<typeRNum>(0.0);
         // inputs (u) default to zero
         u_.assign(NU, static_cast<typeRNum>(0.0));
         // p (parameters) - if not used, leave zero
