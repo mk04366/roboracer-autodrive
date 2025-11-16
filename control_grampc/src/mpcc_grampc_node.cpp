@@ -142,13 +142,13 @@ void MPCCGrampcNode::initGrampcParams()
 
   // scalar parameters
   pvals[0] = L_;
-  pvals[1] = 100.0;
-  pvals[2] = 100.0;
+  pvals[1] = 1000.0;
+  pvals[2] = 1000.0;
   pvals[3] = 1.0;
   pvals[4] = 1.0;
   pvals[5] = 1.0;
-  pvals[6] = 100.0;
-  pvals[7] = 100.0;
+  pvals[6] = 1.0;
+  pvals[7] = 1.0;
   pvals[8] = 1.0;
   pvals[9] = 1.0;
   pvals[10] = 1.0;

@@ -145,7 +145,8 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     void **pSys = (void **)userparam;
     ctypeRNum *xdes = param->xdes;
     ctypeRNum *udes = param->udes;
-    double time_scale = (THOR - t) / THOR;
+    // double time_scale = (THOR - t) / THOR;
+    double time_scale = 1.0;
 
     get_reference_at_time((const double *)pSys[13],
                           (const double *)pSys[14],
@@ -175,7 +176,8 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
-    double time_scale = (THOR - t) / THOR;
+    // double time_scale = (THOR - t) / THOR;
+    double time_scale = 1.0;
 
     get_reference_at_time((const double *)pSys[13],
                           (const double *)pSys[14],
@@ -219,7 +221,8 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
 {
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
-    double time_scale = (THOR - T) / THOR;
+    // double time_scale = (THOR - T) / THOR;
+    double time_scale = 1.0;
 
     get_reference_at_time((const double *)pSys[13],
                           (const double *)pSys[14],
@@ -244,7 +247,8 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
 {
     double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
-    double time_scale = (THOR - T) / THOR;
+    // double time_scale = (THOR - T) / THOR;
+    double time_scale = 1.0;
 
     get_reference_at_time((const double *)pSys[13],
                           (const double *)pSys[14],
