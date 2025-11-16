@@ -169,12 +169,15 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
               const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     void **pSys = (void **)userparam;
+    double L = *((double *)pSys[0]);
     double m = *((double *)pSys[23]);
     double Iz = *((double *)pSys[24]);
-    double Cf = *((double *)pSys[25]);
-    double Cr = *((double *)pSys[26]);
-    double a = *((double *)pSys[27]);
-    double b = *((double *)pSys[28]);
+    double Cf = *((double *)pSys[25]); // cornering stiffness front
+    double Cr = *((double *)pSys[26]); // cornering stiffness rear
+    double a = *((double *)pSys[27]);  // distance from CG to front axle
+    double b = *((double *)pSys[28]);  // distance from CG to rear axle
+    double g = *((double *)pSys[29]);
+    double mu = *((double *)pSys[30]); // friction coef
 
     double psi = x[2];
     double delta = x[3];
@@ -184,66 +187,49 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
 
     double vx_eps = (vx > 0.1) ? vx : 0.1;
 
-    // Slip angles
     double alpha_f = delta - (vy + a * r) / vx_eps;
     double alpha_r = -(vy - b * r) / vx_eps;
-
-    // Lateral forces
     double Fy_f = -Cf * alpha_f;
     double Fy_r = -Cr * alpha_r;
 
-    // initialize output
+    /* initialize out vector */
     for (int i = 0; i < 7; i++)
         out[i] = 0.0;
 
-    // --------------------------
-    // x_dot = vx*cos(psi) - vy*sin(psi)
-    // y_dot = vx*sin(psi) + vy*cos(psi)
-    // --------------------------
-    out[2] += (-vx*sin(psi) - vy*cos(psi)) * vec[0]; // ∂x_dot/∂psi * vec[0]
-    out[4] += cos(psi) * vec[0];                     // ∂x_dot/∂vx * vec[0]
-    out[5] += -sin(psi) * vec[0];                    // ∂x_dot/∂vy * vec[0]
+    /* df/dx^T * vec accumulation */
+    /* x_dot */
+    out[2] += (-vx * sin(psi) - vy * cos(psi)) * vec[0];
+    out[4] += cos(psi) * vec[0];
+    out[5] += -sin(psi) * vec[0];
 
-    out[2] += (vx*cos(psi) - vy*sin(psi)) * vec[1];  // ∂y_dot/∂psi * vec[1]
-    out[4] += sin(psi) * vec[1];                     // ∂y_dot/∂vx * vec[1]
-    out[5] += cos(psi) * vec[1];                     // ∂y_dot/∂vy * vec[1]
+    /* y_dot */
+    out[2] += (vx * cos(psi) - vy * sin(psi)) * vec[1];
+    out[4] += sin(psi) * vec[1];
+    out[5] += cos(psi) * vec[1];
 
-    // psi_dot = r
+    /* psi_dot */
     out[6] += vec[2];
 
-    // delta_dot = u0 → no x dependency
+    /* delta_dot -> no contribution, all zeros */
 
-    // vx_dot = a_long - Fy_f*sin(delta)/m - r*vy
-    double dFyf_ddelta = -Cf; // ∂Fy_f/∂delta
-    double dFyf_dvy = -Cf * (-1.0 / vx_eps); // ∂Fy_f/∂vy
-    double dFyf_dr = -Cf * (-a / vx_eps);    // ∂Fy_f/∂r
+    /* vx_dot */
+    out[3] += (Cf * sin(delta) / m - Fy_f * cos(delta) / m) * vec[4];
+    out[4] += -Cf * sin(delta) * (vy + a * r) / (m * vx_eps * vx_eps) * vec[4];
+    out[5] += (-Cf / (m * vx_eps) - r) * vec[4];
+    out[6] += (-Cf * a / (m * vx_eps) - vy) * vec[4];
 
-    out[3] += (-dFyf_ddelta * sin(delta) - Fy_f * cos(delta)) / m * vec[4];
-    out[4] += (-dFyf_dvy * sin(delta)) / m * vec[4];
-    out[5] += (-r) * vec[4] + (-dFyf_dvy * sin(delta)) / m * vec[4]; // lateral cross-term
-    out[6] += (-dFyf_dr * sin(delta)) / m * vec[4];
+    /* vy_dot */
+    out[3] += (-Cf * cos(delta) / m - Fy_f * sin(delta) / m) * vec[5];
+    out[4] += (Cf * (vy + a * r) * cos(delta) / (m * vx_eps * vx_eps) + Cr * (vy - b * r) / (m * vx_eps * vx_eps)) * vec[5];
+    out[5] += (Cf * cos(delta) / (m * vx_eps) - Cr / (m * vx_eps)) * vec[5];
+    out[6] += (Cf * a * cos(delta) / (m * vx_eps) - Cr * b / (m * vx_eps) + vx) * vec[5];
 
-    // vy_dot = (Fy_f*cos(delta) + Fy_r)/m + r*vx
-    double dFyf_ddelta_vy = -Cf * cos(delta);
-    double dFyf_dvy_vy = -Cf * (-1.0 / vx_eps);
-    double dFyr_dvy = -Cr * (-1.0 / vx_eps);
-    double dFyf_dr_vy = -Cf * (-a / vx_eps);
-    double dFyr_dr = -Cr * (b / vx_eps);
-
-    out[3] += (dFyf_ddelta_vy) / m * vec[5];
-    out[4] += 0; // vy_dot wrt vx is only r? already included below
-    out[5] += (dFyf_dvy_vy + dFyr_dvy) / m * vec[5];
-    out[6] += (dFyf_dr_vy - dFyr_dr) / m * vec[5];
-    out[4] += r * vec[5];  // cross-term
-    out[5] += vx * vec[5]; // cross-term
-
-    // r_dot = (a*Fy_f*cos(delta) - b*Fy_r)/Iz
-    out[3] += (a * dFyf_ddelta - 0) / Iz * vec[6];  // only delta
-    out[4] += 0;
-    out[5] += (a * dFyf_dvy - b * dFyr_dvy) / Iz * vec[6];
-    out[6] += (a * dFyf_dr - b * dFyr_dr) / Iz * vec[6];
+    /* r_dot */
+    out[3] += (a * Cf * sin(delta) / Iz - a * Fy_f * cos(delta) / Iz) * vec[6];
+    out[4] += (-a * Cf * (vy + a * r) / (Iz * vx_eps * vx_eps) + b * Cr * (vy - b * r) / (Iz * vx_eps * vx_eps)) * vec[6];
+    out[5] += (-a * Cf / (Iz * vx_eps) + b * Cr / (Iz * vx_eps)) * vec[6];
+    out[6] += (-a * a * Cf * cos(delta) / Iz + a * Fy_f * sin(delta) / Iz + b * Cr / Iz) * vec[6];
 }
-
 
 /** Jacobian df/du multiplied by vector vec: out = (df/du)^T * vec **/
 void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p,
