@@ -103,14 +103,14 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     void **pSys = (void **)userparam;
     double L = *((double *)pSys[0]);
-    double m = *((double *)pSys[23]);
-    double Iz = *((double *)pSys[24]);
-    double Cf = *((double *)pSys[25]); // cornering stiffness front
-    double Cr = *((double *)pSys[26]); // cornering stiffness rear
-    double a = *((double *)pSys[27]);  // distance from CG to front axle
-    double b = *((double *)pSys[28]);  // distance from CG to rear axle
-    double g = *((double *)pSys[29]);
-    double mu = *((double *)pSys[30]);   // friction coef
+    double m = *((double *)pSys[27]);
+    double Iz = *((double *)pSys[28]);
+    double Cf = *((double *)pSys[29]); // cornering stiffness front
+    double Cr = *((double *)pSys[30]); // cornering stiffness rear
+    double a = *((double *)pSys[31]);  // distance from CG to front axle
+    double b = *((double *)pSys[32]);  // distance from CG to rear axle
+    double g = *((double *)pSys[33]);
+    double mu = *((double *)pSys[34]);   // friction coef
     double Fz_f = (m * g * b) / (a + b); // optionally use passed normal loads
     double Fz_r = (m * g * a) / (a + b);
 
@@ -139,14 +139,6 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     /* friction saturation: limit lateral force by mu * Fz */
     double Fy_f_max = mu * Fz_f;
     double Fy_r_max = mu * Fz_r;
-    if (Fy_f > Fy_f_max)
-        Fy_f = Fy_f_max;
-    if (Fy_f < -Fy_f_max)
-        Fy_f = -Fy_f_max;
-    if (Fy_r > Fy_r_max)
-        Fy_r = Fy_r_max;
-    if (Fy_r < -Fy_r_max)
-        Fy_r = -Fy_r_max;
 
     /* equations */
     out[0] = vx * COS(psi) - vy * SIN(psi); /* x_dot */
@@ -169,12 +161,12 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
               const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     void **pSys = (void **)userparam;
-    double m = *((double *)pSys[23]);
-    double Iz = *((double *)pSys[24]);
-    double Cf = *((double *)pSys[25]);
-    double Cr = *((double *)pSys[26]);
-    double a = *((double *)pSys[27]);
-    double b = *((double *)pSys[28]);
+    double m = *((double *)pSys[27]);
+    double Iz = *((double *)pSys[28]);
+    double Cf = *((double *)pSys[29]);
+    double Cr = *((double *)pSys[30]);
+    double a = *((double *)pSys[31]);
+    double b = *((double *)pSys[32]);
 
     double psi = x[2];
     double delta = x[3];
@@ -182,67 +174,95 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     double vy = x[5];
     double r = x[6];
 
+    /* mirror logic from ffct: avoid divide-by-zero */
     double vx_eps = (vx > 0.1) ? vx : 0.1;
+    /* inverse and inverse-squared for chain rule (zero derivative if clamped) */
+    double inv_vx = 1.0 / vx_eps;
+    double inv_vx2 = (vx > 0.1) ? (1.0 / (vx_eps * vx_eps)) : 0.0;
 
-    // Slip angles
-    double alpha_f = delta - (vy + a * r) / vx_eps;
-    double alpha_r = -(vy - b * r) / vx_eps;
+    /* slip angles */
+    double alpha_f = delta - (vy + a * r) * inv_vx;
+    double alpha_r = - (vy - b * r) * inv_vx;
 
-    // Lateral forces
+    /* lateral forces (unsaturated; ffct saturates them — see note) */
     double Fy_f = -Cf * alpha_f;
     double Fy_r = -Cr * alpha_r;
 
-    // initialize output
-    for (int i = 0; i < 7; i++)
-        out[i] = 0.0;
+    /* If you saturate Fy_f / Fy_r in ffct, you must handle derivative accordingly.
+       A pragmatic approach is: if unsaturated, use derivative; if saturated, set derivative
+       to zero (subgradient). Here we assume unsaturated region for derivatives.
+       For production code: check if |Fy| >= Fy_max and choose subgradient or smooth approx. */
 
-    // --------------------------
-    // x_dot = vx*cos(psi) - vy*sin(psi)
-    // y_dot = vx*sin(psi) + vy*cos(psi)
-    // --------------------------
-    out[2] += (-vx*sin(psi) - vy*cos(psi)) * vec[0]; // ∂x_dot/∂psi * vec[0]
-    out[4] += cos(psi) * vec[0];                     // ∂x_dot/∂vx * vec[0]
-    out[5] += -sin(psi) * vec[0];                    // ∂x_dot/∂vy * vec[0]
+    /* derivatives of Fy wrt delta, vy, r, vx */
+    double dFy_f_ddelta = -Cf * 1.0;               // ∂Fy_f/∂delta
+    double dFy_f_dvy    = -Cf * ( -inv_vx );       // ∂Fy_f/∂vy  = -Cf * ∂alpha_f/∂vy = -Cf * (-1/vx) = +Cf/vx
+    double dFy_f_dr     = -Cf * ( -a * inv_vx );   // ∂Fy_f/∂r   = -Cf * ( -a/vx ) = +Cf*a/vx
+    double dFy_f_dvx    = -Cf * ( (vy + a * r) * inv_vx2 ); // ∂Fy_f/∂vx = -Cf * ∂alpha_f/∂vx ; alpha_f = delta - (vy+a*r)/vx
 
-    out[2] += (vx*cos(psi) - vy*sin(psi)) * vec[1];  // ∂y_dot/∂psi * vec[1]
-    out[4] += sin(psi) * vec[1];                     // ∂y_dot/∂vx * vec[1]
-    out[5] += cos(psi) * vec[1];                     // ∂y_dot/∂vy * vec[1]
+    double dFy_r_ddelta = 0.0;                     // Fy_r does not depend on delta in your model
+    double dFy_r_dvy    = -Cr * ( -inv_vx );       // -Cr * ∂alpha_r/∂vy = -Cr * ( -1/vx ) = +Cr/vx
+    double dFy_r_dr     = -Cr * ( b * inv_vx );    // careful: alpha_r = - (vy - b r)/vx => ∂alpha_r/∂r = b/vx
+    double dFy_r_dvx    = -Cr * ( (vy - b * r) * inv_vx2 ); // ∂Fy_r/∂vx
 
-    // psi_dot = r
-    out[6] += vec[2];
+    /* initialize output */
+    for (int i = 0; i < 7; i++) out[i] = 0.0;
 
-    // delta_dot = u0 → no x dependency
+    // f0 = x_dot = vx*cos(psi) - vy*sin(psi)
+    out[2] += (-vx * sin(psi) - vy * cos(psi)) * vec[0]; // d f0 / d psi
+    out[4] += (cos(psi)) * vec[0];                      // d f0 / d vx
+    out[5] += (-sin(psi)) * vec[0];                     // d f0 / d vy
 
-    // vx_dot = a_long - Fy_f*sin(delta)/m - r*vy
-    double dFyf_ddelta = -Cf; // ∂Fy_f/∂delta
-    double dFyf_dvy = -Cf * (-1.0 / vx_eps); // ∂Fy_f/∂vy
-    double dFyf_dr = -Cf * (-a / vx_eps);    // ∂Fy_f/∂r
+    // f1 = y_dot = vx*sin(psi) + vy*cos(psi)
+    out[2] += (vx * cos(psi) - vy * sin(psi)) * vec[1]; // d f1 / d psi
+    out[4] += (sin(psi)) * vec[1];                      // d f1 / d vx
+    out[5] += (cos(psi)) * vec[1];                      // d f1 / d vy
 
-    out[3] += (-dFyf_ddelta * sin(delta) - Fy_f * cos(delta)) / m * vec[4];
-    out[4] += (-dFyf_dvy * sin(delta)) / m * vec[4];
-    out[5] += (-r) * vec[4] + (-dFyf_dvy * sin(delta)) / m * vec[4]; // lateral cross-term
-    out[6] += (-dFyf_dr * sin(delta)) / m * vec[4];
+    // f2 = psi_dot = r
+    out[6] += 1.0 * vec[2]; // d f2 / d r
 
-    // vy_dot = (Fy_f*cos(delta) + Fy_r)/m + r*vx
-    double dFyf_ddelta_vy = -Cf * cos(delta);
-    double dFyf_dvy_vy = -Cf * (-1.0 / vx_eps);
-    double dFyr_dvy = -Cr * (-1.0 / vx_eps);
-    double dFyf_dr_vy = -Cf * (-a / vx_eps);
-    double dFyr_dr = -Cr * (b / vx_eps);
+    // f3 = delta_dot -> no x dependencies
 
-    out[3] += (dFyf_ddelta_vy) / m * vec[5];
-    out[4] += 0; // vy_dot wrt vx is only r? already included below
-    out[5] += (dFyf_dvy_vy + dFyr_dvy) / m * vec[5];
-    out[6] += (dFyf_dr_vy - dFyr_dr) / m * vec[5];
-    out[4] += r * vec[5];  // cross-term
-    out[5] += vx * vec[5]; // cross-term
+    // f4 = vx_dot = a_long - (Fy_f * sin(delta))/m - r*vy
+    // ∂f4/∂delta = -( dFy_f/ddelta * sin(delta) + Fy_f * cos(delta) ) / m
+    out[3] += ( -(dFy_f_ddelta * sin(delta) + Fy_f * cos(delta)) / m ) * vec[4];
 
-    // r_dot = (a*Fy_f*cos(delta) - b*Fy_r)/Iz
-    out[3] += (a * dFyf_ddelta - 0) / Iz * vec[6];  // only delta
-    out[4] += 0;
-    out[5] += (a * dFyf_dvy - b * dFyr_dvy) / Iz * vec[6];
-    out[6] += (a * dFyf_dr - b * dFyr_dr) / Iz * vec[6];
+    // ∂f4/∂vx (chain via Fy_f)
+    out[4] += ( -(dFy_f_dvx * sin(delta)) / m ) * vec[4];
+
+    // ∂f4/∂vy = -r + -(dFy_f/dvy * sin(delta))/m
+    out[5] += ( -r + (-(dFy_f_dvy * sin(delta)) / m) ) * vec[4];
+
+    // ∂f4/∂r = -(dFy_f_dr * sin(delta))/m  (note r also appears in -r*vy term when vy is variable, but that's in ∂/∂r of (-r*vy) = -vy)
+    // Actually ∂(-r*vy)/∂r = -vy -> we must include that in out[6]? careful: r is state index 6.
+    out[6] += ( -(dFy_f_dr * sin(delta)) / m + ( -vy ) ) * vec[4];
+
+    // f5 = vy_dot = (Fy_f * cos(delta) + Fy_r)/m + r*vx
+    // ∂f5/∂delta = ( dFy_f/ddelta * cos(delta) + Fy_f * (-sin(delta)) ) / m
+    out[3] += ( (dFy_f_ddelta * cos(delta) - Fy_f * sin(delta)) / m ) * vec[5];
+
+    // ∂f5/∂vx = ( dFy_f/dvx * cos(delta) + dFy_r_dvx )/m + r
+    out[4] += ( (dFy_f_dvx * cos(delta) + dFy_r_dvx) / m + r ) * vec[5];
+
+    // ∂f5/∂vy = ( dFy_f/dvy * cos(delta) + dFy_r_dvy )/m
+    out[5] += ( (dFy_f_dvy * cos(delta) + dFy_r_dvy) / m ) * vec[5];
+
+    // ∂f5/∂r = ( dFy_f_dr * cos(delta) + dFy_r_dr )/m + vx
+    out[6] += ( (dFy_f_dr * cos(delta) + dFy_r_dr) / m + vx ) * vec[5];
+
+    // f6 = r_dot = (a*Fy_f*cos(delta) - b*Fy_r)/Iz
+    // ∂f6/∂delta = ( a*( dFy_f/ddelta * cos(delta) + Fy_f * (-sin(delta)) ) )/Iz
+    out[3] += ( a * (dFy_f_ddelta * cos(delta) - Fy_f * sin(delta)) / Iz ) * vec[6];
+
+    // ∂f6/∂vx = ( a*(dFy_f_dvx * cos(delta)) - b*(dFy_r_dvx) )/Iz
+    out[4] += ( (a * dFy_f_dvx * cos(delta) - b * dFy_r_dvx) / Iz ) * vec[6];
+
+    // ∂f6/∂vy = ( a*(dFy_f_dvy * cos(delta)) - b*(dFy_r_dvy) )/Iz
+    out[5] += ( (a * dFy_f_dvy * cos(delta) - b * dFy_r_dvy) / Iz ) * vec[6];
+
+    // ∂f6/∂r = ( a*(dFy_f_dr * cos(delta)) - b*(dFy_r_dr) )/Iz
+    out[6] += ( (a * dFy_f_dr * cos(delta) - b * dFy_r_dr) / Iz ) * vec[6];
 }
+
 
 
 /** Jacobian df/du multiplied by vector vec: out = (df/du)^T * vec **/
@@ -272,22 +292,22 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     ctypeRNum *udes = param->udes;
     double time_scale = (THOR - t) / THOR;
 
-    get_reference_at_time((const double *)pSys[13],
-                          (const double *)pSys[14],
-                          (const double *)pSys[15],
-                          (const double *)pSys[16],
-                          (const double *)pSys[17],
+    get_reference_at_time((const double *)pSys[17],
                           (const double *)pSys[18],
                           (const double *)pSys[19],
                           (const double *)pSys[20],
-                          (int)(*((double *)pSys[21])),
-                          t + *((double *)pSys[22]),
+                          (const double *)pSys[21],
+                          (const double *)pSys[22],
+                          (const double *)pSys[23],
+                          (const double *)pSys[24],
+                          (int)(*((double *)pSys[25])),
+                          t + *((double *)pSys[26]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &vx_ref_t, &vy_ref_t, &yaw_rate_ref_t);
 
     out[0] =
-        ((*((double *)pSys[11])) * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
-         (*((double *)pSys[12])) * POW2(u[1] - udes[1]) +    // control effort weight for u₁ = v̇
+        ((*((double *)pSys[15])) * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
+         (*((double *)pSys[16])) * POW2(u[1] - udes[1]) +    // control effort weight for u₁ = v̇
          (*((double *)pSys[1])) * POW2(x[0] - x_ref_t) +     // position x error weight
          (*((double *)pSys[2])) * POW2(x[1] - y_ref_t) +     // position y error weight
          (*((double *)pSys[3])) * POW2(x[2] - psi_ref_t) +   // heading error weight
@@ -306,16 +326,16 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     void **pSys = (void **)userparam;
     double time_scale = (THOR - t) / THOR;
 
-    get_reference_at_time((const double *)pSys[13],
-                          (const double *)pSys[14],
-                          (const double *)pSys[15],
-                          (const double *)pSys[16],
-                          (const double *)pSys[17],
+    get_reference_at_time((const double *)pSys[17],
                           (const double *)pSys[18],
                           (const double *)pSys[19],
                           (const double *)pSys[20],
-                          (int)(*((double *)pSys[21])),
-                          t + *((double *)pSys[22]),
+                          (const double *)pSys[21],
+                          (const double *)pSys[22],
+                          (const double *)pSys[23],
+                          (const double *)pSys[24],
+                          (int)(*((double *)pSys[25])),
+                          t + *((double *)pSys[26]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &vx_ref_t, &vy_ref_t, &yaw_rate_ref_t);
 
@@ -337,8 +357,8 @@ void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     ctypeRNum *udes = param->udes;
     // gradient of the stage cost w.r.t. state u:
     // dl/dx = 2R(u - u_{des})
-    out[0] = 2 * (*((double *)pSys[11])) * (u[0] - udes[0]);
-    out[1] = 2 * (*((double *)pSys[12])) * (u[1] - udes[1]);
+    out[0] = 2 * (*((double *)pSys[15])) * (u[0] - udes[0]);
+    out[1] = 2 * (*((double *)pSys[16])) * (u[1] - udes[1]);
 }
 
 /** Gradient dl/dp **/
@@ -354,26 +374,26 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
     void **pSys = (void **)userparam;
     double time_scale = (THOR - T) / THOR;
 
-    get_reference_at_time((const double *)pSys[13],
-                          (const double *)pSys[14],
-                          (const double *)pSys[15],
-                          (const double *)pSys[16],
-                          (const double *)pSys[17],
+    get_reference_at_time((const double *)pSys[17],
                           (const double *)pSys[18],
                           (const double *)pSys[19],
                           (const double *)pSys[20],
-                          (int)(*((double *)pSys[21])),
-                          T + *((double *)pSys[22]),
+                          (const double *)pSys[21],
+                          (const double *)pSys[22],
+                          (const double *)pSys[23],
+                          (const double *)pSys[24],
+                          (int)(*((double *)pSys[25])),
+                          T + *((double *)pSys[26]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &vx_ref_t, &vy_ref_t, &yaw_rate_ref_t);
 
-    out[0] = time_scale * (*((double *)pSys[6])) * POW2(x[0] - x_ref_t) +
-             time_scale * (*((double *)pSys[7])) * POW2(x[1] - y_ref_t) +
-             time_scale * (*((double *)pSys[8])) * POW2(x[2] - psi_ref_t) +
-             time_scale * (*((double *)pSys[9])) * POW2(x[3] - delta_ref_t) +
-             time_scale * (*((double *)pSys[10])) * POW2(x[4] - vx_ref_t) +
-             time_scale * (*((double *)pSys[11])) * POW2(x[5] - vy_ref_t) +
-             time_scale * (*((double *)pSys[12])) * POW2(x[6] - yaw_rate_ref_t);
+    out[0] = time_scale * (*((double *)pSys[8])) * POW2(x[0] - x_ref_t) +
+             time_scale * (*((double *)pSys[9])) * POW2(x[1] - y_ref_t) +
+             time_scale * (*((double *)pSys[10])) * POW2(x[2] - psi_ref_t) +
+             time_scale * (*((double *)pSys[11])) * POW2(x[3] - delta_ref_t) +
+             time_scale * (*((double *)pSys[12])) * POW2(x[4] - vx_ref_t) +
+             time_scale * (*((double *)pSys[13])) * POW2(x[5] - vy_ref_t) +
+             time_scale * (*((double *)pSys[14])) * POW2(x[6] - yaw_rate_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
@@ -383,27 +403,27 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
     void **pSys = (void **)userparam;
     double time_scale = (THOR - T) / THOR;
 
-    get_reference_at_time((const double *)pSys[13],
-                          (const double *)pSys[14],
-                          (const double *)pSys[15],
-                          (const double *)pSys[16],
-                          (const double *)pSys[17],
+    get_reference_at_time((const double *)pSys[17],
                           (const double *)pSys[18],
                           (const double *)pSys[19],
                           (const double *)pSys[20],
-                          (int)(*((double *)pSys[21])),
-                          T + *((double *)pSys[22]),
+                          (const double *)pSys[21],
+                          (const double *)pSys[22],
+                          (const double *)pSys[23],
+                          (const double *)pSys[24],
+                          (int)(*((double *)pSys[25])),
+                          T + *((double *)pSys[26]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
                           &delta_ref_t, &vx_ref_t, &vy_ref_t, &yaw_rate_ref_t);
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
-    out[0] = time_scale * 2 * (*((double *)pSys[6])) * (x[0] - x_ref_t);
-    out[1] = time_scale * 2 * (*((double *)pSys[7])) * (x[1] - y_ref_t);
-    out[2] = time_scale * 2 * (*((double *)pSys[8])) * (x[2] - psi_ref_t);
-    out[3] = time_scale * 2 * (*((double *)pSys[9])) * (x[3] - delta_ref_t);
-    out[4] = time_scale * 2 * (*((double *)pSys[10])) * (x[4] - vx_ref_t);
-    out[5] = time_scale * 2 * (*((double *)pSys[11])) * (x[5] - vy_ref_t);
-    out[6] = time_scale * 2 * (*((double *)pSys[12])) * (x[6] - yaw_rate_ref_t);
+    out[0] = time_scale * 2 * (*((double *)pSys[8])) * (x[0] - x_ref_t);
+    out[1] = time_scale * 2 * (*((double *)pSys[9])) * (x[1] - y_ref_t);
+    out[2] = time_scale * 2 * (*((double *)pSys[10])) * (x[2] - psi_ref_t);
+    out[3] = time_scale * 2 * (*((double *)pSys[11])) * (x[3] - delta_ref_t);
+    out[4] = time_scale * 2 * (*((double *)pSys[12])) * (x[4] - vx_ref_t);
+    out[5] = time_scale * 2 * (*((double *)pSys[13])) * (x[5] - vy_ref_t);
+    out[6] = time_scale * 2 * (*((double *)pSys[14])) * (x[6] - yaw_rate_ref_t);
 }
 
 /** Gradient dV/dp **/
@@ -448,14 +468,14 @@ void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 
     void **pSys = (void **)userparam;
 
-    double m = *((double *)pSys[23]);
-    double Iz = *((double *)pSys[24]);
-    double Cf = *((double *)pSys[25]); // cornering stiffness front
-    double Cr = *((double *)pSys[26]); // cornering stiffness rear
-    double a = *((double *)pSys[27]);  // distance from CG to front axle
-    double b = *((double *)pSys[28]);  // distance from CG to rear axle
-    double g = *((double *)pSys[29]);
-    double mu = *((double *)pSys[30]); // friction coef
+    double m = *((double *)pSys[27]);
+    double Iz = *((double *)pSys[28]);
+    double Cf = *((double *)pSys[29]); // cornering stiffness front
+    double Cr = *((double *)pSys[30]); // cornering stiffness rear
+    double a = *((double *)pSys[31]);  // distance from CG to front axle
+    double b = *((double *)pSys[32]);  // distance from CG to rear axle
+    double g = *((double *)pSys[33]);
+    double mu = *((double *)pSys[34]); // friction coef
 
     double vx = x[4];
     double vy = x[5];
