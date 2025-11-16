@@ -24,7 +24,7 @@ extern "C"
 // If your probfct.h doesn't define NX/NU as plain integer macros visible to C++ here,
 // you can override here (keep consistent with your model).
 #ifndef NX
-#define NX 5
+#define NX 7
 #endif
 #ifndef NU
 #define NU 2
@@ -52,10 +52,10 @@ public:
         x_[0] = static_cast<typeRNum>(-0.852928);
         x_[1] = static_cast<typeRNum>(5.125907);
         x_[2] = static_cast<typeRNum>(-0.046640);
-        x_[3] = static_cast<typeRNum>(-0.816011);
+        x_[3] = static_cast<typeRNum>(-0.263044);
         x_[4] = static_cast<typeRNum>(3.355342);
-        x_[5] = static_cast<typeRNum>(0.0);
-        x_[6] = static_cast<typeRNum>(0.0);
+        x_[5] = static_cast<typeRNum>(-0.903539);
+        x_[6] = static_cast<typeRNum>(-2.823559);
         // inputs (u) default to zero
         u_.assign(NU, static_cast<typeRNum>(0.0));
         // p (parameters) - if not used, leave zero
@@ -150,7 +150,10 @@ private:
         double py = static_cast<double>(x_[1]);
         double psi = static_cast<double>(x_[2]);
         double delta = static_cast<double>(x_[3]);
-        double v = static_cast<double>(x_[4]);
+        double v_x = static_cast<double>(x_[4]);
+        double v_y = static_cast<double>(x_[5]);
+        double v = std::sqrt(v_x * v_x + v_y * v_y);
+        double yaw_rate = static_cast<double>(x_[6]);
 
         // Build Vehiclestate message
         autodrive_msgs::msg::Vehiclestate vs_msg;
@@ -179,8 +182,12 @@ private:
 
         // fill imu orientation so controller can read psi from msg->imu
         vs_msg.imu.orientation = tf2::toMsg(q);
+        vs_msg.imu.angular_velocity.z = yaw_rate;
 
-        RCLCPP_INFO(this->get_logger(), "Publishing Vehiclestate: x=%.2f, y=%.2f, psi=%.2f, v=%.2f, delta=%.2f", px, py, psi, v, delta);
+        RCLCPP_INFO(this->get_logger(),
+                    "Time: %.2f | Pos: (%.2f, %.2f) | Psi: %.2f | Delta: %.2f | V: %.2f | YawRate: %.2f",
+                    current_time_, px, py, psi, delta, v, yaw_rate);
+
         state_pub_->publish(vs_msg);
 
         tf_broadcaster_->sendTransform(tf_msg);
