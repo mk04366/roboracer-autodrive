@@ -615,78 +615,74 @@ t_profile_cl = np.array(t_profile_cl)
 
 
 # ------------------------------
-# Parameters
+# Parameters for uniform time grid
 # ------------------------------
-dt = 0.05  # uniform time step [s]
-t_final = t_profile_cl[-1]  # total lap time
-t_uniform = np.arange(0, t_final + dt, dt)
-N = len(t_uniform)
+dt = 0.01  # desired sampling time in seconds
+t_uniform = np.arange(0, t_profile_cl[-1], dt)
+output_file = "traj_time_based.csv"
+# ------------------------------
+# Interpolation functions
+# ------------------------------
+# Ensure raceline_interp has same number of points as el_lengths_opt_interp
+# Typically: len(t_profile_cl) == len(vx_profile_opt)
+interp_x  = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     raceline_interp[:, 0], kind='cubic', fill_value="extrapolate")
+interp_y  = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     raceline_interp[:, 1], kind='cubic', fill_value="extrapolate")
+interp_psi= interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     psi_vel_opt, kind='cubic', fill_value="extrapolate")
+interp_kappa = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                        kappa_opt, kind='cubic', fill_value="extrapolate")
+interp_vx= interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     vx_profile_opt, kind='cubic', fill_value="extrapolate")
+interp_ax = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                        ax_profile_opt, kind='cubic', fill_value="extrapolate")
+interp_delta = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                        delta_opt, kind='cubic', fill_value="extrapolate")
 
 # ------------------------------
-# Interpolation of trajectory data
+# Create time-based trajectory
 # ------------------------------
-interp_vx = interp1d(np.linspace(0, t_final, len(vx_profile_opt)), vx_profile_opt, kind='cubic', fill_value="extrapolate")
-interp_ax = interp1d(np.linspace(0, t_final, len(ax_profile_opt)), ax_profile_opt, kind='cubic', fill_value="extrapolate")
-interp_kappa = interp1d(np.linspace(0, t_final, len(kappa_opt)), kappa_opt, kind='cubic', fill_value="extrapolate")
-interp_delta = interp1d(np.linspace(0, t_final, len(delta_opt)), delta_opt, kind='cubic', fill_value="extrapolate")
-
+x_time = interp_x(t_uniform)
+y_time = interp_y(t_uniform)
+psi_time = interp_psi(t_uniform)
+kappa_time = interp_kappa(t_uniform)
 vx_time = interp_vx(t_uniform)
 ax_time = interp_ax(t_uniform)
-kappa_time = interp_kappa(t_uniform)
 delta_time = interp_delta(t_uniform)
 
-# ------------------------------
-# Initialize state arrays
-# ------------------------------
-x_time = np.zeros(N)
-y_time = np.zeros(N)
-psi_time = np.zeros(N)
-vy_time = np.zeros(N)
-r_time = np.zeros(N)
+wheelbase_front = 0.16
 
-# Initial position and heading (from your trajectory)
-x_time[0] = raceline_interp[0, 0]
-y_time[0] = raceline_interp[0, 1]
-psi_time[0] = psi_vel_opt[0]
+r_time = vx_time * kappa_time
+
+# Steering angle
+delta_time = np.arctan(L * kappa_time)
+
+# Lateral velocity (approximation)
+vy_time = r_time * wheelbase_front
 
 # ------------------------------
-# Integrate states over time
+# Rotate psi_time by 90° around z-axis
 # ------------------------------
-# Wheelbase
-L = 0.32
+# psi_time += np.pi / 2  # rotate +90 degrees
+# psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
 
-for i in range(1, N):
-    dt_i = t_uniform[i] - t_uniform[i-1]
-
-    # yaw rate from kinematic bicycle model
-    r_time[i-1] = (vx_time[i-1] * np.tan(delta_time[i-1])) / L
-
-    # lateral velocity
-    vy_time[i-1] = vx_time[i-1] * np.tan(delta_time[i-1])
-
-    # integrate positions and heading
-    x_time[i]   = x_time[i-1] + dt_i * (vx_time[i-1] * np.cos(psi_time[i-1]) - vy_time[i-1] * np.sin(psi_time[i-1]))
-    y_time[i]   = y_time[i-1] + dt_i * (vx_time[i-1] * np.sin(psi_time[i-1]) + vy_time[i-1] * np.cos(psi_time[i-1]))
-    psi_time[i] = psi_time[i-1] + dt_i * r_time[i-1]
-
-# Last value of yaw rate and lateral velocity
-r_time[-1] = r_time[-2]
-vy_time[-1] = vy_time[-2]
-
-
+# Combine into a trajectory array
+trajectory_time_based = np.column_stack((
+    t_uniform,    # 0: time
+    x_time,       # 1: x
+    y_time,       # 2: y
+    psi_time,     # 3: psi
+    delta_time,   # 4: delta
+    vx_time,      # 5: vx
+    vy_time,      # 6: vy
+    r_time        # 7: r
+))
 # ------------------------------
-# Combine into trajectory array
-# ------------------------------
-trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, delta_time, vx_time, vy_time, r_time))
+header = "time_s,x_m,y_m,psi_rad,kappa_rad,vx_mps,ax_mps2"
+np.savetxt(output_file, trajectory_time_based, delimiter=",", header=header, comments='', fmt='%.6f')
 
-# ------------------------------
-# Save CSV
-# ------------------------------
-header = "time_s,x_m,y_m,psi_rad,delta_rad,vx_mps,vy_mps,r_radps"
-np.savetxt("traj_time_based.csv", trajectory_time_based, delimiter=",", header=header, comments='', fmt='%.6f')
-
-print("INFO: Time-based trajectory with consistent states saved.")
-
+print(f"INFO: Time-based trajectory saved to {os.path.abspath(output_file)}")
 
 with open(file_paths["lane_optimal_export"], 'w') as f:
     for x, y, v in zip(trajectory_opt[:, 1], trajectory_opt[:, 2], trajectory_opt[:, 5]):
