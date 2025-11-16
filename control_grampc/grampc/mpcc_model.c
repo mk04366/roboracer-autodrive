@@ -74,10 +74,10 @@ static void get_reference_at_time(const double *t_array,
     inequalities (Nh), terminal equalities (NgT), terminal inequalities (NhT) **/
 void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, typeInt *NgT, typeInt *NhT, typeUSERPARAM *userparam)
 {
-    *Nx = 7; // [x, y, psi, delta(steering), vx, vy, r]
+    *Nx = 5; // [x, y, psi, delta(steering), v]
     *Nu = 2; // [delta_dot, a]
     *Np = 0;
-    *Nh = 3; // keep steering bounds + lateral accel bound
+    *Nh = 2;
     *Ng = 0;
     *NgT = 0;
     *NhT = 0;
@@ -85,142 +85,39 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
 
 /** System Dynamics function f(t,x,u,p,userparam)
     ------------------------------------ **/
-/** dynamic bicycle ffct using linear tire model **/
-/* Dynamic bicycle model ffct
-   States: x[0]=x, x[1]=y, x[2]=psi, x[3]=delta, x[4]=vx, x[5]=vy, x[6]=r
-   Controls: u[0]=delta_dot, u[1]=a (longitudinal accel, m/s^2)
-   userparam: pSys[] should contain pointers to:
-     [0] L, [1] m, [2] Iz, [3] a (front), [4] b (rear), [5] Cf, [6] Cr, [7] mu, [8] g, [9] Fz_front, [10] Fz_rear
-     (adjust indexing if you store differently)
-*/
 void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     void **pSys = (void **)userparam;
-    double L = *((double *)pSys[0]);
-    double m = *((double *)pSys[21]);
-    double Iz = *((double *)pSys[22]);
-    double Cf = *((double *)pSys[23]); // cornering stiffness front
-    double Cr = *((double *)pSys[24]); // cornering stiffness rear
-    double a = *((double *)pSys[25]);  // distance from CG to front axle
-    double b = *((double *)pSys[26]);  // distance from CG to rear axle
-    double g = *((double *)pSys[27]);
-    double mu = *((double *)pSys[28]);   // friction coef
-    double Fz_f = (m * g * b) / (a + b); // optionally use passed normal loads
-    double Fz_r = (m * g * a) / (a + b);
+    ctypeRNum L = *((ctypeRNum *)pSys[0]);
 
-    /* states */
-    double psi = x[2];
-    double delta = x[3];
-    double vx = x[4];
-    double vy = x[5];
-    double r = x[6];
+    ctypeRNum psi = x[2];
+    ctypeRNum delta = x[3];
+    ctypeRNum v = x[4];
 
-    /* controls */
-    double delta_dot = u[0];
-    double a_long = u[1];
-
-    /* avoid divide-by-zero when vx is very small */
-    double vx_eps = (vx > 0.1) ? vx : 0.1;
-
-    /* slip angles (small-angle approximations not required) */
-    double alpha_f = delta - ((vy + a * r) / vx_eps);
-    double alpha_r = -((vy - b * r) / vx_eps);
-
-    /* linear tire model forces (with simple saturation) */
-    double Fy_f = -Cf * alpha_f;
-    double Fy_r = -Cr * alpha_r;
-
-    /* friction saturation: limit lateral force by mu * Fz */
-    double Fy_f_max = mu * Fz_f;
-    double Fy_r_max = mu * Fz_r;
-    if (Fy_f > Fy_f_max)
-        Fy_f = Fy_f_max;
-    if (Fy_f < -Fy_f_max)
-        Fy_f = -Fy_f_max;
-    if (Fy_r > Fy_r_max)
-        Fy_r = Fy_r_max;
-    if (Fy_r < -Fy_r_max)
-        Fy_r = -Fy_r_max;
-
-    /* equations */
-    out[0] = vx * COS(psi) - vy * SIN(psi); /* x_dot */
-    out[1] = vx * SIN(psi) + vy * COS(psi); /* y_dot */
-    out[2] = r;                             /* psi_dot */
-    out[3] = delta_dot;                     /* delta_dot (steering dynamics) */
-
-    /* longitudinal dynamics: simple a_long - coupling term (can be refined) */
-    out[4] = a_long + ((-(Fy_f * SIN(delta))) / m) - r * vy; /* vx_dot */
-
-    /* lateral velocity dynamics */
-    out[5] = (Fy_f * COS(delta) + Fy_r) / m + r * vx; /* vy_dot */
-
-    /* yaw acceleration */
-    out[6] = (a * Fy_f * COS(delta) - b * Fy_r) / Iz; /* r_dot */
+    /* state ordering: [x, y, psi, delta, v] */
+    out[0] = v * COS(psi);         // ẋ
+    out[1] = v * SIN(psi);         // ẏ
+    out[2] = (v / L) * TAN(delta); // ψ̇
+    out[3] = u[0];                 // δ̇ = delta_dot
+    out[4] = u[1];                 // v̇ = a
 }
 
 /** Jacobian df/dx multiplied by vector vec: out = (df/dx)^T * vec **/
-void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec,
-              const typeGRAMPCparam *param, typeUSERPARAM *userparam)
+void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p,
+              ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     void **pSys = (void **)userparam;
-    double L = *((double *)pSys[0]);
-    double m = *((double *)pSys[21]);
-    double Iz = *((double *)pSys[22]);
-    double Cf = *((double *)pSys[23]); // cornering stiffness front
-    double Cr = *((double *)pSys[24]); // cornering stiffness rear
-    double a = *((double *)pSys[25]);  // distance from CG to front axle
-    double b = *((double *)pSys[26]);  // distance from CG to rear axle
+    ctypeRNum L = *((ctypeRNum *)pSys[0]);
 
-    double psi = x[2];
-    double delta = x[3];
-    double vx = x[4];
-    double vy = x[5];
-    double r = x[6];
+    ctypeRNum psi = x[2];
+    ctypeRNum delta = x[3];
+    ctypeRNum v = x[4];
 
-    double vx_eps = (vx > 0.1) ? vx : 0.1;
-
-    double alpha_f = delta - (vy + a * r) / vx_eps;
-    double alpha_r = -(vy - b * r) / vx_eps;
-    double Fy_f = -Cf * alpha_f;
-    double Fy_r = -Cr * alpha_r;
-
-    /* initialize out vector */
-    for (int i = 0; i < 7; i++)
-        out[i] = 0.0;
-
-    /* df/dx^T * vec accumulation */
-    /* x_dot */
-    out[2] += (-vx * sin(psi) - vy * cos(psi)) * vec[0];
-    out[4] += cos(psi) * vec[0];
-    out[5] += -sin(psi) * vec[0];
-
-    /* y_dot */
-    out[2] += (vx * cos(psi) - vy * sin(psi)) * vec[1];
-    out[4] += sin(psi) * vec[1];
-    out[5] += cos(psi) * vec[1];
-
-    /* psi_dot */
-    out[6] += vec[2];
-
-    /* delta_dot -> no contribution, all zeros */
-
-    /* vx_dot */
-    out[3] += (Cf * sin(delta) / m - Fy_f * cos(delta) / m) * vec[4];
-    out[4] += -Cf * sin(delta) * (vy + a * r) / (m * vx_eps * vx_eps) * vec[4];
-    out[5] += (-Cf / (m * vx_eps) - r) * vec[4];
-    out[6] += (-Cf * a / (m * vx_eps) - vy) * vec[4];
-
-    /* vy_dot */
-    out[3] += (-Cf * cos(delta) / m - Fy_f * sin(delta) / m) * vec[5];
-    out[4] += (Cf * (vy + a * r) * cos(delta) / (m * vx_eps * vx_eps) + Cr * (vy - b * r) / (m * vx_eps * vx_eps)) * vec[5];
-    out[5] += (Cf * cos(delta) / (m * vx_eps) - Cr / (m * vx_eps)) * vec[5];
-    out[6] += (Cf * a * cos(delta) / (m * vx_eps) - Cr * b / (m * vx_eps) + vx) * vec[5];
-
-    /* r_dot */
-    out[3] += (a * Cf * sin(delta) / Iz - a * Fy_f * cos(delta) / Iz) * vec[6];
-    out[4] += (-a * Cf * (vy + a * r) / (Iz * vx_eps * vx_eps) + b * Cr * (vy - b * r) / (Iz * vx_eps * vx_eps)) * vec[6];
-    out[5] += (-a * Cf / (Iz * vx_eps) + b * Cr / (Iz * vx_eps)) * vec[6];
-    out[6] += (-a * a * Cf * cos(delta) / Iz + a * Fy_f * sin(delta) / Iz + b * Cr / Iz) * vec[6];
+    out[0] = 0;                                                                         // df1/dx * vec
+    out[1] = 0;                                                                         // df2/dx * vec
+    out[2] = (-v * SIN(psi)) * vec[0] + (v * COS(psi)) * vec[1];                        // df3/dx * vec
+    out[3] = (v / L) * (1.0 / (COS(delta) * COS(delta))) * vec[2];                      // df4/dx * vec
+    out[4] = COS(psi) * vec[0] + SIN(psi) * vec[1] + ((1.0 / L) * TAN(delta)) * vec[2]; // df5/dx * vec
 }
 
 /** Jacobian df/du multiplied by vector vec: out = (df/du)^T * vec **/
@@ -399,41 +296,17 @@ void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
 
 /** Inequality constraints h(t,x(t),u(t),p,param,userparam) <= 0
     ------------------------------------------------------ **/
-/** inequality constraints: modify hfct to include steering bounds + lateral accel bound **/
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     ctypeRNum delta = x[3];
-    const double delta_max = M_PI / 4.0; // as before
+    const double delta_max = M_PI / 4.0;
 
+    // Constraint 1: delta - delta_max ≤ 0
     out[0] = delta - delta_max;
+
+    // Constraint 2: -delta - delta_max ≤ 0
     out[1] = -delta - delta_max;
-
-    void **pSys = (void **)userparam;
-
-    double m = *((double *)pSys[21]);
-    double Cf = *((double *)pSys[23]); // cornering stiffness front
-    double Cr = *((double *)pSys[24]); // cornering stiffness rear
-    double a = *((double *)pSys[25]);  // distance from CG to front axle
-    double b = *((double *)pSys[26]);  // distance from CG to rear axle
-    double g = *((double *)pSys[27]);
-    double mu = *((double *)pSys[28]); // friction coef
-
-    double vx = x[4];
-    double vy = x[5];
-    double r = x[6];
-
-    double vx_eps = (vx > 0.1) ? vx : 0.1;
-    double alpha_f = delta - ((vy + a * r) / vx_eps);
-    double alpha_r = -((vy - b * r) / vx_eps);
-    double Fy_f = -Cf * alpha_f;
-    double Fy_r = -Cr * alpha_r;
-    double a_lat = (Fy_f * COS(delta) + Fy_r) / m; /* lateral accel m/s^2 */
-
-    double a_lat_max = mu * g; // conservative limit
-    /* constraint: |a_lat| - a_lat_max <= 0  -> we create out[2] = |a_lat| - a_lat_max */
-    out[2] = fabs(a_lat) - a_lat_max;
 }
-
 /** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
 void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {

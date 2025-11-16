@@ -142,13 +142,13 @@ void MPCCGrampcNode::initGrampcParams()
 
   // scalar parameters
   pvals[0] = L_;
-  pvals[1] = 1000.0;
-  pvals[2] = 1000.0;
+  pvals[1] = 100.0;
+  pvals[2] = 100.0;
   pvals[3] = 1.0;
   pvals[4] = 1.0;
   pvals[5] = 1.0;
-  pvals[6] = 1.0;
-  pvals[7] = 1.0;
+  pvals[6] = 100.0;
+  pvals[7] = 100.0;
   pvals[8] = 1.0;
   pvals[9] = 1.0;
   pvals[10] = 1.0;
@@ -172,7 +172,7 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
   // Build pointer array pSys which GRAMPC model will interpret as userparam (array of pointers)
-  static void *pSys[29] = {nullptr};
+  static void *pSys[21] = {nullptr};
   // Point scalar slots to pvals entries (indices 0..12 and 19..20)
   for (size_t i = 0; i <= 12; ++i)
   {
@@ -189,24 +189,6 @@ void MPCCGrampcNode::initGrampcParams()
   pSys[17] = const_cast<double *>(delta_ref_.data());
   pSys[18] = const_cast<double *>(v_ref_.data());
 
-  static double vehicle_mass = 3.24; // Mass of the vehicle
-  static double vehicle_inertia = 0.04712; // Inertia of the vehicle
-  static double tire_stiffness_front = 2.0; // Front tire stiffness
-  static double tire_stiffness_rear = 2.5; // Rear tire stiffness
-  static double a_f = 0.16; // Distance from CG to front axle
-  static double b = 0.16;   // Distance from CG to rear axle
-  static double gravity = 9.81; // Gravity acceleration
-  static double friction_coefficient = 0.3; // Friction coefficient
-
-  pSys[21] = &vehicle_mass;
-  pSys[22] = &vehicle_inertia;
-  pSys[23] = &tire_stiffness_front;
-  pSys[24] = &tire_stiffness_rear;
-  pSys[25] = &a_f;
-  pSys[26] = &b;
-  pSys[27] = &gravity;
-  pSys[28] = &friction_coefficient;
-  
   // Cast the void* array to the expected USERPARAM pointer type for GRAMPC
   typeUSERPARAM *userparam = reinterpret_cast<typeUSERPARAM *>(pSys);
 
