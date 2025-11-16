@@ -54,9 +54,9 @@ private:
 
   std::shared_ptr<mpcc::Path> path_;
   // Vehicle state - 5D [x, y, psi, v, steering]
-  double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_x_ = 0.0, steering_ = 0.0, v_y_ = 0.0, yaw_rate_ = 0.0;
+  double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_ = 0.0, steering_ = 0.0;
 
-  std::vector<double> t_ref_, x_ref_, y_ref_, psi_ref_, delta_ref_, v_ref_x_, v_ref_y_, yaw_rate_ref_;
+  std::vector<double> t_ref_, x_ref_, y_ref_, psi_ref_, delta_ref_, v_ref_;
   // Path following state
   size_t current_path_idx_ = 0;
   double current_time_ = 0.0;

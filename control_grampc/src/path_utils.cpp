@@ -9,10 +9,8 @@ namespace mpcc
 
     Path::Path(const std::vector<Eigen::Vector4d> &waypoints,
                const std::vector<double> &time_profile,
-               const std::vector<double> &velocity_x,
-               const std::vector<double> &velocity_y,
-               const std::vector<double> &yaw_rate)
-        : waypoints_(waypoints), time_profile_(time_profile), velocity_x_(velocity_x), velocity_y_(velocity_y), yaw_rate_(yaw_rate)
+               const std::vector<double> &velocities)
+        : waypoints_(waypoints), time_profile_(time_profile), velocities_(velocities)
     {
     }
     size_t Path::findNextWaypointIdx(double current_time, double horizon_time) const
@@ -66,25 +64,11 @@ namespace mpcc
         return waypoints_.size();
     }
 
-    double Path::getVelocityX(size_t index) const
+    double Path::getVelocity(size_t index) const
     {
-        if (index >= velocity_x_.size())
-            return velocity_x_.back();
-        return velocity_x_[index];
-    }
-
-    double Path::getVelocityY(size_t index) const
-    {
-        if (index >= velocity_y_.size())
-            return velocity_y_.back();
-        return velocity_y_[index];
-    }
-
-    double Path::getYawRate(size_t index) const
-    {
-        if (index >= yaw_rate_.size())
-            return yaw_rate_.back();
-        return yaw_rate_[index];
+        if (index >= velocities_.size())
+            return velocities_.back();
+        return velocities_[index];
     }
 
     double Path::getSteering(size_t index) const
@@ -100,9 +84,7 @@ namespace mpcc
         std::string line;
         std::vector<Eigen::Vector4d> waypoints;
         std::vector<double> time_profile;
-        std::vector<double> velocity_x;
-        std::vector<double> velocity_y;
-        std::vector<double> yaw_rate;
+        std::vector<double> velocities;
 
         while (std::getline(file, line))
         {
@@ -126,14 +108,10 @@ namespace mpcc
                     double psi = std::stod(tokens[3]);
                     double steering = std::stod(tokens[4]);
                     double vx = std::stod(tokens[5]);
-                    double vy = std::stod(tokens[6]);
-                    double r_rad_s = std::stod(tokens[7]);
 
                     waypoints.emplace_back(x, y, psi, steering);
                     time_profile.push_back(t);
-                    velocity_x.push_back(vx);
-                    velocity_y.push_back(vy);
-                    yaw_rate.push_back(r_rad_s);
+                    velocities.push_back(vx);
                 }
                 catch (const std::exception &e)
                 {
@@ -142,7 +120,7 @@ namespace mpcc
             }
         }
 
-        return Path(waypoints, time_profile, velocity_x, velocity_y, yaw_rate);
+        return Path(waypoints, time_profile, velocities);
     }
 
 } // namespace mpcc

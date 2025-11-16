@@ -30,18 +30,14 @@ static void get_reference_at_time(const double *t_array,
                                   const double *y_ref,
                                   const double *psi_ref,
                                   const double *delta_ref,
-                                  const double *vx_ref,
-                                  const double *vy_ref,
-                                  const double *yaw_rate_ref,
+                                  const double *v_ref,
                                   int N,
                                   double t,
                                   double *x_out,
                                   double *y_out,
                                   double *psi_out,
                                   double *delta_out,
-                                  double *vx_out,
-                                  double *vy_out,
-                                  double *yaw_rate_out)
+                                  double *v_out)
 {
 
     double t_max = t_array[N - 1];
@@ -67,9 +63,7 @@ static void get_reference_at_time(const double *t_array,
     *x_out = x_ref[i] + alpha * (x_ref[i + 1] - x_ref[i]);
     *y_out = y_ref[i] + alpha * (y_ref[i + 1] - y_ref[i]);
     *delta_out = delta_ref[i] + alpha * (delta_ref[i + 1] - delta_ref[i]);
-    *vx_out = vx_ref[i] + alpha * (vx_ref[i + 1] - vx_ref[i]);
-    *vy_out = vy_ref[i] + alpha * (vy_ref[i + 1] - vy_ref[i]);
-    *yaw_rate_out = yaw_rate_ref[i] + alpha * (yaw_rate_ref[i + 1] - yaw_rate_ref[i]);
+    *v_out = v_ref[i] + alpha * (v_ref[i + 1] - v_ref[i]);
     *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
     // fprintf(stderr, "t: %.4f, t_wrapped: %.4f, i: %d, t0: %.4f, t1: %.4f, alpha: %.4f\n", t, t_wrapped, i, t0, t1, alpha);
     // fprintf(stderr, "x_out: %.4f, y_out: %.4f, psi_out: %.4f, delta_out: %.4f, v_out: %.4f\n",
@@ -103,14 +97,14 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     void **pSys = (void **)userparam;
     double L = *((double *)pSys[0]);
-    double m = *((double *)pSys[23]);
-    double Iz = *((double *)pSys[24]);
-    double Cf = *((double *)pSys[25]); // cornering stiffness front
-    double Cr = *((double *)pSys[26]); // cornering stiffness rear
-    double a = *((double *)pSys[27]);  // distance from CG to front axle
-    double b = *((double *)pSys[28]);  // distance from CG to rear axle
-    double g = *((double *)pSys[29]);
-    double mu = *((double *)pSys[30]);   // friction coef
+    double m = *((double *)pSys[21]);
+    double Iz = *((double *)pSys[22]);
+    double Cf = *((double *)pSys[23]); // cornering stiffness front
+    double Cr = *((double *)pSys[24]); // cornering stiffness rear
+    double a = *((double *)pSys[25]);  // distance from CG to front axle
+    double b = *((double *)pSys[26]);  // distance from CG to rear axle
+    double g = *((double *)pSys[27]);
+    double mu = *((double *)pSys[28]);   // friction coef
     double Fz_f = (m * g * b) / (a + b); // optionally use passed normal loads
     double Fz_r = (m * g * a) / (a + b);
 
@@ -170,14 +164,12 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
 {
     void **pSys = (void **)userparam;
     double L = *((double *)pSys[0]);
-    double m = *((double *)pSys[23]);
-    double Iz = *((double *)pSys[24]);
-    double Cf = *((double *)pSys[25]); // cornering stiffness front
-    double Cr = *((double *)pSys[26]); // cornering stiffness rear
-    double a = *((double *)pSys[27]);  // distance from CG to front axle
-    double b = *((double *)pSys[28]);  // distance from CG to rear axle
-    double g = *((double *)pSys[29]);
-    double mu = *((double *)pSys[30]); // friction coef
+    double m = *((double *)pSys[21]);
+    double Iz = *((double *)pSys[22]);
+    double Cf = *((double *)pSys[23]); // cornering stiffness front
+    double Cr = *((double *)pSys[24]); // cornering stiffness rear
+    double a = *((double *)pSys[25]);  // distance from CG to front axle
+    double b = *((double *)pSys[26]);  // distance from CG to rear axle
 
     double psi = x[2];
     double delta = x[3];
@@ -239,8 +231,8 @@ void dfdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
        u1 = a          -> appears in f4
        So (df/du)^T * vec = [vec[3]; vec[4]]
     */
-    out[0] = vec[3]; // contribution from delta_dot to f3
-    out[1] = vec[4]; // contribution from a to f4
+    out[0] = vec[3];
+    out[1] = vec[4];
 }
 /** Jacobian df/dp multiplied by vector vec, i.e. (df/dp)^T*vec or vec^T*(df/dp) **/
 void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
@@ -252,7 +244,7 @@ void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
 void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
-    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, vx_ref_t, vy_ref_t, yaw_rate_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
     ctypeRNum *xdes = param->xdes;
     ctypeRNum *udes = param->udes;
@@ -264,12 +256,10 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
                           (const double *)pSys[16],
                           (const double *)pSys[17],
                           (const double *)pSys[18],
-                          (const double *)pSys[19],
-                          (const double *)pSys[20],
-                          (int)(*((double *)pSys[21])),
-                          t + *((double *)pSys[22]),
+                          (int)(*((double *)pSys[19])),
+                          t + *((double *)pSys[20]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
-                          &delta_ref_t, &vx_ref_t, &vy_ref_t, &yaw_rate_ref_t);
+                          &delta_ref_t, &v_ref_t);
 
     out[0] =
         ((*((double *)pSys[11])) * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
@@ -278,9 +268,7 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
          (*((double *)pSys[2])) * POW2(x[1] - y_ref_t) +     // position y error weight
          (*((double *)pSys[3])) * POW2(x[2] - psi_ref_t) +   // heading error weight
          (*((double *)pSys[4])) * POW2(x[3] - delta_ref_t) + // steering error weight
-         (*((double *)pSys[5])) * POW2(x[4] - vx_ref_t) +      // velocity_x error weight
-         (*((double *)pSys[6])) * POW2(x[5] - vy_ref_t) +      // velocity_y error weight
-         (*((double *)pSys[7])) * POW2(x[6] - yaw_rate_ref_t)) // yaw_rate error weight
+         (*((double *)pSys[5])) * POW2(x[4] - v_ref_t))      // velocity error weight
         * time_scale;                                        // time-varying scaling
 }
 
@@ -288,7 +276,7 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
-    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, vx_ref_t, vy_ref_t, yaw_rate_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
     double time_scale = (THOR - t) / THOR;
 
@@ -298,12 +286,10 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
                           (const double *)pSys[16],
                           (const double *)pSys[17],
                           (const double *)pSys[18],
-                          (const double *)pSys[19],
-                          (const double *)pSys[20],
-                          (int)(*((double *)pSys[21])),
-                          t + *((double *)pSys[22]),
+                          (int)(*((double *)pSys[19])),
+                          t + *((double *)pSys[20]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
-                          &delta_ref_t, &vx_ref_t, &vy_ref_t, &yaw_rate_ref_t);
+                          &delta_ref_t, &v_ref_t);
 
     // gradient of the stage cost w.r.t. state x:
     // dl/dx = 2Q(x - x_{des})
@@ -311,9 +297,7 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     out[1] = time_scale * 2 * (*((double *)pSys[2])) * (x[1] - y_ref_t);
     out[2] = time_scale * 2 * (*((double *)pSys[3])) * (x[2] - psi_ref_t);
     out[3] = time_scale * 2 * (*((double *)pSys[4])) * (x[3] - delta_ref_t);
-    out[4] = time_scale * 2 * (*((double *)pSys[5])) * (x[4] - vx_ref_t);
-    out[5] = time_scale * 2 * (*((double *)pSys[6])) * (x[5] - vy_ref_t);
-    out[6] = time_scale * 2 * (*((double *)pSys[7])) * (x[6] - yaw_rate_ref_t);
+    out[4] = time_scale * 2 * (*((double *)pSys[5])) * (x[4] - v_ref_t);
 }
 
 /** Gradient dl/du **/
@@ -336,7 +320,7 @@ void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     ---------------------------------------- **/
 void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, vx_ref_t, vy_ref_t, yaw_rate_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
     double time_scale = (THOR - T) / THOR;
 
@@ -346,26 +330,22 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
                           (const double *)pSys[16],
                           (const double *)pSys[17],
                           (const double *)pSys[18],
-                          (const double *)pSys[19],
-                          (const double *)pSys[20],
-                          (int)(*((double *)pSys[21])),
-                          T + *((double *)pSys[22]),
+                          (int)(*((double *)pSys[19])),
+                          T + *((double *)pSys[20]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
-                          &delta_ref_t, &vx_ref_t, &vy_ref_t, &yaw_rate_ref_t);
+                          &delta_ref_t, &v_ref_t);
 
     out[0] = time_scale * (*((double *)pSys[6])) * POW2(x[0] - x_ref_t) +
              time_scale * (*((double *)pSys[7])) * POW2(x[1] - y_ref_t) +
              time_scale * (*((double *)pSys[8])) * POW2(x[2] - psi_ref_t) +
              time_scale * (*((double *)pSys[9])) * POW2(x[3] - delta_ref_t) +
-             time_scale * (*((double *)pSys[10])) * POW2(x[4] - vx_ref_t) +
-             time_scale * (*((double *)pSys[11])) * POW2(x[5] - vy_ref_t) +
-             time_scale * (*((double *)pSys[12])) * POW2(x[6] - yaw_rate_ref_t);
+             time_scale * (*((double *)pSys[10])) * POW2(x[4] - v_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, vx_ref_t, vy_ref_t, yaw_rate_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
     void **pSys = (void **)userparam;
     double time_scale = (THOR - T) / THOR;
 
@@ -375,21 +355,17 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
                           (const double *)pSys[16],
                           (const double *)pSys[17],
                           (const double *)pSys[18],
-                          (const double *)pSys[19],
-                          (const double *)pSys[20],
-                          (int)(*((double *)pSys[21])),
-                          T + *((double *)pSys[22]),
+                          (int)(*((double *)pSys[19])),
+                          T + *((double *)pSys[20]),
                           &x_ref_t, &y_ref_t, &psi_ref_t,
-                          &delta_ref_t, &vx_ref_t, &vy_ref_t, &yaw_rate_ref_t);
+                          &delta_ref_t, &v_ref_t);
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
     out[0] = time_scale * 2 * (*((double *)pSys[6])) * (x[0] - x_ref_t);
     out[1] = time_scale * 2 * (*((double *)pSys[7])) * (x[1] - y_ref_t);
     out[2] = time_scale * 2 * (*((double *)pSys[8])) * (x[2] - psi_ref_t);
     out[3] = time_scale * 2 * (*((double *)pSys[9])) * (x[3] - delta_ref_t);
-    out[4] = time_scale * 2 * (*((double *)pSys[10])) * (x[4] - vx_ref_t);
-    out[5] = time_scale * 2 * (*((double *)pSys[11])) * (x[5] - vy_ref_t);
-    out[6] = time_scale * 2 * (*((double *)pSys[12])) * (x[6] - yaw_rate_ref_t);
+    out[4] = time_scale * 2 * (*((double *)pSys[10])) * (x[4] - v_ref_t);
 }
 
 /** Gradient dV/dp **/
@@ -434,14 +410,13 @@ void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 
     void **pSys = (void **)userparam;
 
-    double m = *((double *)pSys[23]);
-    double Iz = *((double *)pSys[24]);
-    double Cf = *((double *)pSys[25]); // cornering stiffness front
-    double Cr = *((double *)pSys[26]); // cornering stiffness rear
-    double a = *((double *)pSys[27]);  // distance from CG to front axle
-    double b = *((double *)pSys[28]);  // distance from CG to rear axle
-    double g = *((double *)pSys[29]);
-    double mu = *((double *)pSys[30]); // friction coef
+    double m = *((double *)pSys[21]);
+    double Cf = *((double *)pSys[23]); // cornering stiffness front
+    double Cr = *((double *)pSys[24]); // cornering stiffness rear
+    double a = *((double *)pSys[25]);  // distance from CG to front axle
+    double b = *((double *)pSys[26]);  // distance from CG to rear axle
+    double g = *((double *)pSys[27]);
+    double mu = *((double *)pSys[28]); // friction coef
 
     double vx = x[4];
     double vy = x[5];
