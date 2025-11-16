@@ -151,11 +151,10 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeInt Nhor = Thor_ / dt_ + 1; /* Number of steps for the system integration */
   typeRNum t0 = 0.0;               /* time at the current sampling step */
 
-  static double pvals[27];
+  static double pvals[23];
 
   // scalar parameters
   pvals[0] = L_;
-  
   pvals[1] = 1000.0;
   pvals[2] = 1000.0;
   pvals[3] = 1.0;
@@ -163,55 +162,48 @@ void MPCCGrampcNode::initGrampcParams()
   pvals[5] = 1.0;
   pvals[6] = 1.0;
   pvals[7] = 1.0;
-  
   pvals[8] = 1.0;
   pvals[9] = 1.0;
   pvals[10] = 1.0;
-  pvals[11] = 1.0;
-  pvals[12] = 1.0;
-  pvals[13] = 1.0;
-  pvals[14] = 1.0;
-
-  pvals[15] = 0.01;
-  pvals[16] = 100.0;
+  pvals[11] = 0.01;
+  pvals[12] = 100.0;
 
   // store pointer bitpatterns (uintptr_t -> double)
-  pvals[17] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
-  pvals[18] = static_cast<double>(reinterpret_cast<uintptr_t>(x_ref_.data()));
-  pvals[19] = static_cast<double>(reinterpret_cast<uintptr_t>(y_ref_.data()));
-  pvals[20] = static_cast<double>(reinterpret_cast<uintptr_t>(psi_ref_.data()));
-  pvals[21] = static_cast<double>(reinterpret_cast<uintptr_t>(delta_ref_.data()));
-  pvals[22] = static_cast<double>(reinterpret_cast<uintptr_t>(v_ref_x_.data()));
-  pvals[23] = static_cast<double>(reinterpret_cast<uintptr_t>(v_ref_y_.data()));
-  pvals[24] = static_cast<double>(reinterpret_cast<uintptr_t>(yaw_rate_ref_.data()));
+  pvals[13] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
+  pvals[14] = static_cast<double>(reinterpret_cast<uintptr_t>(x_ref_.data()));
+  pvals[15] = static_cast<double>(reinterpret_cast<uintptr_t>(y_ref_.data()));
+  pvals[16] = static_cast<double>(reinterpret_cast<uintptr_t>(psi_ref_.data()));
+  pvals[17] = static_cast<double>(reinterpret_cast<uintptr_t>(delta_ref_.data()));
+  pvals[18] = static_cast<double>(reinterpret_cast<uintptr_t>(v_ref_x_.data()));
+  pvals[19] = static_cast<double>(reinterpret_cast<uintptr_t>(v_ref_y_.data()));
+  pvals[20] = static_cast<double>(reinterpret_cast<uintptr_t>(yaw_rate_ref_.data()));
 
   // N and current_time_
-  pvals[25] = static_cast<double>(N);
-  pvals[26] = static_cast<double>(current_time_);
+  pvals[21] = static_cast<double>(N);
+  pvals[22] = static_cast<double>(current_time_);
   /********* Option definition *********/
   ctypeInt MaxGradIter = 5;
   ctypeRNum ConstraintsAbsTol[1] = { 1e-2 };
 
   // Build pointer array pSys which GRAMPC model will interpret as userparam (array of pointers)
-  static void* pSys[35] = { nullptr };
+  static void* pSys[31] = { nullptr };
   // Point scalar slots to pvals entries (indices 0..12 and 19..20)
-  for (size_t i = 0; i <= 16; ++i)
+  for (size_t i = 0; i <= 12; ++i)
   {
     pSys[i] = &pvals[i];
   }
-
-  pSys[25] = &pvals[25];
-  pSys[26] = &pvals[26];
+  pSys[21] = &pvals[21];
+  pSys[22] = &pvals[22];
 
   // Fill pointer slots with the reference array data pointers (indices 13..18)
-  pSys[17] = const_cast<double*>(t_ref_.data());
-  pSys[18] = const_cast<double*>(x_ref_.data());
-  pSys[19] = const_cast<double*>(y_ref_.data());
-  pSys[20] = const_cast<double*>(psi_ref_.data());
-  pSys[21] = const_cast<double*>(delta_ref_.data());
-  pSys[22] = const_cast<double*>(v_ref_x_.data());
-  pSys[23] = const_cast<double*>(v_ref_y_.data());
-  pSys[24] = const_cast<double*>(yaw_rate_ref_.data());
+  pSys[13] = const_cast<double*>(t_ref_.data());
+  pSys[14] = const_cast<double*>(x_ref_.data());
+  pSys[15] = const_cast<double*>(y_ref_.data());
+  pSys[16] = const_cast<double*>(psi_ref_.data());
+  pSys[17] = const_cast<double*>(delta_ref_.data());
+  pSys[18] = const_cast<double*>(v_ref_x_.data());
+  pSys[19] = const_cast<double*>(v_ref_y_.data());
+  pSys[20] = const_cast<double*>(yaw_rate_ref_.data());
 
   static double vehicle_mass = 3.24;         // Mass of the vehicle
   static double vehicle_inertia = 0.04712;   // Inertia of the vehicle
@@ -222,14 +214,14 @@ void MPCCGrampcNode::initGrampcParams()
   static double gravity = 9.81;              // Gravity acceleration
   static double friction_coefficient = 0.3;  // Friction coefficient
 
-  pSys[27] = &vehicle_mass;
-  pSys[28] = &vehicle_inertia;
-  pSys[29] = &tire_stiffness_front;
-  pSys[30] = &tire_stiffness_rear;
-  pSys[31] = &a_f;
-  pSys[32] = &b;
-  pSys[33] = &gravity;
-  pSys[34] = &friction_coefficient;
+  pSys[23] = &vehicle_mass;
+  pSys[24] = &vehicle_inertia;
+  pSys[25] = &tire_stiffness_front;
+  pSys[26] = &tire_stiffness_rear;
+  pSys[27] = &a_f;
+  pSys[28] = &b;
+  pSys[29] = &gravity;
+  pSys[30] = &friction_coefficient;
 
   // Cast the void* array to the expected USERPARAM pointer type for GRAMPC
   typeUSERPARAM* userparam = reinterpret_cast<typeUSERPARAM*>(pSys);
