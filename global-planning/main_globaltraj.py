@@ -649,9 +649,6 @@ x_time[0] = raceline_interp[0, 0]
 y_time[0] = raceline_interp[0, 1]
 psi_time[0] = psi_vel_opt[0]
 
-psi_time += np.pi / 2  # rotate +90 degrees
-psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
-
 # ------------------------------
 # Integrate states over time
 # ------------------------------
