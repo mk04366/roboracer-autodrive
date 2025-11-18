@@ -24,7 +24,7 @@ extern "C"
 // If your probfct.h doesn't define NX/NU as plain integer macros visible to C++ here,
 // you can override here (keep consistent with your model).
 #ifndef NX
-#define NX 5
+#define NX 7
 #endif
 #ifndef NU
 #define NU 2
@@ -54,6 +54,9 @@ public:
         x_[2] = static_cast<typeRNum>(-0.046640);
         x_[3] = static_cast<typeRNum>(-0.816011);
         x_[4] = static_cast<typeRNum>(3.355342);
+        x_[5] = static_cast<typeRNum>(4.856792);
+        x_[6] = static_cast<typeRNum>(-3.870758);
+        
         // inputs (u) default to zero
         u_.assign(NU, static_cast<typeRNum>(0.0));
         // p (parameters) - if not used, leave zero
@@ -89,14 +92,12 @@ private:
     void steerCallback(const std_msgs::msg::Float32::SharedPtr msg)
     {
         std::lock_guard<std::mutex> lock(u_mutex_);
-        // the model expects u[0] = steering_rate (or steering dot), adapt if your commands are different
         u_[0] = static_cast<typeRNum>(msg->data);
     }
 
     void throttleCallback(const std_msgs::msg::Float32::SharedPtr msg)
     {
         std::lock_guard<std::mutex> lock(u_mutex_);
-        // the model expects u[1] = acceleration
         u_[1] = static_cast<typeRNum>(msg->data);
     }
 
@@ -121,11 +122,25 @@ private:
             x_c[i] = x_[i];
 
         typeRNum L_val = static_cast<typeRNum>(0.32); // typical wheelbase [m], adjust if needed
+        double cornering_stiffness_front = 4.718;
+        double cornering_stiffness_rear = 5.4562;
+        double mass = 3.47;
+        double inertia_z = 0.04712;
+        double rear_axle_distance = 0.15875;
+        double front_axle_distance = 0.17145;
+        
         void *pSys[21];
         // initialize all entries to nullptr
         for (int i = 0; i < 21; ++i)
             pSys[i] = nullptr;
         pSys[0] = &L_val;
+        pSys[1] = &cornering_stiffness_front;
+        pSys[2] = &cornering_stiffness_rear;
+        pSys[3] = &mass;
+        pSys[4] = &inertia_z;
+        pSys[5] = &front_axle_distance;
+        pSys[6] = &rear_axle_distance;
+        // other parameters can be set similarly if needed
 
         ffct(f, t, x_c, u_local, p_.data(), nullptr, (typeUSERPARAM *)pSys);
 
@@ -149,6 +164,8 @@ private:
         double psi = static_cast<double>(x_[2]);
         double delta = static_cast<double>(x_[3]);
         double v = static_cast<double>(x_[4]);
+        double v_y = static_cast<double>(x_[5]);
+        double psi_rate = static_cast<double>(x_[6]);
 
         // Build Vehiclestate message
         autodrive_msgs::msg::Vehiclestate vs_msg;
@@ -159,6 +176,7 @@ private:
         vs_msg.position.z = 0.0;
         // minimal IMU: leave default-initialized (zeros) unless you have sensor data
         vs_msg.imu = sensor_msgs::msg::Imu();
+        vs_msg.imu.angular_velocity.z = static_cast<float>(psi_rate);
         vs_msg.speed = static_cast<float>(v);
         vs_msg.steering_angle = static_cast<float>(delta);
 

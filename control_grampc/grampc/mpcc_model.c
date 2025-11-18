@@ -68,11 +68,11 @@ static void get_reference_at_time(const double *t_array,
     // linear interpolation for x,y,delta,v
     *x_out = x_ref[i] + alpha * (x_ref[i + 1] - x_ref[i]);
     *y_out = y_ref[i] + alpha * (y_ref[i + 1] - y_ref[i]);
+    *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
     *delta_out = delta_ref[i] + alpha * (delta_ref[i + 1] - delta_ref[i]);
     *v_x_out = v_x_ref[i] + alpha * (v_x_ref[i + 1] - v_x_ref[i]);
     *v_y_out = v_y_ref[i] + alpha * (v_y_ref[i + 1] - v_y_ref[i]);
     *psi_rate_out = psi_rate_ref[i] + alpha * (psi_rate_ref[i + 1] - psi_rate_ref[i]);
-    *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
 }
 
 /** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),

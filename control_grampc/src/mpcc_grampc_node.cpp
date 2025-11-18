@@ -17,7 +17,7 @@ MPCCGrampcNode::MPCCGrampcNode()
   // Load path from CSV file
   std::string csv_file = this->declare_parameter<std::string>("path_csv",
                                                               "/home/ammar/ros2_ws/src/global-planning/outputs/map5/"
-                                                              "time_traj_kappa_low_rotated.csv");
+                                                              "dynamic_traj_low.csv");
   path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
 
   if (path_ && path_->getTotalLength() > 1e-3)
