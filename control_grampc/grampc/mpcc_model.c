@@ -202,19 +202,19 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     const double *v_y_ref = (const double *)pSys[29];
     const double *psi_rate_ref = (const double *)pSys[30];
 
-    const int N = (int)(*((double *)pSys[31]));
+    const double N = (double)(*((double *)pSys[31]));
     const double current_time_offset = *((double *)pSys[32]);
 
-    const int weight_u0 = *((double *)pSys[21]);
-    const int weight_u1 = *((double *)pSys[22]);
+    const double weight_u0 = *((double *)pSys[21]);
+    const double weight_u1 = *((double *)pSys[22]);
 
-    const int weight_q0 = *((double *)pSys[7]);
-    const int weight_q1 = *((double *)pSys[8]);
-    const int weight_q2 = *((double *)pSys[9]);
-    const int weight_q3 = *((double *)pSys[10]);
-    const int weight_q4 = *((double *)pSys[11]);
-    const int weight_q5 = *((double *)pSys[12]);
-    const int weight_q6 = *((double *)pSys[13]);
+    const double weight_q0 = *((double *)pSys[7]);
+    const double weight_q1 = *((double *)pSys[8]);
+    const double weight_q2 = *((double *)pSys[9]);
+    const double weight_q3 = *((double *)pSys[10]);
+    const double weight_q4 = *((double *)pSys[11]);
+    const double weight_q5 = *((double *)pSys[12]);
+    const double weight_q6 = *((double *)pSys[13]);
 
     get_reference_at_time(t_array,
                           x_ref,
@@ -261,16 +261,16 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     const double *v_y_ref = (const double *)pSys[29];
     const double *psi_rate_ref = (const double *)pSys[30];
 
-    const int N = (int)(*((double *)pSys[31]));
+    const double N = (double)(*((double *)pSys[31]));
     const double current_time_offset = *((double *)pSys[32]);
 
-    const int weight_q0 = *((double *)pSys[7]);
-    const int weight_q1 = *((double *)pSys[8]);
-    const int weight_q2 = *((double *)pSys[9]);
-    const int weight_q3 = *((double *)pSys[10]);
-    const int weight_q4 = *((double *)pSys[11]);
-    const int weight_q5 = *((double *)pSys[12]);
-    const int weight_q6 = *((double *)pSys[13]);
+    const double weight_q0 = *((double *)pSys[7]);
+    const double weight_q1 = *((double *)pSys[8]);
+    const double weight_q2 = *((double *)pSys[9]);
+    const double weight_q3 = *((double *)pSys[10]);
+    const double weight_q4 = *((double *)pSys[11]);
+    const double weight_q5 = *((double *)pSys[12]);
+    const double weight_q6 = *((double *)pSys[13]);
 
     get_reference_at_time(t_array,
                           x_ref,
@@ -302,8 +302,8 @@ void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     void **pSys = (void **)userparam;
     ctypeRNum *udes = param->udes;
 
-    const int weight_u0 = *((double *)pSys[21]);
-    const int weight_u1 = *((double *)pSys[22]);
+    const double weight_u0 = *((double *)pSys[21]);
+    const double weight_u1 = *((double *)pSys[22]);
     // gradient of the stage cost w.r.t. state u:
     // dl/dx = 2R(u - u_{des})
     out[0] = 2 * weight_u0 * (u[0] - udes[0]);
@@ -334,16 +334,16 @@ void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
     const double *v_y_ref = (const double *)pSys[29];
     const double *psi_rate_ref = (const double *)pSys[30];
 
-    const int N = (int)(*((double *)pSys[31]));
+    const double N = (double)(*((double *)pSys[31]));
     const double current_time_offset = *((double *)pSys[32]);
 
-    const int weight_r0 = *((double *)pSys[14]);
-    const int weight_r1 = *((double *)pSys[15]);
-    const int weight_r2 = *((double *)pSys[16]);
-    const int weight_r3 = *((double *)pSys[17]);
-    const int weight_r4 = *((double *)pSys[18]);
-    const int weight_r5 = *((double *)pSys[19]);
-    const int weight_r6 = *((double *)pSys[20]);
+    const double weight_r0 = *((double *)pSys[14]);
+    const double weight_r1 = *((double *)pSys[15]);
+    const double weight_r2 = *((double *)pSys[16]);
+    const double weight_r3 = *((double *)pSys[17]);
+    const double weight_r4 = *((double *)pSys[18]);
+    const double weight_r5 = *((double *)pSys[19]);
+    const double weight_r6 = *((double *)pSys[20]);
 
     get_reference_at_time(t_array,
                           x_ref,
@@ -385,16 +385,16 @@ void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAM
     const double *v_y_ref = (const double *)pSys[29];
     const double *psi_rate_ref = (const double *)pSys[30];
 
-    const int N = (int)(*((double *)pSys[31]));
+    const double N = (double)(*((double *)pSys[31]));
     const double current_time_offset = *((double *)pSys[32]);
 
-    const int weight_r0 = *((double *)pSys[14]);
-    const int weight_r1 = *((double *)pSys[15]);
-    const int weight_r2 = *((double *)pSys[16]);
-    const int weight_r3 = *((double *)pSys[17]);
-    const int weight_r4 = *((double *)pSys[18]);
-    const int weight_r5 = *((double *)pSys[19]);
-    const int weight_r6 = *((double *)pSys[20]);
+    const double weight_r0 = *((double *)pSys[14]);
+    const double weight_r1 = *((double *)pSys[15]);
+    const double weight_r2 = *((double *)pSys[16]);
+    const double weight_r3 = *((double *)pSys[17]);
+    const double weight_r4 = *((double *)pSys[18]);
+    const double weight_r5 = *((double *)pSys[19]);
+    const double weight_r6 = *((double *)pSys[20]);
 
     get_reference_at_time(t_array,
                           x_ref,
