@@ -658,8 +658,8 @@ vy_time = -xdot * np.sin(psi_time) + ydot * np.cos(psi_time)
 # ------------------------------
 # Rotate psi_time by 90° around z-axis
 # ------------------------------
-# psi_time += np.pi / 2  # rotate +90 degrees
-# psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
+psi_time += np.pi / 2  # rotate +90 degrees
+psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
 
 # Combine into a trajectory array
 trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, kappa_time, vx_time, vy_time, psi_rate_time))
