@@ -12,7 +12,8 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include "autodrive_msgs/msg/vehiclestate.hpp"
 
-extern "C" {
+extern "C"
+{
 #include "grampc.h"
 #include "grampc_mess.h"
 }
@@ -40,8 +41,8 @@ private:
   void initGrampcParams();
   void controlLoop();
   void publishPath();
-  void publishTarget(const Eigen::Vector2d& point, double heading);
-  double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr& imu_msg);
+  void publishTarget(const Eigen::Vector2d &point, double heading);
+  double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
   void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
   // ROS publishers/subscribers
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
@@ -53,10 +54,10 @@ private:
   rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
 
   std::shared_ptr<mpcc::Path> path_;
-  // Vehicle state - 5D [x, y, psi, v, steering]
-  double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_ = 0.0, steering_ = 0.0;
+  // Vehicle state - 5D [x, y, psi, steering, v_x, v_y, psi_rate]
+  double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_x_ = 0.0, v_y_ = 0.0, steering_ = 0.0, psi_rate_ = 0.0;
 
-  std::vector<double> t_ref_, x_ref_, y_ref_, psi_ref_, delta_ref_, v_ref_;
+  std::vector<double> t_ref_, x_ref_, y_ref_, psi_ref_, delta_ref_, v_x_ref_, v_y_ref_, psi_rate_ref_;
   // Path following state
   size_t current_path_idx_ = 0;
   double current_time_ = 0.0;
@@ -76,4 +77,4 @@ private:
   geometry_msgs::msg::Point last_pos_;
 };
 
-#endif  // CONTROL_GRAMPC__MPCC_GRAMPC_NODE_HPP_
+#endif // CONTROL_GRAMPC__MPCC_GRAMPC_NODE_HPP_

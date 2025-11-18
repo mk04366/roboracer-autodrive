@@ -9,8 +9,10 @@ namespace mpcc
 
     Path::Path(const std::vector<Eigen::Vector4d> &waypoints,
                const std::vector<double> &time_profile,
-               const std::vector<double> &velocities)
-        : waypoints_(waypoints), time_profile_(time_profile), velocities_(velocities)
+               const std::vector<double> &velocities_x,
+               const std::vector<double> &velocities_y,
+               const std::vector<double> &psi_rate)
+        : waypoints_(waypoints), time_profile_(time_profile), velocities_x_(velocities_x), velocities_y_(velocities_y), psi_rate_(psi_rate)
     {
     }
     size_t Path::findNextWaypointIdx(double current_time, double horizon_time) const
@@ -56,7 +58,7 @@ namespace mpcc
     {
         if (index >= waypoints_.size())
             return waypoints_.back()(2);
-       return waypoints_[index](2);        
+        return waypoints_[index](2);
     }
 
     size_t Path::getTotalLength() const
@@ -64,11 +66,25 @@ namespace mpcc
         return waypoints_.size();
     }
 
-    double Path::getVelocity(size_t index) const
+    double Path::getVelocityX(size_t index) const
     {
-        if (index >= velocities_.size())
-            return velocities_.back();
-        return velocities_[index];
+        if (index >= velocities_x_.size())
+            return velocities_x_.back();
+        return velocities_x_[index];
+    }
+
+    double Path::getVelocityY(size_t index) const
+    {
+        if (index >= velocities_y_.size())
+            return velocities_y_.back();
+        return velocities_y_[index];
+    }
+
+    double Path::getPsiRate(size_t index) const
+    {
+        if (index >= psi_rate_.size())
+            return psi_rate_.back();
+        return psi_rate_[index];
     }
 
     double Path::getSteering(size_t index) const
@@ -84,7 +100,9 @@ namespace mpcc
         std::string line;
         std::vector<Eigen::Vector4d> waypoints;
         std::vector<double> time_profile;
-        std::vector<double> velocities;
+        std::vector<double> velocities_x;
+        std::vector<double> velocities_y;
+        std::vector<double> psi_rate_;
 
         while (std::getline(file, line))
         {
@@ -108,10 +126,14 @@ namespace mpcc
                     double psi = std::stod(tokens[3]);
                     double steering = std::stod(tokens[4]);
                     double vx = std::stod(tokens[5]);
+                    double vy = std::stod(tokens[6]);
+                    double psir = std::stod(tokens[7]);
 
                     waypoints.emplace_back(x, y, psi, steering);
                     time_profile.push_back(t);
-                    velocities.push_back(vx);
+                    velocities_x.push_back(vx);
+                    velocities_y.push_back(vy);
+                    psi_rate_.push_back(psir);
                 }
                 catch (const std::exception &e)
                 {
@@ -120,7 +142,7 @@ namespace mpcc
             }
         }
 
-        return Path(waypoints, time_profile, velocities);
+        return Path(waypoints, time_profile, velocities_x, velocities_y, psi_rate_);
     }
 
 } // namespace mpcc

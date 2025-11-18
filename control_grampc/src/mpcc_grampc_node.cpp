@@ -12,7 +12,7 @@
 using std::placeholders::_1;
 
 MPCCGrampcNode::MPCCGrampcNode()
-    : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), psi_(0.0), v_(0.0), steering_(0.0), prev_steer_(0.0), prev_throttle_(0.0)
+    : Node("mpcc_grampc_node"), x_(0.0), y_(0.0), psi_(0.0), v_x_(0.0), v_y_(0.0), psi_rate_(0.0), steering_(0.0), prev_steer_(0.0), prev_throttle_(0.0)
 {
   // Load path from CSV file
   std::string csv_file = this->declare_parameter<std::string>("path_csv",
@@ -110,7 +110,9 @@ void MPCCGrampcNode::initGrampcParams()
   y_ref_.reserve(N);
   psi_ref_.reserve(N);
   delta_ref_.reserve(N);
-  v_ref_.reserve(N);
+  v_x_ref_.reserve(N);
+  v_y_ref_.reserve(N);
+  psi_rate_ref_.reserve(N);
 
   for (double i = 0; i < N; ++i)
   {
@@ -120,9 +122,10 @@ void MPCCGrampcNode::initGrampcParams()
     y_ref_.push_back(xy.y());
     psi_ref_.push_back(path_->getHeading(i));
     delta_ref_.push_back(path_->getSteering(i));
-    v_ref_.push_back(path_->getVelocity(i));
+    v_x_ref_.push_back(path_->getVelocityX(i));
+    v_y_ref_.push_back(path_->getVelocityY(i));
+    psi_rate_ref_.push_back(path_->getPsiRate(i));
   }
-  L_ = 0.32;
 
   /********* Parameter definition *********/
   /* Initial values and setpoints of the states, inputs, parameters, penalties and Lagrangian mmultipliers, setpoints
@@ -138,56 +141,80 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeInt Nhor = Thor_ / dt_ + 1; /* Number of steps for the system integration */
   typeRNum t0 = 0.0;               /* time at the current sampling step */
 
-  static double pvals[21];
+  static double pvals[33];
+
+  L_ = 0.33020;
+  double cornering_stiffness_front = 4.718;
+  double cornering_stiffness_rear = 5.4562;
+  double mass = 3.47;
+  double inertia_z = 0.04712;
+  double rear_axle_distance = 0.15875;
+  double front_axle_distance = 0.17145;
 
   // scalar parameters
   pvals[0] = L_;
-  pvals[1] = 1000.0;
-  pvals[2] = 1000.0;
-  pvals[3] = 1.0;
-  pvals[4] = 1.0;
-  pvals[5] = 1.0;
-  pvals[6] = 1.0;
-  pvals[7] = 1.0;
-  pvals[8] = 1.0;
+  pvals[1] = cornering_stiffness_front;
+  pvals[2] = cornering_stiffness_rear;
+  pvals[3] = mass;
+  pvals[4] = inertia_z;
+  pvals[5] = front_axle_distance;
+  pvals[6] = rear_axle_distance;
+
+  pvals[7] = 1000.0;
+  pvals[8] = 1000.0;
   pvals[9] = 1.0;
   pvals[10] = 1.0;
-  pvals[11] = 0.01;
-  pvals[12] = 100.0;
+  pvals[11] = 1.0;
+  pvals[12] = 1.0;
+  pvals[13] = 1.0;
+
+  pvals[14] = 1.0;
+  pvals[15] = 1.0;
+  pvals[16] = 1.0;
+  pvals[17] = 1.0;
+  pvals[18] = 1.0;
+  pvals[19] = 1.0;
+  pvals[20] = 1.0;
+
+  pvals[21] = 0.01;
+  pvals[22] = 100.0;
 
   // store pointer bitpatterns (uintptr_t -> double)
-  pvals[13] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
-  pvals[14] = static_cast<double>(reinterpret_cast<uintptr_t>(x_ref_.data()));
-  pvals[15] = static_cast<double>(reinterpret_cast<uintptr_t>(y_ref_.data()));
-  pvals[16] = static_cast<double>(reinterpret_cast<uintptr_t>(psi_ref_.data()));
-  pvals[17] = static_cast<double>(reinterpret_cast<uintptr_t>(delta_ref_.data()));
-  pvals[18] = static_cast<double>(reinterpret_cast<uintptr_t>(v_ref_.data()));
+  pvals[23] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
+  pvals[24] = static_cast<double>(reinterpret_cast<uintptr_t>(x_ref_.data()));
+  pvals[25] = static_cast<double>(reinterpret_cast<uintptr_t>(y_ref_.data()));
+  pvals[26] = static_cast<double>(reinterpret_cast<uintptr_t>(psi_ref_.data()));
+  pvals[27] = static_cast<double>(reinterpret_cast<uintptr_t>(delta_ref_.data()));
+  pvals[28] = static_cast<double>(reinterpret_cast<uintptr_t>(v_x_ref_.data()));
+  pvals[29] = static_cast<double>(reinterpret_cast<uintptr_t>(v_y_ref_.data()));
+  pvals[30] = static_cast<double>(reinterpret_cast<uintptr_t>(psi_rate_ref_.data()));
 
   // N and current_time_
-  pvals[19] = static_cast<double>(N);
-  pvals[20] = static_cast<double>(current_time_);
-
+  pvals[31] = static_cast<double>(N);
+  pvals[32] = static_cast<double>(current_time_);
   /********* Option definition *********/
   ctypeInt MaxGradIter = 5;
   ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
   // Build pointer array pSys which GRAMPC model will interpret as userparam (array of pointers)
-  static void *pSys[21] = {nullptr};
+  static void *pSys[33] = {nullptr};
   // Point scalar slots to pvals entries (indices 0..12 and 19..20)
-  for (size_t i = 0; i <= 12; ++i)
+  for (size_t i = 0; i <= 22; ++i)
   {
     pSys[i] = &pvals[i];
   }
-  pSys[19] = &pvals[19];
-  pSys[20] = &pvals[20];
+  pSys[31] = &pvals[31];
+  pSys[32] = &pvals[32];
 
   // Fill pointer slots with the reference array data pointers (indices 13..18)
-  pSys[13] = const_cast<double *>(t_ref_.data());
-  pSys[14] = const_cast<double *>(x_ref_.data());
-  pSys[15] = const_cast<double *>(y_ref_.data());
-  pSys[16] = const_cast<double *>(psi_ref_.data());
-  pSys[17] = const_cast<double *>(delta_ref_.data());
-  pSys[18] = const_cast<double *>(v_ref_.data());
+  pSys[23] = const_cast<double *>(t_ref_.data());
+  pSys[24] = const_cast<double *>(x_ref_.data());
+  pSys[25] = const_cast<double *>(y_ref_.data());
+  pSys[26] = const_cast<double *>(psi_ref_.data());
+  pSys[27] = const_cast<double *>(delta_ref_.data());
+  pSys[28] = const_cast<double *>(v_x_ref_.data());
+  pSys[29] = const_cast<double *>(v_y_ref_.data());
+  pSys[30] = const_cast<double *>(psi_rate_ref_.data());
 
   // Cast the void* array to the expected USERPARAM pointer type for GRAMPC
   typeUSERPARAM *userparam = reinterpret_cast<typeUSERPARAM *>(pSys);
@@ -255,12 +282,15 @@ double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr
 
 void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg)
 {
+  auto last_x_ = x_;
+  auto last_y_ = y_;
+
   // Extract IPS position
   x_ = msg->position.x;
   y_ = msg->position.y;
 
   // Extract speed
-  v_ = static_cast<double>(msg->speed);
+  v_x_ = static_cast<double>(msg->speed);
 
   // Extract steering angle
   steering_ = static_cast<double>(msg->steering_angle);
@@ -271,6 +301,12 @@ void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::Sh
 
   // Compute curvature
   auto pos_ptr = std::make_shared<geometry_msgs::msg::Point>(msg->position);
+
+  double xdot = (x_ - last_x_) / dt_;
+  double ydot = (y_ - last_y_) / dt_;
+  v_y_ = -xdot * sin(psi_) + ydot * cos(psi_);
+
+  psi_rate_ = msg->imu.angular_velocity.z;
 
   // Run control loop
   controlLoop();
@@ -286,14 +322,16 @@ void MPCCGrampcNode::controlLoop()
   Eigen::Vector2d target_point = path_->getWaypoint(nextIdx);
   double target_heading = path_->getHeading(nextIdx);
   double target_steering = path_->getSteering(nextIdx);
-  double target_speed = path_->getVelocity(nextIdx);
+  double target_velocity_x = path_->getVelocityX(nextIdx);
+  double target_velocity_y = path_->getVelocityY(nextIdx);
+  double target_psi_rate = path_->getPsiRate(nextIdx);
 
   // publish target pose for visualization
   publishTarget(target_point, target_heading);
 
   // Current state and target state
-  std::vector<double> current_state = {x_, y_, psi_, steering_, v_};
-  std::vector<double> target_state = {target_point.x(), target_point.y(), target_heading, target_steering, target_speed};
+  std::vector<double> current_state = {x_, y_, psi_, steering_, v_x_, v_y_, psi_rate_};
+  std::vector<double> target_state = {target_point.x(), target_point.y(), target_heading, target_steering, target_velocity_x, target_velocity_y, target_psi_rate};
 
   // Set current state as initial & desired condition
   grampc_setparam_real_vector(grampc_, "x0", current_state.data());

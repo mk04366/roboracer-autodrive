@@ -5,10 +5,12 @@
 #define SIN(a) sinf(a)
 #define COS(a) cosf(a)
 #define TAN(a) tanf(a)
+#define ATAN2(a, b) atan2f(a, b)
 #else
 #define SIN(a) sin(a)
 #define COS(a) cos(a)
 #define TAN(a) tan(a)
+#define ATAN2(a, b) atan2(a, b)
 #endif
 /* square macro */
 #define POW2(a) ((a) * (a))
@@ -30,14 +32,18 @@ static void get_reference_at_time(const double *t_array,
                                   const double *y_ref,
                                   const double *psi_ref,
                                   const double *delta_ref,
-                                  const double *v_ref,
+                                  const double *v_x_ref,
+                                  const double *v_y_ref,
+                                  const double *psi_rate_ref,
                                   int N,
                                   double t,
                                   double *x_out,
                                   double *y_out,
                                   double *psi_out,
                                   double *delta_out,
-                                  double *v_out)
+                                  double *v_x_out,
+                                  double *v_y_out,
+                                  double *psi_rate_out)
 {
 
     double t_max = t_array[N - 1];
@@ -63,18 +69,17 @@ static void get_reference_at_time(const double *t_array,
     *x_out = x_ref[i] + alpha * (x_ref[i + 1] - x_ref[i]);
     *y_out = y_ref[i] + alpha * (y_ref[i + 1] - y_ref[i]);
     *delta_out = delta_ref[i] + alpha * (delta_ref[i + 1] - delta_ref[i]);
-    *v_out = v_ref[i] + alpha * (v_ref[i + 1] - v_ref[i]);
+    *v_x_out = v_x_ref[i] + alpha * (v_x_ref[i + 1] - v_x_ref[i]);
+    *v_y_out = v_y_ref[i] + alpha * (v_y_ref[i + 1] - v_y_ref[i]);
+    *psi_rate_out = psi_rate_ref[i] + alpha * (psi_rate_ref[i + 1] - psi_rate_ref[i]);
     *psi_out = psi_ref[i] + alpha * (psi_ref[i + 1] - psi_ref[i]);
-    // fprintf(stderr, "t: %.4f, t_wrapped: %.4f, i: %d, t0: %.4f, t1: %.4f, alpha: %.4f\n", t, t_wrapped, i, t0, t1, alpha);
-    // fprintf(stderr, "x_out: %.4f, y_out: %.4f, psi_out: %.4f, delta_out: %.4f, v_out: %.4f\n",
-    //         *x_out, *y_out, *psi_out, *delta_out, *v_out);
 }
 
 /** OCP dimensions: states (Nx), controls (Nu), parameters (Np), equalities (Ng),
     inequalities (Nh), terminal equalities (NgT), terminal inequalities (NhT) **/
 void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, typeInt *NgT, typeInt *NhT, typeUSERPARAM *userparam)
 {
-    *Nx = 5; // [x, y, psi, delta(steering), v]
+    *Nx = 7; // [x, y, psi(orientation), delta(steering), vx, vy, psi_rate]
     *Nu = 2; // [delta_dot, a]
     *Np = 0;
     *Nh = 2;
@@ -89,17 +94,38 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     void **pSys = (void **)userparam;
     ctypeRNum L = *((ctypeRNum *)pSys[0]);
+    ctypeRNum Cf = *((ctypeRNum *)pSys[1]);
+    ctypeRNum Cr = *((ctypeRNum *)pSys[2]);
+    ctypeRNum m = *((ctypeRNum *)pSys[3]);
+    ctypeRNum Iz = *((ctypeRNum *)pSys[4]);
+    ctypeRNum lf = *((ctypeRNum *)pSys[5]);
+    ctypeRNum lr = *((ctypeRNum *)pSys[6]);
 
     ctypeRNum psi = x[2];
     ctypeRNum delta = x[3];
-    ctypeRNum v = x[4];
+    ctypeRNum vx = x[4];
+    ctypeRNum vy = x[5];
+    ctypeRNum psi_rate = x[6];
 
-    /* state ordering: [x, y, psi, delta, v] */
-    out[0] = v * COS(psi);         // ẋ
-    out[1] = v * SIN(psi);         // ẏ
-    out[2] = (v / L) * TAN(delta); // ψ̇
-    out[3] = u[0];                 // δ̇ = delta_dot
-    out[4] = u[1];                 // v̇ = a
+    ctypeRNum front_slip_angle = ATAN2((vy + lf * psi_rate), vx) - delta;
+    ctypeRNum rear_slip_angle = ATAN2((vy - lr * psi_rate), vx);
+
+    ctypeRNum tyre_force_front = -Cf * front_slip_angle;
+    ctypeRNum tyre_force_rear = -Cr * rear_slip_angle;
+
+    /* state ordering: [x, y, psi, delta, vx, vy, psi_rate] */
+    out[0] = vx * COS(psi) - vy * SIN(psi); // ẋ = vx * cos(psi) - vy * sin(psi)
+    out[1] = vx * SIN(psi) + vy * COS(psi); // ẏ = vx * sin(psi) + vy * cos(psi)
+    out[2] = psi_rate;                      // ψ̇ = psi_rate
+    out[3] = u[0];                          // δ̇ = delta_dot
+    out[4] = u[1] + (psi_rate * vy);        // vẋ = a + (psi_rate * vy) [approximation]
+    out[5] = -(psi_rate * vx) +
+             ((tyre_force_front * COS(delta)) +
+              tyre_force_rear) /
+                 m; // vẏ = -(psi_rate * vx) + Fy_total/mass
+    out[6] = (lf * tyre_force_front * COS(delta) -
+              lr * tyre_force_rear) /
+             Iz; // psi_ratė = front_axle_distance*F_front_y - rear_axle_distance*F_rear_y / I_z
 }
 
 /** Jacobian df/dx multiplied by vector vec: out = (df/dx)^T * vec **/
@@ -108,16 +134,36 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
 {
     void **pSys = (void **)userparam;
     ctypeRNum L = *((ctypeRNum *)pSys[0]);
+    ctypeRNum Cf = *((ctypeRNum *)pSys[1]);
+    ctypeRNum Cr = *((ctypeRNum *)pSys[2]);
+    ctypeRNum m = *((ctypeRNum *)pSys[3]);
+    ctypeRNum Iz = *((ctypeRNum *)pSys[4]);
+    ctypeRNum lf = *((ctypeRNum *)pSys[5]);
+    ctypeRNum lr = *((ctypeRNum *)pSys[6]);
 
     ctypeRNum psi = x[2];
     ctypeRNum delta = x[3];
-    ctypeRNum v = x[4];
+    ctypeRNum vx = x[4];
+    ctypeRNum vy = x[5];
+    ctypeRNum psi_rate = x[6];
 
-    out[0] = 0;                                                                         // df1/dx * vec
-    out[1] = 0;                                                                         // df2/dx * vec
-    out[2] = (-v * SIN(psi)) * vec[0] + (v * COS(psi)) * vec[1];                        // df3/dx * vec
-    out[3] = (v / L) * (1.0 / (COS(delta) * COS(delta))) * vec[2];                      // df4/dx * vec
-    out[4] = COS(psi) * vec[0] + SIN(psi) * vec[1] + ((1.0 / L) * TAN(delta)) * vec[2]; // df5/dx * vec
+    out[0] = (-vx * SIN(psi) - vy * COS(psi)) * vec[2] + COS(psi) * vec[4] - SIN(psi) * vec[5]; // df1/dx * vec
+    out[1] = (vx * COS(psi) - vy * SIN(psi)) * vec[2] + SIN(psi) * vec[4] + COS(psi) * vec[5];  // df2/dx * vec
+    out[2] = vec[6];                                                                            // df3/dx * vec
+    out[3] = 0;                                                                                 // df4/dx * vec
+    out[4] = psi_rate * vec[5] + vy * vec[6];                                                   // df5/dx * vec
+    out[5] = vec[3] * ((Cf / m) * (SIN(delta) * ATAN2((vy + lf * psi_rate), vx) - delta * SIN(delta) + COS(delta))) +
+             vec[4] * (-psi_rate + (((Cr * (vy - lr * psi_rate)) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) +
+                                    ((Cf * COS(delta) * (vy + lf * psi_rate)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) /
+                                       (POW2(vx) * m)) +
+             vec[5] * (((Cr / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) +
+                        ((Cf * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) /
+                       (POW2(vx) * m)) +
+             vec[6] * (vx * (((lr * Cr) / (m * (POW2(vx) + POW2(vy - lr * psi_rate)))) - ((Cf * lf * COS(delta)) / (m * (POW2(vx) + POW2(psi_rate * lf + vy)))) - 1)); // df6/dx * vec
+    out[6] = vec[3] * (lf * Cf * ((SIN(delta) * ATAN2(vy + lf * psi_rate, vx)) - (delta * SIN(delta)) + (COS(delta))) / Iz) +
+             vec[4] * ((((lr * Cr * (lr * psi_rate - vy)) / (POW2(vx) + POW2(vy - lr * psi_rate))) + ((Cf * lf * COS(delta) * (psi_rate * lf + vy)) / (POW2(vx) + POW2(psi_rate * lf + vy)))) / Iz) +
+             vec[5] * ((((lr * Cr) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) - ((Cf * lf * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / (vx * Iz)) +
+             vec[6] * (-(((POW2(lr) * Cr) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) + ((Cf * POW2(lf) * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / (vx * Iz));
 }
 
 /** Jacobian df/du multiplied by vector vec: out = (df/du)^T * vec **/
@@ -141,62 +187,113 @@ void dfdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
 void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
-    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_x_ref_t, v_y_ref_t, psi_rate_ref_t;
     void **pSys = (void **)userparam;
     ctypeRNum *xdes = param->xdes;
     ctypeRNum *udes = param->udes;
     // double time_scale = (THOR - t) / THOR;
     double time_scale = 1.0;
+    const double *t_array = (const double *)pSys[23];
+    const double *x_ref = (const double *)pSys[24];
+    const double *y_ref = (const double *)pSys[25];
+    const double *psi_ref = (const double *)pSys[26];
+    const double *delta_ref = (const double *)pSys[27];
+    const double *v_x_ref = (const double *)pSys[28];
+    const double *v_y_ref = (const double *)pSys[29];
+    const double *psi_rate_ref = (const double *)pSys[30];
 
-    get_reference_at_time((const double *)pSys[13],
-                          (const double *)pSys[14],
-                          (const double *)pSys[15],
-                          (const double *)pSys[16],
-                          (const double *)pSys[17],
-                          (const double *)pSys[18],
-                          (int)(*((double *)pSys[19])),
-                          t + *((double *)pSys[20]),
+    const int N = (int)(*((double *)pSys[31]));
+    const double current_time_offset = *((double *)pSys[32]);
+
+    const int weight_u0 = *((double *)pSys[21]);
+    const int weight_u1 = *((double *)pSys[22]);
+
+    const int weight_q0 = *((double *)pSys[7]);
+    const int weight_q1 = *((double *)pSys[8]);
+    const int weight_q2 = *((double *)pSys[9]);
+    const int weight_q3 = *((double *)pSys[10]);
+    const int weight_q4 = *((double *)pSys[11]);
+    const int weight_q5 = *((double *)pSys[12]);
+    const int weight_q6 = *((double *)pSys[13]);
+
+    get_reference_at_time(t_array,
+                          x_ref,
+                          y_ref,
+                          psi_ref,
+                          delta_ref,
+                          v_x_ref,
+                          v_y_ref,
+                          psi_rate_ref,
+                          N,
+                          t + current_time_offset,
                           &x_ref_t, &y_ref_t, &psi_ref_t,
-                          &delta_ref_t, &v_ref_t);
+                          &delta_ref_t, &v_x_ref_t, &v_y_ref_t, &psi_rate_ref_t);
 
     out[0] =
-        ((*((double *)pSys[11])) * POW2(u[0] - udes[0]) +    // control effort weight for u₀ = κ̇
-         (*((double *)pSys[12])) * POW2(u[1] - udes[1]) +    // control effort weight for u₁ = v̇
-         (*((double *)pSys[1])) * POW2(x[0] - x_ref_t) +     // position x error weight
-         (*((double *)pSys[2])) * POW2(x[1] - y_ref_t) +     // position y error weight
-         (*((double *)pSys[3])) * POW2(x[2] - psi_ref_t) +   // heading error weight
-         (*((double *)pSys[4])) * POW2(x[3] - delta_ref_t) + // steering error weight
-         (*((double *)pSys[5])) * POW2(x[4] - v_ref_t))      // velocity error weight
-        * time_scale;                                        // time-varying scaling
+        (weight_u0 * POW2(u[0] - udes[0]) +       // control effort weight for u₀ = κ̇
+         weight_u1 * POW2(u[1] - udes[1]) +       // control effort weight for u₁ = v̇
+         weight_q0 * POW2(x[0] - x_ref_t) +       // position x error weight
+         weight_q1 * POW2(x[1] - y_ref_t) +       // position y error weight
+         weight_q2 * POW2(x[2] - psi_ref_t) +     // heading error weight
+         weight_q3 * POW2(x[3] - delta_ref_t) +   // steering error weight
+         weight_q4 * POW2(x[4] - v_x_ref_t) +     // longitudinal velocity error weight
+         weight_q5 * POW2(x[5] - v_y_ref_t) +     // lateral velocity error weight
+         weight_q6 * POW2(x[6] - psi_rate_ref_t)) // yaw rate error weight
+        * time_scale;                             // time-varying scaling
 }
 
 /** Gradient dl/dx **/
 void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
 
-    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_x_ref_t, v_y_ref_t, psi_rate_ref_t;
     void **pSys = (void **)userparam;
+    ctypeRNum *xdes = param->xdes;
+    ctypeRNum *udes = param->udes;
     // double time_scale = (THOR - t) / THOR;
     double time_scale = 1.0;
+    const double *t_array = (const double *)pSys[23];
+    const double *x_ref = (const double *)pSys[24];
+    const double *y_ref = (const double *)pSys[25];
+    const double *psi_ref = (const double *)pSys[26];
+    const double *delta_ref = (const double *)pSys[27];
+    const double *v_x_ref = (const double *)pSys[28];
+    const double *v_y_ref = (const double *)pSys[29];
+    const double *psi_rate_ref = (const double *)pSys[30];
 
-    get_reference_at_time((const double *)pSys[13],
-                          (const double *)pSys[14],
-                          (const double *)pSys[15],
-                          (const double *)pSys[16],
-                          (const double *)pSys[17],
-                          (const double *)pSys[18],
-                          (int)(*((double *)pSys[19])),
-                          t + *((double *)pSys[20]),
+    const int N = (int)(*((double *)pSys[31]));
+    const double current_time_offset = *((double *)pSys[32]);
+
+    const int weight_q0 = *((double *)pSys[7]);
+    const int weight_q1 = *((double *)pSys[8]);
+    const int weight_q2 = *((double *)pSys[9]);
+    const int weight_q3 = *((double *)pSys[10]);
+    const int weight_q4 = *((double *)pSys[11]);
+    const int weight_q5 = *((double *)pSys[12]);
+    const int weight_q6 = *((double *)pSys[13]);
+
+    get_reference_at_time(t_array,
+                          x_ref,
+                          y_ref,
+                          psi_ref,
+                          delta_ref,
+                          v_x_ref,
+                          v_y_ref,
+                          psi_rate_ref,
+                          N,
+                          t + current_time_offset,
                           &x_ref_t, &y_ref_t, &psi_ref_t,
-                          &delta_ref_t, &v_ref_t);
+                          &delta_ref_t, &v_x_ref_t, &v_y_ref_t, &psi_rate_ref_t);
 
     // gradient of the stage cost w.r.t. state x:
     // dl/dx = 2Q(x - x_{des})
-    out[0] = time_scale * 2 * (*((double *)pSys[1])) * (x[0] - x_ref_t);
-    out[1] = time_scale * 2 * (*((double *)pSys[2])) * (x[1] - y_ref_t);
-    out[2] = time_scale * 2 * (*((double *)pSys[3])) * (x[2] - psi_ref_t);
-    out[3] = time_scale * 2 * (*((double *)pSys[4])) * (x[3] - delta_ref_t);
-    out[4] = time_scale * 2 * (*((double *)pSys[5])) * (x[4] - v_ref_t);
+    out[0] = time_scale * 2 * weight_q0 * (x[0] - x_ref_t);
+    out[1] = time_scale * 2 * weight_q1 * (x[1] - y_ref_t);
+    out[2] = time_scale * 2 * weight_q2 * (x[2] - psi_ref_t);
+    out[3] = time_scale * 2 * weight_q3 * (x[3] - delta_ref_t);
+    out[4] = time_scale * 2 * weight_q4 * (x[4] - v_x_ref_t);
+    out[5] = time_scale * 2 * weight_q5 * (x[5] - v_y_ref_t);
+    out[6] = time_scale * 2 * weight_q6 * (x[6] - psi_rate_ref_t);
 }
 
 /** Gradient dl/du **/
@@ -204,10 +301,13 @@ void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
 {
     void **pSys = (void **)userparam;
     ctypeRNum *udes = param->udes;
+
+    const int weight_u0 = *((double *)pSys[21]);
+    const int weight_u1 = *((double *)pSys[22]);
     // gradient of the stage cost w.r.t. state u:
     // dl/dx = 2R(u - u_{des})
-    out[0] = 2 * (*((double *)pSys[11])) * (u[0] - udes[0]);
-    out[1] = 2 * (*((double *)pSys[12])) * (u[1] - udes[1]);
+    out[0] = 2 * weight_u0 * (u[0] - udes[0]);
+    out[1] = 2 * weight_u1 * (u[1] - udes[1]);
 }
 
 /** Gradient dl/dp **/
@@ -219,54 +319,104 @@ void dldp(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     ---------------------------------------- **/
 void Vfct(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_x_ref_t, v_y_ref_t, psi_rate_ref_t;
     void **pSys = (void **)userparam;
-    // double time_scale = (THOR - T) / THOR;
+    ctypeRNum *xdes = param->xdes;
+    ctypeRNum *udes = param->udes;
+    // double time_scale = (THOR - t) / THOR;
     double time_scale = 1.0;
+    const double *t_array = (const double *)pSys[23];
+    const double *x_ref = (const double *)pSys[24];
+    const double *y_ref = (const double *)pSys[25];
+    const double *psi_ref = (const double *)pSys[26];
+    const double *delta_ref = (const double *)pSys[27];
+    const double *v_x_ref = (const double *)pSys[28];
+    const double *v_y_ref = (const double *)pSys[29];
+    const double *psi_rate_ref = (const double *)pSys[30];
 
-    get_reference_at_time((const double *)pSys[13],
-                          (const double *)pSys[14],
-                          (const double *)pSys[15],
-                          (const double *)pSys[16],
-                          (const double *)pSys[17],
-                          (const double *)pSys[18],
-                          (int)(*((double *)pSys[19])),
-                          T + *((double *)pSys[20]),
+    const int N = (int)(*((double *)pSys[31]));
+    const double current_time_offset = *((double *)pSys[32]);
+
+    const int weight_r0 = *((double *)pSys[14]);
+    const int weight_r1 = *((double *)pSys[15]);
+    const int weight_r2 = *((double *)pSys[16]);
+    const int weight_r3 = *((double *)pSys[17]);
+    const int weight_r4 = *((double *)pSys[18]);
+    const int weight_r5 = *((double *)pSys[19]);
+    const int weight_r6 = *((double *)pSys[20]);
+
+    get_reference_at_time(t_array,
+                          x_ref,
+                          y_ref,
+                          psi_ref,
+                          delta_ref,
+                          v_x_ref,
+                          v_y_ref,
+                          psi_rate_ref,
+                          N,
+                          T + current_time_offset,
                           &x_ref_t, &y_ref_t, &psi_ref_t,
-                          &delta_ref_t, &v_ref_t);
+                          &delta_ref_t, &v_x_ref_t, &v_y_ref_t, &psi_rate_ref_t);
 
-    out[0] = time_scale * (*((double *)pSys[6])) * POW2(x[0] - x_ref_t) +
-             time_scale * (*((double *)pSys[7])) * POW2(x[1] - y_ref_t) +
-             time_scale * (*((double *)pSys[8])) * POW2(x[2] - psi_ref_t) +
-             time_scale * (*((double *)pSys[9])) * POW2(x[3] - delta_ref_t) +
-             time_scale * (*((double *)pSys[10])) * POW2(x[4] - v_ref_t);
+    out[0] = time_scale * weight_r0 * POW2(x[0] - x_ref_t) +
+             time_scale * weight_r1 * POW2(x[1] - y_ref_t) +
+             time_scale * weight_r2 * POW2(x[2] - psi_ref_t) +
+             time_scale * weight_r3 * POW2(x[3] - delta_ref_t) +
+             time_scale * weight_r4 * POW2(x[4] - v_x_ref_t) +
+             time_scale * weight_r5 * POW2(x[5] - v_y_ref_t) +
+             time_scale * weight_r6 * POW2(x[6] - psi_rate_ref_t);
 }
 
 /** Gradient dV/dx : Terminal Cost Function V(x(T))**/
 void dVdx(typeRNum *out, ctypeRNum T, ctypeRNum *x, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_ref_t;
+    double x_ref_t, y_ref_t, psi_ref_t, delta_ref_t, v_x_ref_t, v_y_ref_t, psi_rate_ref_t;
     void **pSys = (void **)userparam;
-    // double time_scale = (THOR - T) / THOR;
+    ctypeRNum *xdes = param->xdes;
+    ctypeRNum *udes = param->udes;
+    // double time_scale = (THOR - t) / THOR;
     double time_scale = 1.0;
+    const double *t_array = (const double *)pSys[23];
+    const double *x_ref = (const double *)pSys[24];
+    const double *y_ref = (const double *)pSys[25];
+    const double *psi_ref = (const double *)pSys[26];
+    const double *delta_ref = (const double *)pSys[27];
+    const double *v_x_ref = (const double *)pSys[28];
+    const double *v_y_ref = (const double *)pSys[29];
+    const double *psi_rate_ref = (const double *)pSys[30];
 
-    get_reference_at_time((const double *)pSys[13],
-                          (const double *)pSys[14],
-                          (const double *)pSys[15],
-                          (const double *)pSys[16],
-                          (const double *)pSys[17],
-                          (const double *)pSys[18],
-                          (int)(*((double *)pSys[19])),
-                          T + *((double *)pSys[20]),
+    const int N = (int)(*((double *)pSys[31]));
+    const double current_time_offset = *((double *)pSys[32]);
+
+    const int weight_r0 = *((double *)pSys[14]);
+    const int weight_r1 = *((double *)pSys[15]);
+    const int weight_r2 = *((double *)pSys[16]);
+    const int weight_r3 = *((double *)pSys[17]);
+    const int weight_r4 = *((double *)pSys[18]);
+    const int weight_r5 = *((double *)pSys[19]);
+    const int weight_r6 = *((double *)pSys[20]);
+
+    get_reference_at_time(t_array,
+                          x_ref,
+                          y_ref,
+                          psi_ref,
+                          delta_ref,
+                          v_x_ref,
+                          v_y_ref,
+                          psi_rate_ref,
+                          N,
+                          T + current_time_offset,
                           &x_ref_t, &y_ref_t, &psi_ref_t,
-                          &delta_ref_t, &v_ref_t);
+                          &delta_ref_t, &v_x_ref_t, &v_y_ref_t, &psi_rate_ref_t);
 
     // V(x(T)) = (x(T) - x_des) * P * (x(T) - x_des)
-    out[0] = time_scale * 2 * (*((double *)pSys[6])) * (x[0] - x_ref_t);
-    out[1] = time_scale * 2 * (*((double *)pSys[7])) * (x[1] - y_ref_t);
-    out[2] = time_scale * 2 * (*((double *)pSys[8])) * (x[2] - psi_ref_t);
-    out[3] = time_scale * 2 * (*((double *)pSys[9])) * (x[3] - delta_ref_t);
-    out[4] = time_scale * 2 * (*((double *)pSys[10])) * (x[4] - v_ref_t);
+    out[0] = time_scale * 2 * weight_r0 * (x[0] - x_ref_t);
+    out[1] = time_scale * 2 * weight_r1 * (x[1] - y_ref_t);
+    out[2] = time_scale * 2 * weight_r2 * (x[2] - psi_ref_t);
+    out[3] = time_scale * 2 * weight_r3 * (x[3] - delta_ref_t);
+    out[4] = time_scale * 2 * weight_r4 * (x[4] - v_x_ref_t);
+    out[5] = time_scale * 2 * weight_r5 * (x[5] - v_y_ref_t);
+    out[6] = time_scale * 2 * weight_r6 * (x[6] - psi_rate_ref_t);
 }
 
 /** Gradient dV/dp **/
