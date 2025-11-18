@@ -648,8 +648,12 @@ y_time = interp_y(t_uniform)
 psi_time = interp_psi(t_uniform)
 kappa_time = interp_kappa(t_uniform)
 vx_time = interp_vx(t_uniform)
-ax_time = interp_ax(t_uniform)
 delta_time = interp_delta(t_uniform)
+
+xdot = np.gradient(x_time, dt)
+ydot = np.gradient(y_time, dt)
+psi_rate_time = np.gradient(psi_time, dt)
+vy_time = -xdot * np.sin(psi_time) + ydot * np.cos(psi_time)
 
 # ------------------------------
 # Rotate psi_time by 90° around z-axis
@@ -658,10 +662,39 @@ delta_time = interp_delta(t_uniform)
 # psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
 
 # Combine into a trajectory array
-trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, kappa_time, vx_time, ax_time))
+trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, kappa_time, vx_time, vy_time, psi_rate_time))
 
-header = "time_s,x_m,y_m,psi_rad,kappa_rad,vx_mps,ax_mps2"
+header = "time_s,x_m,y_m,psi_rad,kappa_rad,vx_mps,vy_mps,psi_rate_radps"
 np.savetxt(output_file, trajectory_time_based, delimiter=",", header=header, comments='', fmt='%.6f')
+
+# ------------------------------
+# VISUALIZE TRAJECTORY OVER TRACK
+# ------------------------------
+
+plt.figure(figsize=(10, 6))
+
+# Plot reference track boundaries
+if 'bound1' in locals() and 'bound2' in locals():
+    plt.plot(bound1[:, 0], bound1[:, 1], 'k--', label='Right boundary')
+    plt.plot(bound2[:, 0], bound2[:, 1], 'k--', label='Left boundary')
+
+# Plot time-based trajectory
+plt.plot(x_time, y_time, 'r', label='Time-based trajectory')
+
+# Optional: plot heading arrows every N points
+N_arrows = 20
+for i in range(0, len(x_time), N_arrows):
+    plt.arrow(x_time[i], y_time[i],
+              0.5*np.cos(psi_time[i]), 0.5*np.sin(psi_time[i]),
+              head_width=0.05, head_length=0.1, fc='b', ec='b')
+
+plt.axis('equal')
+plt.xlabel('X [m]')
+plt.ylabel('Y [m]')
+plt.title('Time-based Vehicle Trajectory over Track')
+plt.legend()
+plt.grid(True)
+plt.show()
 
 print(f"INFO: Time-based trajectory saved to {os.path.abspath(output_file)}")
 
