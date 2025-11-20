@@ -147,23 +147,32 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     ctypeRNum vy = x[5];
     ctypeRNum psi_rate = x[6];
 
-    out[0] = (-vx * SIN(psi) - vy * COS(psi)) * vec[2] + COS(psi) * vec[4] - SIN(psi) * vec[5]; // df1/dx * vec
-    out[1] = (vx * COS(psi) - vy * SIN(psi)) * vec[2] + SIN(psi) * vec[4] + COS(psi) * vec[5];  // df2/dx * vec
-    out[2] = vec[6];                                                                            // df3/dx * vec
-    out[3] = 0;                                                                                 // df4/dx * vec
-    out[4] = psi_rate * vec[5] + vy * vec[6];                                                   // df5/dx * vec
-    out[5] = vec[3] * ((Cf / m) * (SIN(delta) * ATAN2((vy + lf * psi_rate), vx) - delta * SIN(delta) + COS(delta))) +
-             vec[4] * (-psi_rate + (((Cr * (vy - lr * psi_rate)) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) +
-                                    ((Cf * COS(delta) * (vy + lf * psi_rate)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) /
-                                       (POW2(vx) * m)) +
-             vec[5] * (((Cr / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) +
-                        ((Cf * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) /
-                       (POW2(vx) * m)) +
-             vec[6] * (vx * (((lr * Cr) / (m * (POW2(vx) + POW2(vy - lr * psi_rate)))) - ((Cf * lf * COS(delta)) / (m * (POW2(vx) + POW2(psi_rate * lf + vy)))) - 1)); // df6/dx * vec
-    out[6] = vec[3] * (lf * Cf * ((SIN(delta) * ATAN2(vy + lf * psi_rate, vx)) - (delta * SIN(delta)) + (COS(delta))) / Iz) +
-             vec[4] * ((((lr * Cr * (lr * psi_rate - vy)) / (POW2(vx) + POW2(vy - lr * psi_rate))) + ((Cf * lf * COS(delta) * (psi_rate * lf + vy)) / (POW2(vx) + POW2(psi_rate * lf + vy)))) / Iz) +
-             vec[5] * ((((lr * Cr) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) - ((Cf * lf * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / (vx * Iz)) +
-             vec[6] * (-(((POW2(lr) * Cr) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) + ((Cf * POW2(lf) * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / (vx * Iz));
+    out[0] = 0; // df(.)/dx * vec
+    out[1] = 0; // df(.)/dy * vec
+    out[2] = vec[0] * (-vx * SIN(psi) - vy * COS(psi)) +
+             vec[1] * (vx * COS(psi) - vy * SIN(psi)); // df(.)/dpsi * vec
+
+    out[3] = vec[5] * ((Cf / m) * (SIN(delta) * ATAN2((vy + lf * psi_rate), vx) - (delta * SIN(delta)) + COS(delta))) +
+             vec[6] * (lf * Cf * ((SIN(delta) * ATAN2(vy + lf * psi_rate, vx)) - (delta * SIN(delta)) + (COS(delta))) / Iz); // df(.)/ddelta * vec
+
+    out[4] = vec[0] * COS(psi) +
+             vec[1] * SIN(psi) +
+             vec[5] * (-psi_rate + ((((Cr * (vy - lr * psi_rate)) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) +
+                                     ((Cf * COS(delta) * (vy + lf * psi_rate)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) /
+                                    (POW2(vx) * m))) +
+             vec[6] * ((((lr * Cr * (lr * psi_rate - vy)) / (POW2(vx) + POW2(vy - lr * psi_rate))) + ((Cf * lf * COS(delta) * (psi_rate * lf + vy)) / (POW2(vx) + POW2(psi_rate * lf + vy)))) / Iz); // df(.)/dvx * vec
+
+    out[5] = vec[0] * (-SIN(psi)) +
+             vec[1] * COS(psi) +
+             vec[4] * (psi_rate) +
+             vec[5] * (-(Cr / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) + ((Cf * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) /
+                 (POW2(vx) * m) +
+             vec[6] * ((((lr * Cr) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) - ((Cf * lf * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / (vx * Iz)); // df(.)/dvy * vec
+
+    out[6] = vec[2] +
+             vec[4] * vy +
+             vec[5] * (vx * (((lr * Cr) / (m * (POW2(vx) + POW2(vy - lr * psi_rate)))) - ((Cf * lf * COS(delta)) / (m * (POW2(vx) + POW2(psi_rate * lf + vy)))) - 1)) +
+             vec[6] * (-(((POW2(lr) * Cr) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) + ((Cf * POW2(lf) * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / (vx * Iz)); // df(.)/dpsi_rate * vec
 }
 
 /** Jacobian df/du multiplied by vector vec: out = (df/du)^T * vec **/
