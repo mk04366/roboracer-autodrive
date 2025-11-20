@@ -341,10 +341,10 @@ void MPCCGrampcNode::controlLoop()
   double throttle_cmd = 0.0;
 
   // print target state for debugging
-  RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, steering=%.2f, v=%.2f", target_state[0],
-              target_state[1], target_state[2], target_state[3], target_state[4]);
-  RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, steering=%.4f, v=%.2f", current_state[0],
-              current_state[1], current_state[2], current_state[3], current_state[4]);
+  RCLCPP_INFO(this->get_logger(), "Target State: x=%.2f, y=%.2f, psi=%.2f, steering=%.2f, vx=%.2f, vy=%.2f, psi_rate=%.2f", target_state[0],
+              target_state[1], target_state[2], target_state[3], target_state[4], target_state[5], target_state[6]);
+  RCLCPP_INFO(this->get_logger(), "Current State: x=%.2f, y=%.2f, psi=%.2f, steering=%.4f, vx=%.2f, vy=%.2f, psi_rate=%.2f", current_state[0],
+              current_state[1], current_state[2], current_state[3], current_state[4], current_state[5], current_state[6]);
 
   grampc_run(grampc_);
 
