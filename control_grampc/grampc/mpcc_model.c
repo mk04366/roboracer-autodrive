@@ -107,25 +107,14 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     ctypeRNum vy = x[5];
     ctypeRNum psi_rate = x[6];
 
-    ctypeRNum front_slip_angle = ATAN2((vy + lf * psi_rate), vx) - delta;
-    ctypeRNum rear_slip_angle = ATAN2((vy - lr * psi_rate), vx);
-
-    ctypeRNum tyre_force_front = -Cf * front_slip_angle;
-    ctypeRNum tyre_force_rear = -Cr * rear_slip_angle;
-
     /* state ordering: [x, y, psi, delta, vx, vy, psi_rate] */
-    out[0] = vx * COS(psi) - vy * SIN(psi); // ẋ = vx * cos(psi) - vy * sin(psi)
-    out[1] = vx * SIN(psi) + vy * COS(psi); // ẏ = vx * sin(psi) + vy * cos(psi)
-    out[2] = psi_rate;                      // ψ̇ = psi_rate
-    out[3] = u[0];                          // δ̇ = delta_dot
-    out[4] = u[1] + (psi_rate * vy);        // vẋ = a + (psi_rate * vy) [approximation]
-    out[5] = -(psi_rate * vx) +
-             ((tyre_force_front * COS(delta)) +
-              tyre_force_rear) /
-                 m; // vẏ = -(psi_rate * vx) + Fy_total/mass
-    out[6] = (lf * tyre_force_front * COS(delta) -
-              lr * tyre_force_rear) /
-             Iz; // psi_ratė = front_axle_distance*F_front_y - rear_axle_distance*F_rear_y / I_z
+    out[0] = vx * COS(psi) - vy * SIN(psi);                                                                                                   // ẋ = vx * cos(psi) - vy * sin(psi)
+    out[1] = vx * SIN(psi) + vy * COS(psi);                                                                                                   // ẏ = vx * sin(psi) + vy * cos(psi)
+    out[2] = psi_rate;                                                                                                                        // ψ̇ = psi_rate
+    out[3] = u[0];                                                                                                                            // δ̇ = delta_dot
+    out[4] = u[1] + (psi_rate * vy);                                                                                                          // vẋ = a + (psi_rate * vy) [approximation]
+    out[5] = ((-Cf * COS(delta) * (ATAN2((vy + lf * psi_rate), vx) - delta) - Cr * (ATAN2((vy - lr * psi_rate), vx))) / m) - (psi_rate * vx); // vẏ = -(psi_rate * vx) + Fy_total/mass
+    out[6] = ((-lf * Cf * COS(delta) * (ATAN2((vy + lf * psi_rate), vx) - delta)) + (lr * Cr * (ATAN2((vy - lr * psi_rate), vx)))) / (Iz);    // psi_ratė = front_axle_distance*F_front_y - rear_axle_distance*F_rear_y / I_z
 }
 
 /** Jacobian df/dx multiplied by vector vec: out = (df/dx)^T * vec **/
@@ -482,6 +471,8 @@ void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     out[2] = 0;                              // psi
     out[3] = vec[0] * 1.0 + vec[1] * (-1.0); // only delta component contributes
     out[4] = 0;                              // v
+    out[5] = 0;                              // vy
+    out[6] = 0;                              // psi_rate
 }
 /** Jacobian dh/du multiplied by vector vec, i.e. (dh/du)^T*vec or vec^T*(dg/du) **/
 void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
