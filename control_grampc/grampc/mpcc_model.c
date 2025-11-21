@@ -141,8 +141,8 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     out[2] = vec[0] * (-vx * SIN(psi) - vy * COS(psi)) +
              vec[1] * (vx * COS(psi) - vy * SIN(psi)); // df(.)/dpsi * vec
 
-    out[3] = vec[5] * ((Cf / m) * (SIN(delta) * ATAN2((vy + lf * psi_rate), vx) - (delta * SIN(delta)) + COS(delta))) +
-             vec[6] * (lf * Cf * ((SIN(delta) * ATAN2(vy + lf * psi_rate, vx)) - (delta * SIN(delta)) + (COS(delta))) / Iz); // df(.)/ddelta * vec
+    out[3] = vec[5] * ((Cf*cos(delta) - Cf*sin(delta)*(delta - atan2(vx, vy + lf*psi_rate)))/m) +
+             vec[6] * ((Cf*lf*cos(delta) - Cf*lf*sin(delta)*(delta - atan2(vx, vy + lf*psi_rate)))/Iz); // df(.)/ddelta * vec
 
     out[4] = vec[0] * COS(psi) +
              vec[1] * SIN(psi) +
