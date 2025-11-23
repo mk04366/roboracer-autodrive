@@ -4,13 +4,11 @@
 #if USE_typeRNum == USE_FLOAT
 #define SIN(a) sinf(a)
 #define COS(a) cosf(a)
-#define TAN(a) tanf(a)
-#define ATAN2(a, b) atan2f(a, b)
+#define ATAN(a) atanf(a)
 #else
 #define SIN(a) sin(a)
 #define COS(a) cos(a)
-#define TAN(a) tan(a)
-#define ATAN2(a, b) atan2(a, b)
+#define ATAN(a) atan(a)
 #endif
 /* square macro */
 #define POW2(a) ((a) * (a))
@@ -113,8 +111,8 @@ void ffct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     out[2] = psi_rate;                                                                                                                        // ψ̇ = psi_rate
     out[3] = u[0];                                                                                                                            // δ̇ = delta_dot
     out[4] = u[1] + (psi_rate * vy);                                                                                                          // vẋ = a + (psi_rate * vy) [approximation]
-    out[5] = ((-Cf * COS(delta) * (ATAN2((vy + lf * psi_rate), vx) - delta) - Cr * (ATAN2((vy - lr * psi_rate), vx))) / m) - (psi_rate * vx); // vẏ = -(psi_rate * vx) + Fy_total/mass
-    out[6] = ((-lf * Cf * COS(delta) * (ATAN2((vy + lf * psi_rate), vx) - delta)) + (lr * Cr * (ATAN2((vy - lr * psi_rate), vx)))) / (Iz);    // psi_ratė = front_axle_distance*F_front_y - rear_axle_distance*F_rear_y / I_z
+    out[5] = ((-Cf * COS(delta) * (ATAN((vy + lf * psi_rate) / vx) - delta) - Cr * (ATAN((vy - lr * psi_rate) / vx))) / m) - (psi_rate * vx); // vẏ = -(psi_rate * vx) + Fy_total/mass
+    out[6] = ((-lf * Cf * COS(delta) * (ATAN((vy + lf * psi_rate) / vx) - delta)) + (lr * Cr * (ATAN((vy - lr * psi_rate) / vx)))) / (Iz);    // psi_ratė = front_axle_distance*F_front_y - rear_axle_distance*F_rear_y / I_z
 }
 
 /** Jacobian df/dx multiplied by vector vec: out = (df/dx)^T * vec **/
@@ -141,27 +139,24 @@ void dfdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
     out[2] = vec[0] * (-vx * SIN(psi) - vy * COS(psi)) +
              vec[1] * (vx * COS(psi) - vy * SIN(psi)); // df(.)/dpsi * vec
 
-    out[3] = vec[5] * ((Cf*cos(delta) - Cf*sin(delta)*(delta - atan2(vx, vy + lf*psi_rate)))/m) +
-             vec[6] * ((Cf*lf*cos(delta) - Cf*lf*sin(delta)*(delta - atan2(vx, vy + lf*psi_rate)))/Iz); // df(.)/ddelta * vec
+    out[3] = vec[5] * ((Cf * COS(delta) - Cf * SIN(delta) * (delta - ATAN((vy + lf * psi_rate) / vx))) / m) +
+             vec[6] * ((Cf * lf * COS(delta) - Cf * lf * SIN(delta) * (delta - ATAN((vy + lf * psi_rate) / vx))) / Iz); // df(.)/ddelta * vec
 
     out[4] = vec[0] * COS(psi) +
              vec[1] * SIN(psi) +
-             vec[5] * (-psi_rate + ((((Cr * (vy - lr * psi_rate)) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) +
-                                     ((Cf * COS(delta) * (vy + lf * psi_rate)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) /
-                                    (POW2(vx) * m))) +
-             vec[6] * ((((lr * Cr * (lr * psi_rate - vy)) / (POW2(vx) + POW2(vy - lr * psi_rate))) + ((Cf * lf * COS(delta) * (psi_rate * lf + vy)) / (POW2(vx) + POW2(psi_rate * lf + vy)))) / Iz); // df(.)/dvx * vec
+             vec[5] * (((Cr * (vy - lr * psi_rate)) / (POW2(vx) * (POW2(vy - lr * psi_rate) / POW2(vx) + 1)) + (Cf * COS(delta) * (vy + lf * psi_rate)) / (POW2(vx) * (POW2(vy + lf * psi_rate) / POW2(vx) + 1))) / m - psi_rate) +
+             vec[6] * (-((Cr * lr * (vy - lr * psi_rate)) / (POW2(vx) * (POW2(vy - lr * psi_rate) / POW2(vx) + 1)) - (Cf * lf * COS(delta) * (vy + lf * psi_rate)) / (POW2(vx) * (POW2(vy + lf * psi_rate) / POW2(vx) + 1))) / Iz); // df(.)/dvx * vec
 
     out[5] = vec[0] * (-SIN(psi)) +
              vec[1] * COS(psi) +
              vec[4] * (psi_rate) +
-             vec[5] * (-(Cr / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) + ((Cf * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) /
-                 (POW2(vx) * m) +
-             vec[6] * ((((lr * Cr) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) - ((Cf * lf * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / (vx * Iz)); // df(.)/dvy * vec
+             vec[5] * (-(Cr / (vx * (POW2(vy - lr * psi_rate) / POW2(vx) + 1)) + (Cf * COS(delta)) / (vx * (POW2(vy + lf * psi_rate) / POW2(vx) + 1))) / m) +
+             vec[6] * (((Cr * lr) / (vx * (POW2(vy - lr * psi_rate) / POW2(vx) + 1)) - (Cf * lf * COS(delta)) / (vx * (POW2(vy + lf * psi_rate) / POW2(vx) + 1))) / Iz); // df(.)/dvy * vec
 
     out[6] = vec[2] +
              vec[4] * vy +
-             vec[5] * (vx * (((lr * Cr) / (m * (POW2(vx) + POW2(vy - lr * psi_rate)))) - ((Cf * lf * COS(delta)) / (m * (POW2(vx) + POW2(psi_rate * lf + vy)))) - 1)) +
-             vec[6] * (-(((POW2(lr) * Cr) / ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) + ((Cf * POW2(lf) * COS(delta)) / ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / (vx * Iz)); // df(.)/dpsi_rate * vec
+             vec[5] * (((Cr * lr) / (vx * (POW2(vy - lr * psi_rate) / POW2(vx) + 1)) - (Cf * lf * COS(delta)) / (vx * (POW2(vy + lf * psi_rate) / POW2(vx) + 1))) / m - vx) +
+             vec[6] * (-((Cr * POW2(lr)) / (vx * ((POW2(vy - lr * psi_rate) / POW2(vx)) + 1)) + (Cf * POW2(lf) * COS(delta)) / (vx * ((POW2(vy + lf * psi_rate) / POW2(vx)) + 1))) / Iz); // df(.)/dpsi_rate * vec
 }
 
 /** Jacobian df/du multiplied by vector vec: out = (df/du)^T * vec **/
