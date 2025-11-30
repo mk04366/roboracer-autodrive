@@ -40,6 +40,7 @@ MPCCGrampcNode::MPCCGrampcNode()
   steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
   steering_rate_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_rate_command", 10);
   accel_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/accel_current", 10);
+  desired_accel_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/accel_desired", 10);
   path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/planned_path", 10);
   target_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/mpcc_target", 10);
 
@@ -122,7 +123,7 @@ void MPCCGrampcNode::initGrampcParams()
     delta_ref_.push_back(path_->getSteering(i));
     v_ref_.push_back(path_->getVelocity(i));
   }
-  L_ = 0.32;
+  L_ = 0.36;
 
   /********* Parameter definition *********/
   /* Initial values and setpoints of the states, inputs, parameters, penalties and Lagrangian mmultipliers, setpoints
@@ -143,20 +144,20 @@ void MPCCGrampcNode::initGrampcParams()
   // scalar parameters
   pvals[0] = L_;
 
-  pvals[1] = 1000.0;
-  pvals[2] = 1000.0;
+  pvals[1] = 10000.0;
+  pvals[2] = 10000.0;
   pvals[3] = 10.0;
   pvals[4] = 100.0;
-  pvals[5] = 0.1;
+  pvals[5] = 10.0;
 
   pvals[6] = 1000.0;
   pvals[7] = 1000.0;
   pvals[8] = 10.0;
   pvals[9] = 100.0;
-  pvals[10] = 0.1;
+  pvals[10] = 10.0;
 
   pvals[11] = 0.01;
-  pvals[12] = 10.0;
+  pvals[12] = 0.01;
 
   // store pointer bitpatterns (uintptr_t -> double)
   pvals[13] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
@@ -170,8 +171,8 @@ void MPCCGrampcNode::initGrampcParams()
   pvals[19] = static_cast<double>(N);
   pvals[20] = static_cast<double>(current_time_);
 
-  pvals[21] = 2.0; //yaw rate penalty
-  pvals[22] = 0.0; //yaw acc penalty
+  pvals[21] = 2.0; // yaw rate penalty
+  pvals[22] = 1.0; // yaw acc penalty
 
   /********* Option definition *********/
   ctypeInt MaxGradIter = 5;
@@ -247,13 +248,11 @@ void MPCCGrampcNode::initializePathPosition()
   auto **userparamUpdate = reinterpret_cast<void **>(grampc_->userparam);
   userparamUpdate[20] = &current_time_;
   grampc_->userparam = reinterpret_cast<typeUSERPARAM *>(userparamUpdate);
-
-  // RCLCPP_INFO(this->get_logger(), "Initialized path position at index %.0f, time %.2f s", static_cast<double>(current_path_idx_),
-  //             current_time_);
 }
 
-double MPCCGrampcNode::lookupThrottle(double a, double v) {
-    return -0.120551137162 + (0.100415094063 * (a)) + (0.058607309491 * (v)) + (0.006595782035 * (a*a)) + (0.003177853086 * (a * v)) + (-0.004465712844 * (v*v));
+double MPCCGrampcNode::lookupThrottle(double a, double v)
+{
+  return 0.036745578528 + (-0.017688313748 * (a)) + (-0.007076312827 * (v)) + (0.003251715937 * (a*a)) + (0.001392910067 * (a * v)) + (-0.003075206841 * (v*v));
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
@@ -271,6 +270,8 @@ void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::Sh
   x_ = msg->position.x;
   y_ = msg->position.y;
 
+  const double prev_v_ = v_;
+
   // Extract speed
   v_ = static_cast<double>(msg->speed);
 
@@ -281,7 +282,7 @@ void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::Sh
   auto imu_ptr = std::make_shared<sensor_msgs::msg::Imu>(msg->imu);
   psi_ = getYawFromImu(imu_ptr);
 
-  accel_imu_ = msg->imu.linear_acceleration.x;
+  accel_imu_ = (prev_v_ - v_) / dt_;
 
   // Compute curvature
   auto pos_ptr = std::make_shared<geometry_msgs::msg::Point>(msg->position);
@@ -336,12 +337,12 @@ void MPCCGrampcNode::controlLoop()
   else
   {
     /* update state and time */
-    double desired_acc = grampc_->sol->unext[1]; // scale down acceleration command
+    accel_desired_ = grampc_->sol->unext[1]; // scale down acceleration command
     double steering_rate_cmd = grampc_->sol->unext[0];
     steer_cmd = grampc_->sol->xnext[3] + steering_rate_cmd * dt_;
     steer_rate_cmd = steering_rate_cmd;
 
-    throttle_cmd = lookupThrottle(desired_acc, v_);
+    throttle_cmd = lookupThrottle(accel_desired_, v_);
 
     // RCLCPP_INFO(this->get_logger(), "Computed Commands: Throttle=%.4f, Steering=%.4f", throttle_cmd,
     //             steer_cmd);
@@ -370,6 +371,11 @@ void MPCCGrampcNode::controlLoop()
   auto a_msg = std_msgs::msg::Float32();
   a_msg.data = static_cast<float>(accel_imu_);
   accel_pub_->publish(a_msg);
+
+  // Publish desired acceleration command
+  auto ad_msg = std_msgs::msg::Float32();
+  ad_msg.data = static_cast<float>(accel_desired_);
+  desired_accel_pub_->publish(ad_msg);
 }
 
 MPCCGrampcNode::~MPCCGrampcNode()
