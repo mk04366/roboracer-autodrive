@@ -133,7 +133,7 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeRNum udes[NU] = {0.0, 0.0};
   ctypeRNum umin[NU] = {-M_PI, -1.0};
   ctypeRNum umax[NU] = {M_PI, 1.0};
-  Thor_ = 1.0;                     /* Prediction horizon */
+  Thor_ = 0.5;                     /* Prediction horizon */
   dt_ = 1.0 / 17.0;                /* Sampling time */
   ctypeInt Nhor = Thor_ / dt_ + 1; /* Number of steps for the system integration */
   typeRNum t0 = 0.0;               /* time at the current sampling step */
@@ -156,7 +156,7 @@ void MPCCGrampcNode::initGrampcParams()
   pvals[10] = 0.1;
 
   pvals[11] = 0.01;
-  pvals[12] = 100.0;
+  pvals[12] = 1.0;
 
   // store pointer bitpatterns (uintptr_t -> double)
   pvals[13] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
