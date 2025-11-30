@@ -19,7 +19,7 @@ setup(
     maintainer_email='mammark14@gmail.com',
     description='Central launch package for entire system',
     license='BSD',
-    tests_require=['pytest'],
+    
     entry_points={
         'console_scripts': [],
     },

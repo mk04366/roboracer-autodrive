@@ -22,7 +22,7 @@ setup(
     maintainer_email='localhost@todo.todo',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
+    
     entry_points={
         'console_scripts': [
             'initial_pose_publisher = localization.initial_pose_publisher:main',

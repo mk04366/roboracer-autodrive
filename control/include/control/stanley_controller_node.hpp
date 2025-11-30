@@ -10,21 +10,14 @@
 #include <stdexcept>
 #include <tuple>
 #include <limits>
+#include "control/common.hpp"
 
-struct VehicleState
+struct VehicleStateStanley
 {
     double x;
     double y;
     double heading;
     double velocity;
-};
-
-struct Waypoint
-{
-    double x;
-    double y;
-    double velocity;
-    double heading;
 };
 
 class StanleyController
@@ -48,11 +41,11 @@ public:
 
     double pi2pi(double angle);
     std::tuple<double, double, size_t, double> calcThetaAndEf(
-        const VehicleState &state,
+        const VehicleStateStanley &state,
         const std::vector<Waypoint> &waypoints);
 
     std::pair<double, double> controller(
-        const VehicleState &state,
+        const VehicleStateStanley &state,
         const std::vector<Waypoint> &waypoints,
         double k_path);
 
