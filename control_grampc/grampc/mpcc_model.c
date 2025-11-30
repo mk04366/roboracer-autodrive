@@ -170,10 +170,10 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
         * time_scale;                                        // time-varying scaling
     
     double omega = x[4] / *(double *)pSys[0] *TAN(x[3]);
-    out[0] += 1 * POW2(omega); // add term to minimize yaw rate
+    out[0] += (*((double *)pSys[21])) * 1 * POW2(omega); // add term to minimize yaw rate
 
     double omega_dot = u[1] / *(double *)pSys[0] *TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
-    // out[0] += 1 * POW2(omega_dot); // add term to minimize yaw acceleration
+    out[0] += (*((double *)pSys[22])) * 1 * POW2(omega_dot); // add term to minimize yaw acceleration
 }
 
 /** Gradient dl/dx **/
@@ -207,14 +207,14 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     // add yaw rate term
     double omega = x[4] / *(double *)pSys[0] *TAN(x[3]);   
 
-    out[3] += 2 * omega * x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3])));
+    out[3] += (*((double *)pSys[21])) * 2 * omega * x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3])));
 
-    out[4] += 2 * omega * (1.0 / *(double *)pSys[0]) *TAN(x[3]);
+    out[4] += (*((double *)pSys[22])) * 2 * omega * (1.0 / *(double *)pSys[0]) *TAN(x[3]);
     // add yaw acceleration term
     double omega_dot = u[1] / *(double *)pSys[0] *TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
-    // out[3] += 2 * omega_dot * (u[1] / *(double *)pSys[0]) * (1.0 / (COS(x[3]) * COS(x[3]))) + 
-    //           2 * omega_dot * x[4] / *(double *)pSys[0] * (2.0 * SIN(x[3]) / (COS(x[3]) * COS(x[3]) * COS(x[3])))*u[0];
-    // out[4] += 2 * omega_dot * (1.0 / *(double *)pSys[0]) * u[0] / (COS(x[3]) * COS(x[3]));
+    out[3] += (*((double *)pSys[21])) * 2 * omega_dot * (u[1] / *(double *)pSys[0]) * (1.0 / (COS(x[3]) * COS(x[3]))) + 
+              2 * omega_dot * x[4] / *(double *)pSys[0] * (2.0 * SIN(x[3]) / (COS(x[3]) * COS(x[3]) * COS(x[3])))*u[0];
+    out[4] += (*((double *)pSys[22])) * 2 * omega_dot * (1.0 / *(double *)pSys[0]) * u[0] / (COS(x[3]) * COS(x[3]));
 
 }
 
@@ -233,8 +233,8 @@ void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     // add yaw acceleration term
     double omega_dot = u[1] / *(double *)pSys[0] *TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
 
-    // out[0] += 2 * omega_dot * x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3])));
-    // out[1] += 2 * omega_dot * 1/ *(double *)pSys[0] * TAN(x[3]);
+    out[0] += (*((double *)pSys[21])) * 2 * omega_dot * x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3])));
+    out[1] +=(*((double *)pSys[22])) * 2 * omega_dot * 1/ *(double *)pSys[0] * TAN(x[3]);
     
 }
 

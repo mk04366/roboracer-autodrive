@@ -138,25 +138,25 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeInt Nhor = Thor_ / dt_ + 1; /* Number of steps for the system integration */
   typeRNum t0 = 0.0;               /* time at the current sampling step */
 
-  static double pvals[21];
+  static double pvals[23];
 
   // scalar parameters
   pvals[0] = L_;
 
   pvals[1] = 1000.0;
   pvals[2] = 1000.0;
-  pvals[3] = 0.1;
-  pvals[4] = 0.1;
+  pvals[3] = 10.0;
+  pvals[4] = 100.0;
   pvals[5] = 0.1;
 
-  pvals[6] = 0.1;
-  pvals[7] = 0.1;
-  pvals[8] = 0.1;
-  pvals[9] = 0.1;
+  pvals[6] = 1000.0;
+  pvals[7] = 1000.0;
+  pvals[8] = 10.0;
+  pvals[9] = 100.0;
   pvals[10] = 0.1;
 
   pvals[11] = 0.01;
-  pvals[12] = 1.0;
+  pvals[12] = 10.0;
 
   // store pointer bitpatterns (uintptr_t -> double)
   pvals[13] = static_cast<double>(reinterpret_cast<uintptr_t>(t_ref_.data()));
@@ -170,12 +170,15 @@ void MPCCGrampcNode::initGrampcParams()
   pvals[19] = static_cast<double>(N);
   pvals[20] = static_cast<double>(current_time_);
 
+  pvals[21] = 2.0; //yaw rate penalty
+  pvals[22] = 0.0; //yaw acc penalty
+
   /********* Option definition *********/
   ctypeInt MaxGradIter = 5;
   ctypeRNum ConstraintsAbsTol[1] = {1e-2};
 
   // Build pointer array pSys which GRAMPC model will interpret as userparam (array of pointers)
-  static void *pSys[21] = {nullptr};
+  static void *pSys[23] = {nullptr};
   // Point scalar slots to pvals entries (indices 0..12 and 19..20)
   for (size_t i = 0; i <= 12; ++i)
   {
@@ -183,6 +186,8 @@ void MPCCGrampcNode::initGrampcParams()
   }
   pSys[19] = &pvals[19];
   pSys[20] = &pvals[20];
+  pSys[21] = &pvals[21];
+  pSys[22] = &pvals[22];
 
   // Fill pointer slots with the reference array data pointers (indices 13..18)
   pSys[13] = const_cast<double *>(t_ref_.data());
