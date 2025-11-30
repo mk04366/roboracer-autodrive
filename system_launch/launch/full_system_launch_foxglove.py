@@ -67,9 +67,9 @@ def generate_launch_description():
     # )
 
     return LaunchDescription([
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource(autodrive_launch_path)
-        # ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(autodrive_launch_path)
+        ),
         # IncludeLaunchDescription(
         #     PythonLaunchDescriptionSource(control_launch_path),
         #     ),
@@ -81,6 +81,6 @@ def generate_launch_description():
         # ),
         mpcc_node,
         foxglove_node,
-        mpcc_tester_node
+        # mpcc_tester_node
         # initial_pose_node
     ])

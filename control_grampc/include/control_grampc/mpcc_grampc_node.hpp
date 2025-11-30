@@ -29,6 +29,11 @@ extern "C" {
 #define NU 2
 #define NH 0
 
+const int ACC_MIN = -10;
+const int ACC_MAX = 10;
+const int SPEED_MIN = 0;
+const int SPEED_MAX = 8;
+
 class MPCCGrampcNode : public rclcpp::Node
 {
 public:
@@ -43,10 +48,12 @@ private:
   void publishTarget(const Eigen::Vector2d& point, double heading);
   double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr& imu_msg);
   void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
+  double lookupThrottle(double a, double v);
   // ROS publishers/subscribers
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_rate_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr accel_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
   rclcpp::TimerBase::SharedPtr path_timer_;
@@ -54,7 +61,7 @@ private:
 
   std::shared_ptr<mpcc::Path> path_;
   // Vehicle state - 5D [x, y, psi, v, steering]
-  double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_ = 0.0, steering_ = 0.0;
+  double x_ = 0.0, y_ = 0.0, psi_ = 0.0, v_ = 0.0, steering_ = 0.0, accel_imu_ = 0.0;
 
   std::vector<double> t_ref_, x_ref_, y_ref_, psi_ref_, delta_ref_, v_ref_;
   // Path following state
