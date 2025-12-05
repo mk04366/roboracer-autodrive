@@ -17,7 +17,7 @@ MPCCGrampcNode::MPCCGrampcNode()
   // Load path from CSV file
   std::string csv_file = this->declare_parameter<std::string>("path_csv",
                                                               "/home/ammar/ros2_ws/src/global-planning/outputs/map5/"
-                                                              "time_traj_kappa_low_rotated.csv");
+                                                              "ay_safe_2.csv");
   path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
 
   if (path_ && path_->getTotalLength() > 1e-3)
@@ -144,15 +144,15 @@ void MPCCGrampcNode::initGrampcParams()
   // scalar parameters
   pvals[0] = L_;
 
-  pvals[1] = 10000.0;
-  pvals[2] = 10000.0;
-  pvals[3] = 10.0;
+  pvals[1] = 100000.0;
+  pvals[2] = 100000.0;
+  pvals[3] = 1000.0;
   pvals[4] = 1.0;
   pvals[5] = 10.0;
 
-  pvals[6] = 1.0;
-  pvals[7] = 1.0;
-  pvals[8] = 1.0;
+  pvals[6] = 100000.0;
+  pvals[7] = 100000.0;
+  pvals[8] = 1000.0;
   pvals[9] = 1.0;
   pvals[10] = 1.0;
 
@@ -173,7 +173,7 @@ void MPCCGrampcNode::initGrampcParams()
 
   pvals[21] = 2.0; // yaw rate penalty
   pvals[22] = 1.0; // yaw acc penalty
-  pvals[23] = 1000.0; // curvature penalty
+  pvals[23] = 1.0; // curvature penalty
 
   /********* Option definition *********/
   ctypeInt MaxGradIter = 5;
