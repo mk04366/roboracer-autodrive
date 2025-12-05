@@ -123,7 +123,7 @@ void MPCCGrampcNode::initGrampcParams()
     delta_ref_.push_back(path_->getSteering(i));
     v_ref_.push_back(path_->getVelocity(i));
   }
-  L_ = 0.36;
+  L_ = 0.33;
 
   /********* Parameter definition *********/
   /* Initial values and setpoints of the states, inputs, parameters, penalties and Lagrangian mmultipliers, setpoints
@@ -139,7 +139,7 @@ void MPCCGrampcNode::initGrampcParams()
   ctypeInt Nhor = Thor_ / dt_ + 1; /* Number of steps for the system integration */
   typeRNum t0 = 0.0;               /* time at the current sampling step */
 
-  static double pvals[23];
+  static double pvals[24];
 
   // scalar parameters
   pvals[0] = L_;
@@ -147,14 +147,14 @@ void MPCCGrampcNode::initGrampcParams()
   pvals[1] = 10000.0;
   pvals[2] = 10000.0;
   pvals[3] = 10.0;
-  pvals[4] = 100.0;
+  pvals[4] = 1.0;
   pvals[5] = 10.0;
 
-  pvals[6] = 1000.0;
-  pvals[7] = 1000.0;
-  pvals[8] = 10.0;
-  pvals[9] = 100.0;
-  pvals[10] = 10.0;
+  pvals[6] = 1.0;
+  pvals[7] = 1.0;
+  pvals[8] = 1.0;
+  pvals[9] = 1.0;
+  pvals[10] = 1.0;
 
   pvals[11] = 0.01;
   pvals[12] = 0.01;
@@ -173,6 +173,7 @@ void MPCCGrampcNode::initGrampcParams()
 
   pvals[21] = 2.0; // yaw rate penalty
   pvals[22] = 1.0; // yaw acc penalty
+  pvals[23] = 1000.0; // curvature penalty
 
   /********* Option definition *********/
   ctypeInt MaxGradIter = 5;
@@ -189,6 +190,7 @@ void MPCCGrampcNode::initGrampcParams()
   pSys[20] = &pvals[20];
   pSys[21] = &pvals[21];
   pSys[22] = &pvals[22];
+  pSys[23] = &pvals[23];
 
   // Fill pointer slots with the reference array data pointers (indices 13..18)
   pSys[13] = const_cast<double *>(t_ref_.data());
@@ -252,7 +254,7 @@ void MPCCGrampcNode::initializePathPosition()
 
 double MPCCGrampcNode::lookupThrottle(double a, double v)
 {
-  return 0.036745578528 + (-0.017688313748 * (a)) + (-0.007076312827 * (v)) + (0.003251715937 * (a*a)) + (0.001392910067 * (a * v)) + (-0.003075206841 * (v*v));
+  return -0.012833251448 + (0.002944490101 * (a)) + (0.057379678892 * (v)) + (0.000328776471 * (a*a)) + (0.000533089661 * (a * v)) + (-0.002773426265 * (v*v));
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)

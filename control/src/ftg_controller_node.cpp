@@ -2,6 +2,7 @@
 #include "control/common.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/float32.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include <vector>
 #include <algorithm>
 #include <numeric>
@@ -17,10 +18,13 @@ private:
     float decay = 0.9f;
     float THROTTLE_ADJUSTMENT_FACTOR = 0.01f;
     float target_pct = 0.05f;
+    float prev_v = 0.0f;
 
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steer_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr accel_pub_;
 
     void lidar_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
     {
@@ -33,6 +37,7 @@ private:
         publish_steering(steering);
         publish_throttle(throttle);
     }
+
 
     std::vector<float> preprocess_lidar(const std::vector<float> &ranges)
     {
@@ -166,8 +171,18 @@ public:
 
         lidar_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/autodrive/f1tenth_1/lidar", 10, std::bind(&FTGNode::lidar_callback, this, _1));
-
+        speed_sub =  this->create_subscription<std_msgs::msg::Float32>(
+            "/autodrive/f1tenth_1/speed", 10, [this](const std_msgs::msg::Float32::SharedPtr msg) {
+                float v = msg->data;
+                // (v - prev_v) / (1/17) == (v - prev_v) * 17
+                float accel = (v - prev_v) * 17.0f; // assuming 17 Hz
+                prev_v = v;
+                auto amsg = std_msgs::msg::Float32();
+                amsg.data = accel;
+                accel_pub_->publish(amsg);
+            });
         steer_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
+        accel_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/accel_current", 10);
         throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
     }
 

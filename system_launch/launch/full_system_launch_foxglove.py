@@ -19,14 +19,14 @@ def generate_launch_description():
     #     'waypoints_loader_launch.py'
     # )
 
-    # control_launch_path = os.path.join(
-    #     get_package_share_directory('control_grampc'),
-    #     'launch',
-    #     # 'pid_controller_launch.py'
-    #     # 'ftg_controller_launch.py'
-    #     # 'stanley_controller_launch.py'
-    #     'mpcc_grampc.launch.py',
-    # )
+    control_launch_path = os.path.join(
+        get_package_share_directory('control'),
+        'launch',
+        # 'pid_controller_launch.py'
+        'ftg_controller_launch.py'
+        # 'stanley_controller_launch.py'
+        # 'mpcc_grampc.launch.py',
+    )
 
     mpcc_node = Node(
         package="control_grampc",
