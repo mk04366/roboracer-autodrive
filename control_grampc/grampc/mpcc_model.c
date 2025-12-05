@@ -77,7 +77,7 @@ void ocp_dim(typeInt *Nx, typeInt *Nu, typeInt *Np, typeInt *Ng, typeInt *Nh, ty
     *Nx = 5; // [x, y, psi, delta(steering), v]
     *Nu = 2; // [delta_dot, a]
     *Np = 0;
-    *Nh = 2;
+    *Nh = 3;
     *Ng = 0;
     *NgT = 0;
     *NhT = 0;
@@ -168,12 +168,15 @@ void lfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
          (*((double *)pSys[4])) * POW2(x[3] - delta_ref_t) + // steering error weight
          (*((double *)pSys[5])) * POW2(x[4] - v_ref_t))      // velocity error weight
         * time_scale;                                        // time-varying scaling
-    
-    double omega = x[4] / *(double *)pSys[0] *TAN(x[3]);
+
+    double omega = x[4] / *(double *)pSys[0] * TAN(x[3]);
     out[0] += (*((double *)pSys[21])) * 1 * POW2(omega); // add term to minimize yaw rate
 
-    double omega_dot = u[1] / *(double *)pSys[0] *TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
+    double omega_dot = u[1] / *(double *)pSys[0] * TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
     out[0] += (*((double *)pSys[22])) * 1 * POW2(omega_dot); // add term to minimize yaw acceleration
+
+    double k_curv = *((double *)pSys[23]);
+    out[0] += k_curv * POW2(x[4]) * POW2(TAN(x[3]));
 }
 
 /** Gradient dl/dx **/
@@ -205,17 +208,22 @@ void dldx(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     out[4] = time_scale * 2 * (*((double *)pSys[5])) * (x[4] - v_ref_t);
 
     // add yaw rate term
-    double omega = x[4] / *(double *)pSys[0] *TAN(x[3]);   
+    double omega = x[4] / *(double *)pSys[0] * TAN(x[3]);
 
     out[3] += (*((double *)pSys[21])) * 2 * omega * x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3])));
 
-    out[4] += (*((double *)pSys[22])) * 2 * omega * (1.0 / *(double *)pSys[0]) *TAN(x[3]);
+    out[4] += (*((double *)pSys[22])) * 2 * omega * (1.0 / *(double *)pSys[0]) * TAN(x[3]);
     // add yaw acceleration term
-    double omega_dot = u[1] / *(double *)pSys[0] *TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
-    out[3] += (*((double *)pSys[21])) * 2 * omega_dot * (u[1] / *(double *)pSys[0]) * (1.0 / (COS(x[3]) * COS(x[3]))) + 
-              2 * omega_dot * x[4] / *(double *)pSys[0] * (2.0 * SIN(x[3]) / (COS(x[3]) * COS(x[3]) * COS(x[3])))*u[0];
+    double omega_dot = u[1] / *(double *)pSys[0] * TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
+    out[3] += (*((double *)pSys[21])) * 2 * omega_dot * (u[1] / *(double *)pSys[0]) * (1.0 / (COS(x[3]) * COS(x[3]))) +
+              2 * omega_dot * x[4] / *(double *)pSys[0] * (2.0 * SIN(x[3]) / (COS(x[3]) * COS(x[3]) * COS(x[3]))) * u[0];
     out[4] += (*((double *)pSys[22])) * 2 * omega_dot * (1.0 / *(double *)pSys[0]) * u[0] / (COS(x[3]) * COS(x[3]));
 
+    double k_curv = *((double *)pSys[23]);
+    // d/d(delta) [v^2 * tan^2(delta)]
+    out[3] += k_curv * 2 * POW2(x[4]) * TAN(x[3]) * (1.0 / POW2(COS(x[3])));
+    // d/d(v) [v^2 * tan^2(delta)]
+    out[4] += k_curv * 2 * x[4] * POW2(TAN(x[3]));
 }
 
 /** Gradient dl/du **/
@@ -228,14 +236,13 @@ void dldu(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, 
     out[0] = 2 * (*((double *)pSys[11])) * (u[0] - udes[0]);
     out[1] = 2 * (*((double *)pSys[12])) * (u[1] - udes[1]);
 
-   // add yaw rate term
-    double omega = x[4] / *(double *)pSys[0] *TAN(x[3]);   
+    // add yaw rate term
+    double omega = x[4] / *(double *)pSys[0] * TAN(x[3]);
     // add yaw acceleration term
-    double omega_dot = u[1] / *(double *)pSys[0] *TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
+    double omega_dot = u[1] / *(double *)pSys[0] * TAN(x[3]) + x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3]))) * u[0];
 
     out[0] += (*((double *)pSys[21])) * 2 * omega_dot * x[4] / *(double *)pSys[0] * (1.0 / (COS(x[3]) * COS(x[3])));
-    out[1] +=(*((double *)pSys[22])) * 2 * omega_dot * 1/ *(double *)pSys[0] * TAN(x[3]);
-    
+    out[1] += (*((double *)pSys[22])) * 2 * omega_dot * 1 / *(double *)pSys[0] * TAN(x[3]);
 }
 
 /** Gradient dl/dp **/
@@ -331,26 +338,32 @@ void dgdp_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum 
 void hfct(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
     ctypeRNum delta = x[3];
-    const double delta_max = M_PI / 4.0;
+    const double delta_max = M_PI / 6.0;
 
     // Constraint 1: delta - delta_max ≤ 0
     out[0] = delta - delta_max;
 
     // Constraint 2: -delta - delta_max ≤ 0
     out[1] = -delta - delta_max;
+
+    // Constraint 3: centripetal force limit.
+    void **pSys = (void **)userparam;
+    ctypeRNum v = x[4] - 5.0;
+    const double ac_max = 10.0;                          // maximum centripetal acceleration
+    const double R = *(ctypeRNum *)pSys[0] / TAN(delta); // turning radius
+    out[2] = POW2(v) / R - ac_max;                       // v^2 / R - ac_max ≤ 0
 }
 /** Jacobian dh/dx multiplied by vector vec, i.e. (dh/dx)^T*vec or vec^T*(dg/dx) **/
 void dhdx_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
 {
-    // h0 = delta - delta_max → ∂h0/∂delta = +1
-    // h1 = -delta - delta_max → ∂h1/∂delta = -1
-    // vec = [v0, v1]^T selecting combination
+    void **pSys = (void **)userparam;
+    ctypeRNum L = *((ctypeRNum *)pSys[0]);
 
-    out[0] = 0;                              // x
-    out[1] = 0;                              // y
-    out[2] = 0;                              // psi
-    out[3] = vec[0] * 1.0 + vec[1] * (-1.0); // only delta component contributes
-    out[4] = 0;                              // v
+    out[0] = 0;                                                                            // x
+    out[1] = 0;                                                                            // y
+    out[2] = 0;                                                                            // psi
+    out[3] = vec[0] * 1.0 + vec[1] * (-1.0) + vec[2] * (2 * x[4] / (L * POW2(COS(x[3])))); // only delta component contributes
+    out[4] = vec[2] * (2 * x[4] * TAN(x[3]) / L);                                          // v
 }
 /** Jacobian dh/du multiplied by vector vec, i.e. (dh/du)^T*vec or vec^T*(dg/du) **/
 void dhdu_vec(typeRNum *out, ctypeRNum t, ctypeRNum *x, ctypeRNum *u, ctypeRNum *p, ctypeRNum *vec, const typeGRAMPCparam *param, typeUSERPARAM *userparam)
