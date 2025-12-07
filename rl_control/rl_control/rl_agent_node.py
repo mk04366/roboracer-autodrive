@@ -80,6 +80,8 @@ class AutodriveEnv(gym.Env):
         self.latest_observation = np.zeros(TOTAL_OBSERVATION_SIZE, dtype=np.float32)
         self.current_speed = 0.0
         self.is_done = False
+        # flag for synchronization
+        self.new_lidar_received = False
 
     # --- ROS CALLBACKS ---
     def _lidar_callback(self, msg):
@@ -91,6 +93,8 @@ class AutodriveEnv(gym.Env):
         normalized_scan_data = 2 * ((scan_data[:lidar_len] - 0.06) / (10 - 0.06)) - 1
         self.latest_observation[:lidar_len] = normalized_scan_data
         
+        # Signal that fresh data is ready
+        self.new_lidar_received = True
         # Check for collision/terminal state here
         if np.min(self.latest_observation[:lidar_len]) < -0.88:  # Corresponds to 0.06 in normalized range
             self.is_done = True
@@ -146,8 +150,15 @@ class AutodriveEnv(gym.Env):
         self.reset_publisher.publish(reset_msg)
         self.node.get_logger().info('Environment reset commanded.')
         
-        # 3. Spin ROS to allow reset to take effect and get initial observation
-        rclpy.spin_once(self.node, timeout_sec=0.5)
+        self.node.get_logger().info('Waiting for Lidar data...')
+        data_received = False
+        while not data_received:
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+            
+            if np.any(self.latest_observation[:1080] != 0): 
+                data_received = True
+                
+        self.node.get_logger().info('Simulator connected. Lidar data received.')
         
         observation = self.latest_observation.copy()
         info = {}
@@ -160,16 +171,27 @@ class AutodriveEnv(gym.Env):
         steer = action[0] 
         throttle = action[1]
         
-        # Publish steering command
+        # Publish steering and throttle command
         self.steering_publisher.publish(Float32(data=float(steer)))
-        
-        # Publish throttle command
         self.throttle_publisher.publish(Float32(data=float(throttle)))
         
-        # 2. Process Environment (ROS 2)
-        # Spin to receive the next sensor data (new state)
-        rclpy.spin_once(self.node, timeout_sec=0.01) # Use a very short spin time
+        # Reset the flag. waiting for the NEXT message.
+        self.new_lidar_received = False
+        # Safety counter to prevent infinite loops if sim crashes
+        wait_counter = 0 
         
+        # SPIN UNTIL FRESH: Loop until the callback fires
+        while not self.new_lidar_received:
+            # Check the subscriber queue rapidly (1ms timeout)
+            rclpy.spin_once(self.node, timeout_sec=0.001)
+            
+            # Safety break after ~1 second (1000 * 0.001)
+            wait_counter += 1
+            if wait_counter > 1000:
+                self.node.get_logger().error("Timeout: Lidar data stopped arriving!")
+                # Force a break or handle error (e.g., end episode)
+                break
+
         # 3. Calculate Reward
         # Reward is based on the new state
         reward = self._calculate_reward() 
