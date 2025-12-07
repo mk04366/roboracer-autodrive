@@ -105,9 +105,9 @@ class AutodriveEnv(gym.Env):
         self.new_lidar_received = True
         
         # Check for collision/terminal state here
-        # Collision check for objects too close (e.g., minimum normalized distance < -0.88)
-        if np.min(self.latest_observation[:lidar_len]) < -0.88:
-            self.is_done = True
+        # Collision check for objects too close 
+        if np.min(self.latest_observation[:lidar_len]) < -0.98:
+           self.is_done = True
 
     def _speed_callback(self, msg):
         # Update the current speed from the speed topic
@@ -212,20 +212,26 @@ class AutodriveEnv(gym.Env):
         truncated = False # Use truncated for time limits/step limits
         info = {}
 
+        # Log only the KEY components for easier debugging:
+        min_lidar_dist = np.min(observation[:1080])
+        current_speed = observation[1080] 
+        # Note: These values are the *normalized* values [-1, 1]
+
         if not np.all(np.isfinite(self.latest_observation)):
             self.node.get_logger().error(f"Invalid observation: {self.latest_observation}")
 
         self.node.get_logger().info(f"Action: {action}, Reward: {reward}")
+        self.node.get_logger().info(f"Obs: Min Lidar={min_lidar_dist:.4f}, Speed={current_speed:.4f}")
 
         return observation, reward, terminated, truncated, info
 
     def _calculate_reward(self):
         # Simple example: reward for speed, penalty for closeness to objects
-        speed_reward = self.current_speed * 0.1 # Example: reward proportional to speed
+        speed_reward = self.current_speed * 0.1
         min_dist = np.min(self.latest_observation[:1080])
         
-        if min_dist < 0.6:
-            collision_penalty = -5.0 # Large penalty for getting too close
+        if min_dist < -0.93:
+            collision_penalty = -1.0 # Large penalty for getting too close
         else:
             collision_penalty = 0.0
             
@@ -239,12 +245,11 @@ def main(args=None):
     
     # Create the environment
     env = AutodriveEnv()
-    # It will check your custom environment and output additional warnings if needed
+    # It will check custom environment and output additional warnings if needed
     check_env(env)
     
     # Initialize the agent
-    #model = PPO("MlpPolicy", env, verbose=1)
-    model = PPO("MlpPolicy", env, learning_rate=1e-4, verbose=1, device="cpu")
+    model = PPO("MlpPolicy", env, verbose=1, device="cpu")
     
     try:
         # Train the agent
