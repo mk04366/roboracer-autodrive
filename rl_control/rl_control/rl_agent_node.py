@@ -106,7 +106,7 @@ class AutodriveEnv(gym.Env):
         
         # Check for collision/terminal state here
         # Collision check for objects too close 
-        if np.min(self.latest_observation[:lidar_len]) < -0.98:
+        if np.min(self.latest_observation[:lidar_len]) < -0.985:
            self.is_done = True
 
     def _speed_callback(self, msg):
@@ -226,15 +226,27 @@ class AutodriveEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def _calculate_reward(self):
-        # Simple example: reward for speed, penalty for closeness to objects
-        speed_reward = self.current_speed * 0.1
+        # 1. Denormalize Speed for meaningful reward
+        normalized_speed = self.latest_observation[1080] 
+        denormalized_speed = (normalized_speed + 1.0) * 2.5 # [0.0 to 5.0 m/s]
+        
+        # Reward component: Encourage speed (0.5 points per m/s)
+        speed_reward = denormalized_speed * 0.5 
+        
+        # 2. Lidar Penalty
         min_dist = np.min(self.latest_observation[:1080])
         
-        if min_dist < -0.93:
-            collision_penalty = -1.0 # Large penalty for getting too close
+        # Penalty threshold: Normalized value corresponding to a raw Lidar reading of ~0.375m (0.25m clearance)
+        # This gives the agent space to maneuver before crashing.
+        PENALTY_THRESHOLD = -0.936 
+        
+        if min_dist < PENALTY_THRESHOLD:
+            # Strong penalty to force the agent away from the walls
+            collision_penalty = -5.0 
         else:
             collision_penalty = 0.0
             
+        # 3. Combine Rewards
         return speed_reward + collision_penalty
 
     def close(self):
