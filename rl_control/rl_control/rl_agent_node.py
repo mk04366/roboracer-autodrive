@@ -5,6 +5,7 @@ from gymnasium import spaces
 import numpy as np
 from stable_baselines3 import PPO
 import os
+from stable_baselines3.common.env_checker import check_env
 
 # Import messages used for control and sensing
 from sensor_msgs.msg import LaserScan # Lidar
@@ -36,8 +37,8 @@ class AutodriveEnv(gym.Env):
         IPS_READINGS = 3  # x, y, z position
         TOTAL_OBSERVATION_SIZE = LIDAR_POINTS + 1 + IMU_READINGS + IPS_READINGS
 
-        self.observation_space = spaces.Box(low=-np.inf,  # Adjusted for IMU and IPS ranges
-                                            high=np.inf, 
+        self.observation_space = spaces.Box(low=-1.0,  # Adjusted for IMU and IPS ranges
+                                            high=1.0, 
                                             shape=(TOTAL_OBSERVATION_SIZE,), 
                                             dtype=np.float32)
 
@@ -89,14 +90,23 @@ class AutodriveEnv(gym.Env):
         scan_data = np.array(msg.ranges, dtype=np.float32)
         lidar_len = min(len(scan_data), 1080)
         
+        MAX_LIDAR_RANGE = 10.0
+        MIN_LIDAR_RANGE = 0.06
+        
+        clamped_scan_data = np.clip(scan_data[:lidar_len], MIN_LIDAR_RANGE, MAX_LIDAR_RANGE)
+        
         # Normalize Lidar data to [-1, 1]
-        normalized_scan_data = 2 * ((scan_data[:lidar_len] - 0.06) / (10 - 0.06)) - 1
+        # Formula: 2 * ((Value - Min) / (Max - Min)) - 1
+        normalized_scan_data = 2 * ((clamped_scan_data - MIN_LIDAR_RANGE) / (MAX_LIDAR_RANGE - MIN_LIDAR_RANGE)) - 1
+        
         self.latest_observation[:lidar_len] = normalized_scan_data
         
         # Signal that fresh data is ready
         self.new_lidar_received = True
+        
         # Check for collision/terminal state here
-        if np.min(self.latest_observation[:lidar_len]) < -0.88:  # Corresponds to 0.06 in normalized range
+        # Collision check for objects too close (e.g., minimum normalized distance < -0.88)
+        if np.min(self.latest_observation[:lidar_len]) < -0.88:
             self.is_done = True
 
     def _speed_callback(self, msg):
@@ -229,6 +239,8 @@ def main(args=None):
     
     # Create the environment
     env = AutodriveEnv()
+    # It will check your custom environment and output additional warnings if needed
+    check_env(env)
     
     # Initialize the agent
     #model = PPO("MlpPolicy", env, verbose=1)
