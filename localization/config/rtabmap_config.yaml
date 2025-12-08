@@ -1,0 +1,40 @@
+/**:
+  rosparameters:
+    use_sim_time: false
+
+icp_odometry:
+  rosparameters:
+    frame_id: "f1tenth_1"          # base_link
+    odom_frame_id: "f1tenth_1_odom"
+    publish_tf: true
+    wait_for_transform: 0.2
+
+    subscribe_scan: true
+    Reg/Strategy: "1"              # ICP
+    Reg/Force3DoF: "true"          # 平面运动
+    Icp/RangeMin: "0.12"
+    Icp/RangeMax: "9.0"
+    Icp/CorrespondenceRatio: "0.1" # ICP 更稳一点（可再调）
+
+rtabmap:
+  ros__parameters:
+    frame_id: "f1tenth_1"
+    odom_frame_id: "f1tenth_1_odom"
+    map_frame_id: "map"
+
+    # 只用激光
+    subscribe_scan: true
+    subscribe_rgb: false
+    subscribe_depth: false
+    subscribe_stereo: false
+
+    # 配准/网格（字符串！）
+    Reg/Strategy: "1"              # ICP
+    Reg/Force3DoF: "true"
+    Grid/FromDepth: "false"
+    Grid/RangeMax: "9.0"
+    Grid/RangeMin: "0.12"
+
+    # 内存/回环（按需再调）
+    Mem/IncrementalMemory: "true"
+    RGBD/OptimizeFromGraphEnd: "false"
