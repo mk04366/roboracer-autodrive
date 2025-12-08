@@ -16,9 +16,7 @@ from sensor_msgs.msg import Imu
 # Import other relevant messages for state/reward calculation (e.g., Odometry, CarState, etc.)
 
 class AutodriveEnv(gym.Env):
-    # Set this required variable for rendering, though typically not used in ROS
-    metadata = {'render_modes': ['human'], 'render_fps': 30}
-    
+        
     def __init__(self, node_name='rl_env_node'):
         # 1. Initialize the ROS 2 Node (IMPORTANT: Env class acts as a Node)
         self.node = Node(node_name)
