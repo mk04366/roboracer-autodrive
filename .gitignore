@@ -5,4 +5,13 @@
 *.pyc
 *~
 *.swp
-.rl_env/
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+
+# Virtual environment files
+.venv/
+env/
+venv/
