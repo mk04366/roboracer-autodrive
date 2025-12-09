@@ -5,6 +5,7 @@ from gymnasium import spaces
 import numpy as np
 from stable_baselines3 import PPO
 import os
+import time
 from stable_baselines3.common.env_checker import check_env
 
 # Import messages used for control and sensing
@@ -157,6 +158,14 @@ class AutodriveEnv(gym.Env):
         reset_msg.data = True
         self.reset_publisher.publish(reset_msg)
         self.node.get_logger().info('Environment reset commanded.')
+        
+        # Wait briefly to ensure reset is registered
+        time.sleep(0.1)
+
+        # Release reset command
+        reset_msg.data = False
+        self.reset_publisher.publish(reset_msg)
+        self.node.get_logger().info('Environment reset released.')
         
         self.node.get_logger().info('Waiting for Lidar data...')
         data_received = False

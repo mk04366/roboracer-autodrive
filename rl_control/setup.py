@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'rl_training = rl_control.rl_agent_node:main',
+            'rl_train = rl_control.rl_agent_node:main',
         ],
     },
 )
