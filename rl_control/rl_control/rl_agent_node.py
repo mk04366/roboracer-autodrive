@@ -307,14 +307,10 @@ def main(args=None):
     
     # Initialize the agent
     # Enable TensorBoard logging
-    # Use path relative to the package root (one level up from this script)
-    # File: .../rl_control/rl_control/rl_agent_node.py
-    # Dir:  .../rl_control/rl_control/
-    # Parent: .../rl_control/
     script_dir = os.path.dirname(os.path.realpath(__file__))
     package_root = os.path.dirname(script_dir)
-    
     log_dir = os.path.join(package_root, "tensorboard_logs")
+    
     model = PPO("MlpPolicy", env, verbose=1, device="cpu", tensorboard_log=log_dir)
     
     # Create checkpoint callback
