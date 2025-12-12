@@ -37,7 +37,6 @@ class PurePursuitController : public rclcpp::Node
 {
 public:
     PurePursuitController();
-    ~PurePursuitController();
 
 private:
     // ROS handles
@@ -76,9 +75,9 @@ private:
     std::array<double, 4> current_quaternion_;
     std::deque<double> area_window_;
     double max_speed_, min_speed_, max_lookahead_, min_lookahead_, wheelbase_;
-    double lookahead_distance_, beta_, previous_deviation_, total_area_, control_velocity_, heading_angle_ = 0.5;
+    double lookahead_distance_ = 1.0, beta_, previous_deviation_ = 0.0, total_area_ = 0.0, control_velocity_ = 0.1, heading_angle_ = 0.5;
     double heading_scale_, area_threshold_, speed_factor_;
-    double r_, a_;
+    double r_ = 0.8;
     size_t window_size_, vel_window;
     double current_speed_;
     double yaw_;

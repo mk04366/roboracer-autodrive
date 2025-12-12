@@ -2,8 +2,6 @@
 
 PurePursuitController::PurePursuitController()
     : Node("pure_pursuit_autodrive"),
-      heading_angle_(0.5), previous_deviation_(0.0), total_area_(0.0),
-      lookahead_distance_(1.0), a_(1.0), r_(0.8), control_velocity_(0.1),
       throttle_pid_(0.0, 0.0, 0.0, -1.0, 1.0)
 {
     // Parameters (tunable)
@@ -57,19 +55,6 @@ PurePursuitController::PurePursuitController()
     load_raceline_csv("/home/ammar/ros2_ws/src/global-planning/outputs/map5/ay_safe_2.csv");
 }
 
-void PurePursuitController::vehicle_callback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg)
-{
-    imu_callback(std::make_shared<sensor_msgs::msg::Imu>(msg->imu));
-    speed_callback(std::make_shared<std_msgs::msg::Float32>(std_msgs::msg::Float32().set__data(msg->speed)));
-    current_position_ = Eigen::Vector2d(msg->position.x, msg->position.y);
-
-    // const double prev_v_ = v_;
-    // // Extract speed
-    // v_ = static_cast<double>(msg->speed);
-
-    main_control_loop();
-}
-
 void PurePursuitController::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
 {
     yaw_ = get_yaw_from_imu(msg);
@@ -80,6 +65,15 @@ void PurePursuitController::imu_callback(const sensor_msgs::msg::Imu::SharedPtr 
 void PurePursuitController::speed_callback(const std_msgs::msg::Float32::SharedPtr msg)
 {
     current_speed_ = msg->data;
+}
+
+void PurePursuitController::vehicle_callback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg)
+{
+    imu_callback(std::make_shared<sensor_msgs::msg::Imu>(msg->imu));
+    speed_callback(std::make_shared<std_msgs::msg::Float32>(std_msgs::msg::Float32().set__data(msg->speed)));
+    current_position_ = Eigen::Vector2d(msg->position.x, msg->position.y);
+
+    main_control_loop();
 }
 
 void PurePursuitController::main_control_loop()
@@ -175,8 +169,6 @@ void PurePursuitController::load_raceline_csv(const std::string &filename)
         }
     }
 
-    if (a_ == 1.0)
-        std::reverse(temp_path.begin(), temp_path.end());
     path_ = temp_path;
 }
 
@@ -189,6 +181,7 @@ double PurePursuitController::get_yaw_from_imu(const sensor_msgs::msg::Imu::Cons
     return yaw; // in radians
 }
 
+// we essentially use a sigmoid function to map speed to lookahead distance
 void PurePursuitController::update_lookahead_distance(double speed)
 {
     double normalized_speed = (speed - min_speed_) / (max_speed_ - min_speed_);
@@ -220,7 +213,8 @@ std::pair<Eigen::Vector2d, std::optional<Eigen::Vector2d>> PurePursuitController
     for (size_t i = closest_idx + 2; i < std::min(path_.size(), closest_idx + 10); ++i)
     {
         double dist = (path_[i] - current_position_.value()).norm();
-        if (dist < lookahead_distance_)
+        RCLCPP_INFO(this->get_logger(), "Distance to point %zu: %f", i, dist);
+        if (dist > lookahead_distance_)
         {
             goal_point = path_[i];
             break;
@@ -367,7 +361,7 @@ void PurePursuitController::publish_control_commands()
 {
     // Publish steering command
     std_msgs::msg::Float32 steer_cmd;
-    steer_cmd.data = std::clamp(heading_angle_ * heading_scale_, -0.24, 0.24);
+    steer_cmd.data = std::clamp(heading_angle_ * heading_scale_, -0.52359877559, 0.52359877559);
     steering_pub_->publish(steer_cmd);
 
     // Calculate time step for PID
@@ -377,8 +371,6 @@ void PurePursuitController::publish_control_commands()
     last_control_time_ = current_time;
 
     // Use PID to compute throttle command
-    // Setpoint: control_velocity_ (desired speed)
-    // Process variable: current_speed_ (actual speed)
     double throttle_command = throttle_pid_.compute(control_velocity_, current_speed_, dt);
 
     // Publish normalized throttle command [-1.0, 1.0]
