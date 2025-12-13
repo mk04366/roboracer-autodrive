@@ -1,5 +1,4 @@
 #include "control/stanley_controller_node.hpp"
-#include "control/common.hpp"
 
 StanleyController::StanleyController(double wheelbase)
     : wheelbase_(wheelbase)
@@ -95,7 +94,7 @@ std::pair<size_t, std::array<double, 2>> StanleyController::nearestPoint(
 }
 
 std::tuple<double, double, size_t, double> StanleyController::calcThetaAndEf(
-    const VehicleState &state,
+    const VehicleStateStanley &state,
     const std::vector<Waypoint> &waypoints)
 {
     // 1. Compute front axle position
@@ -149,7 +148,7 @@ std::tuple<double, double, size_t, double> StanleyController::calcThetaAndEf(
 }
 
 std::pair<double, double> StanleyController::controller(
-    const VehicleState &state,
+    const VehicleStateStanley &state,
     const std::vector<Waypoint> &waypoints,
     double k_path)
 {

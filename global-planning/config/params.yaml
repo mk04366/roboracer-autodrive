@@ -1,10 +1,10 @@
 # The following params are for maps
-map_name: 'map5'
-map_img_ext: '.pgm'
+map_name: "map5"
+map_img_ext: ".pgm"
 
 # The following params are for path generator
 num_lanes: 2
-clockwise: False
+clockwise: True
 inner_safe_dist: 0.05
 outer_safe_dist: 0.05
 opp_safe_dist: 0.2
@@ -16,10 +16,10 @@ outer_bound: "outer_bound"
 
 # The following params are for lane based controller
 real_test: True
-traj_file: "traj_race_cl"
+traj_file: "traj_race_cl_2"
 lane_files:
-    - "lane_0"
-    - "lane_optimal"
+  - "lane_0"
+  - "lane_optimal"
 
 # The following params are for dummy opponent car (simulation only)
-dummy_car_file: "traj_race_cl"
+dummy_car_file: "traj_race_cl_2"

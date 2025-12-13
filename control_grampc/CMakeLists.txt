@@ -1,0 +1,141 @@
+cmake_minimum_required(VERSION 3.14)
+project(control_grampc)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# Debug flags
+add_compile_options(-g -O0 -fno-omit-frame-pointer)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(autodrive_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+
+# === Link GRAMPC ===
+set(GRAMPC_DIR "/home/ammar/ros2_ws/GRAMPC_v2.3")
+
+set(GRAMPC_INCLUDE_DIR "${GRAMPC_DIR}/include")
+set(GRAMPC_LIB "${GRAMPC_DIR}/libs/libgrampc.a")
+
+# If the v2.3 distribution hasn't been built/installed to ${GRAMPC_DIR}/libs,
+# fall back to the workspace-built grampc static library, but keep the v2.3
+# include directory to ensure we compile against v2.3 headers (user request).
+if(NOT EXISTS "${GRAMPC_LIB}")
+  # Absolute workspace build path (explicit) to avoid path issues when building
+  # this package in isolation. Adjust if your workspace root differs.
+  set(WORKSPACE_GRAMPC_LIB "/home/ammar/ros2_ws/build/grampc/libgrampc.a")
+
+  if(EXISTS "${WORKSPACE_GRAMPC_LIB}")
+    message(STATUS "Using workspace-built libgrampc.a at ${WORKSPACE_GRAMPC_LIB} (headers from ${GRAMPC_INCLUDE_DIR})")
+    set(GRAMPC_LIB "${WORKSPACE_GRAMPC_LIB}")
+  else()
+    message(FATAL_ERROR "libgrampc.a not found in ${GRAMPC_DIR}/libs and no workspace build present. Build GRAMPC v2.3 first.")
+  endif()
+endif()
+
+# Prefer target-specific includes so we don't accidentally pick up other
+# GRAMPC installations (e.g., v2.2) via global include paths.
+include_directories(
+  include
+  ${EIGEN3_INCLUDE_DIRS}
+)
+
+# === Libraries ===
+add_library(mpcc_model STATIC
+  grampc/mpcc_model.c
+)
+
+target_include_directories(mpcc_model PRIVATE ${GRAMPC_INCLUDE_DIR})
+
+add_library(path_utils STATIC
+  src/path_utils.cpp
+)
+
+target_include_directories(path_utils PUBLIC include)
+target_include_directories(path_utils PRIVATE ${GRAMPC_INCLUDE_DIR})
+
+# === Executables ===
+# Original MPCC node (keep for compatibility)
+add_executable(mpcc_grampc_node
+  src/mpcc_grampc_node.cpp
+)
+
+target_link_libraries(mpcc_grampc_node
+  ${GRAMPC_LIB}
+  mpcc_model
+  path_utils
+)
+
+add_executable(mpcc_model_tester_node
+  src/mpcc_model_tester_node.cpp
+)
+
+# add_executable and target_link_libraries...
+target_include_directories(mpcc_model_tester_node PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${GRAMPC_INCLUDE_DIR})
+target_link_libraries(mpcc_model_tester_node
+  ${rclcpp_LIBRARIES}
+  ${std_msgs_LIBRARIES}
+  ${geometry_msgs_LIBRARIES}
+  tf2::tf2
+  tf2_ros::tf2_ros
+  tf2_geometry_msgs::tf2_geometry_msgs
+  mpcc_model
+  ${GRAMPC_LIB}
+)
+
+target_include_directories(mpcc_grampc_node PRIVATE ${GRAMPC_INCLUDE_DIR})
+
+ament_target_dependencies(mpcc_grampc_node
+  rclcpp
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  tf2
+  tf2_geometry_msgs
+  nav_msgs
+  message_filters
+  autodrive_msgs
+)
+
+ament_target_dependencies(path_utils Eigen3)
+
+ament_target_dependencies(mpcc_model_tester_node
+  rclcpp
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  tf2
+  tf2_geometry_msgs
+  tf2_ros
+  autodrive_msgs
+)
+
+# === Install ===
+install(TARGETS
+  mpcc_grampc_node
+  mpcc_model_tester_node
+  mpcc_model
+  path_utils
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY include/
+  DESTINATION include
+)
+
+install(DIRECTORY config launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+ament_package()

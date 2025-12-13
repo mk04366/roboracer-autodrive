@@ -5,9 +5,9 @@ import csv
 import yaml
 import os
 
-WIDTH = 0.2032  # (m)
-WHEEL_LENGTH = 0.0381  # (m)
-MAX_STEER = 0.36  # (rad)
+WIDTH = 0.270  # (m)
+WHEEL_LENGTH = 0.324  # (m)
+MAX_STEER = 0.5236  # (rad)
 
 lane_colors = [(0, 0, 255),
                (0, 255, 255),

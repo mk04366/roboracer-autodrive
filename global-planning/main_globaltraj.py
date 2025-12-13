@@ -10,7 +10,7 @@ import configparser
 import pkg_resources
 import helper_funcs_glob
 import yaml
-
+from scipy.interpolate import interp1d
 """
 Created by:
 Alexander Heilmeier
@@ -58,7 +58,7 @@ print("track filename: ", file_paths["track_name"])
 
 
 # set import options ---------------------------------------------------------------------------------------------------
-imp_opts = {"flip_imp_track": True,                # flip imported track to reverse direction
+imp_opts = {"flip_imp_track": False,                # flip imported track to reverse direction
             "set_new_start": False,                 # set new starting point (changes order, not coordinates)
             "new_start": np.array([0.0, -47.0]),    # [x_m, y_m]
             "min_track_width": None,                # [m] minimum enforced track width (set None to deactivate)
@@ -402,6 +402,10 @@ psi_vel_opt, kappa_opt = tph.calc_head_curv_an.\
                       ind_spls=spline_inds_opt_interp,
                       t_spls=t_vals_opt_interp)
 
+# Compute steering angle from curvature
+L = pars["veh_params"]["wheelbase"]  # wheelbase in meters
+delta_opt = np.arctan(L * kappa_opt)
+
 # ----------------------------------------------------------------------------------------------------------------------
 # CALCULATE VELOCITY AND ACCELERATION PROFILE --------------------------------------------------------------------------
 # ----------------------------------------------------------------------------------------------------------------------
@@ -524,6 +528,11 @@ trajectory_opt = np.column_stack((s_points_opt_interp,
                                   ax_profile_opt))
 spline_data_opt = np.column_stack((spline_lengths_opt, coeffs_x_opt, coeffs_y_opt))
 
+# Rotate heading by 90° to match car frame
+trajectory_opt[:, 3] += np.pi / 2
+# Wrap angles to [-pi, pi]
+trajectory_opt[:, 3] = (trajectory_opt[:, 3] + np.pi) % (2 * np.pi) - np.pi
+
 # create a closed race trajectory array
 traj_race_cl = np.vstack((trajectory_opt, trajectory_opt[0, :]))
 traj_race_cl[-1, 0] = np.sum(spline_data_opt[:, 0])  # set correct length
@@ -599,6 +608,62 @@ helper_funcs_glob.src.result_plots.result_plots(plot_opts=plot_opts,
                                                 trajectory=trajectory_opt)
 
 # save another copy of lane_optimal.csv
+
+# Make t_profile_cl a numpy array
+t_profile_cl = np.array(t_profile_cl)
+
+
+
+# ------------------------------
+# Parameters for uniform time grid
+# ------------------------------
+dt = 0.05  # desired sampling time in seconds
+t_uniform = np.arange(0, t_profile_cl[-1], dt)
+output_file = "traj_time_based.csv"
+# ------------------------------
+# Interpolation functions
+# ------------------------------
+# Ensure raceline_interp has same number of points as el_lengths_opt_interp
+# Typically: len(t_profile_cl) == len(vx_profile_opt)
+interp_x  = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     raceline_interp[:, 0], kind='cubic', fill_value="extrapolate")
+interp_y  = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     raceline_interp[:, 1], kind='cubic', fill_value="extrapolate")
+interp_psi= interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     psi_vel_opt, kind='cubic', fill_value="extrapolate")
+interp_kappa = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                        kappa_opt, kind='cubic', fill_value="extrapolate")
+interp_vx= interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                     vx_profile_opt, kind='cubic', fill_value="extrapolate")
+interp_ax = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                        ax_profile_opt, kind='cubic', fill_value="extrapolate")
+interp_delta = interp1d(np.linspace(0, t_profile_cl[-1], raceline_interp.shape[0]),
+                        delta_opt, kind='cubic', fill_value="extrapolate")
+
+# ------------------------------
+# Create time-based trajectory
+# ------------------------------
+x_time = interp_x(t_uniform)
+y_time = interp_y(t_uniform)
+psi_time = interp_psi(t_uniform)
+kappa_time = interp_kappa(t_uniform)
+vx_time = interp_vx(t_uniform)
+ax_time = interp_ax(t_uniform)
+delta_time = interp_delta(t_uniform)
+
+# ------------------------------
+# Rotate psi_time by 90° around z-axis
+# ------------------------------
+psi_time += np.pi / 2  # rotate +90 degrees
+psi_time = (psi_time + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
+
+# Combine into a trajectory array
+trajectory_time_based = np.column_stack((t_uniform, x_time, y_time, psi_time, kappa_time, vx_time, ax_time))
+
+header = "time_s,x_m,y_m,psi_rad,kappa_rad,vx_mps,ax_mps2"
+np.savetxt(output_file, trajectory_time_based, delimiter=",", header=header, comments='', fmt='%.6f')
+
+print(f"INFO: Time-based trajectory saved to {os.path.abspath(output_file)}")
 
 with open(file_paths["lane_optimal_export"], 'w') as f:
     for x, y, v in zip(trajectory_opt[:, 1], trajectory_opt[:, 2], trajectory_opt[:, 5]):

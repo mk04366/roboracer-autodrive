@@ -27,7 +27,7 @@ class AutodriveEnv(gym.Env):
         
         # Action Space (Continuous control: Steering command and Throttle command)
         # Assuming steering is [-1.0, 1.0] and throttle is [0.0, 1.0]
-        self.action_space = spaces.Box(low=np.array([-1.0, 0.0]), 
+        self.action_space = spaces.Box(low=np.array([-1.0, -1.0]), 
                                        high=np.array([1.0, 1.0]), 
                                        dtype=np.float32)
         
