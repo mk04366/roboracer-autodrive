@@ -46,7 +46,7 @@ class AutodriveEnv(gym.Env):
                                             shape=(TOTAL_OBSERVATION_SIZE,), 
                                             dtype=np.float32)
 
-        # 3. Setup ROS 2 Publishers and Subscribers
+        # import waypoints
         self.waypoints = self._load_path_from_csv('/home/bl/ros2_ws/src/roboracer-autodrive/global-planning/outputs/map5/ay_safe_2.csv')
         
         # Publisher for steering command
@@ -160,29 +160,49 @@ class AutodriveEnv(gym.Env):
     def _imu_callback(self, msg):
         # Update IMU data in the observation array
         
-        # Orientation (Quaternion: x, y, z, w)
+        # Orientation (Quaternion: x, y, z, w) - already normalized [-1, 1]
         base_idx = self.LIDAR_POINTS + 1 # After Lidar and Speed
-        self.latest_observation[base_idx:base_idx+4] = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
+        self.latest_observation[base_idx:base_idx+4] = np.clip(
+            [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w],
+            -1.0, 1.0
+        )
         
-        # Angular Velocity (Normalize to [-1, 1])
+        # Angular Velocity (Normalize to [-1, 1]) - widened bounds with 50% margin
         base_idx += 4
-        self.latest_observation[base_idx] = 2 * ((msg.angular_velocity.x - (-0.1997)) / (0.2317 - (-0.1997))) - 1
-        self.latest_observation[base_idx+1] = 2 * ((msg.angular_velocity.y - (-0.1566)) / (0.1933 - (-0.1566))) - 1
-        self.latest_observation[base_idx+2] = 2 * ((msg.angular_velocity.z - (-1.7952)) / (1.5179 - (-1.7952))) - 1
+        ANG_VEL_MIN = np.array([-0.3, -0.25, -2.7])  # Widened from original
+        ANG_VEL_MAX = np.array([0.35, 0.3, 2.3])     # Widened from original
+        ang_vel = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
+        ang_vel_normalized = 2 * ((ang_vel - ANG_VEL_MIN) / (ANG_VEL_MAX - ANG_VEL_MIN)) - 1
+        self.latest_observation[base_idx:base_idx+3] = np.clip(ang_vel_normalized, -1.0, 1.0)
         
-        # Linear Acceleration (Normalize to [-1, 1])
+        # Linear Acceleration (Normalize to [-1, 1]) - widened bounds with 50% margin
         base_idx += 3
-        self.latest_observation[base_idx] = 2 * ((msg.linear_acceleration.x - (-7.9472)) / (7.6237 - (-7.9472))) - 1
-        self.latest_observation[base_idx+1] = 2 * ((msg.linear_acceleration.y - (-5.4421)) / (5.986 - (-5.4421))) - 1
-        self.latest_observation[base_idx+2] = 2 * ((msg.linear_acceleration.z - (-0.2101)) / (0.2638 - (-0.2101))) - 1
+        LIN_ACC_MIN = np.array([-12.0, -8.0, -0.5])  # Widened from original
+        LIN_ACC_MAX = np.array([12.0, 9.0, 0.5])     # Widened from original
+        lin_acc = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
+        lin_acc_normalized = 2 * ((lin_acc - LIN_ACC_MIN) / (LIN_ACC_MAX - LIN_ACC_MIN)) - 1
+        self.latest_observation[base_idx:base_idx+3] = np.clip(lin_acc_normalized, -1.0, 1.0)
 
     def _ips_callback(self, msg):
         # Update IPS data in the observation array
-        # Normalize IPS data to [-1, 1]
+        # Normalize IPS data to [-1, 1] with widened bounds
         base_idx = self.LIDAR_POINTS + 1 + 10 # After Lidar, Speed, IMU
-        self.latest_observation[base_idx] = 2 * ((msg.x - (-3.1241)) / (0.9177 - (-3.1241))) - 1
-        self.latest_observation[base_idx+1] = 2 * ((msg.y - (-7.7468)) / (6.106 - (-7.7468))) - 1
-        self.latest_observation[base_idx+2] = 2 * ((msg.z - 0.0562) / (0.0605 - 0.0562)) - 1
+        
+        # Widened position bounds based on map extents + 50% margin
+        IPS_X_MIN, IPS_X_MAX = -5.0, 3.0   # Widened from (-3.12, 0.92)
+        IPS_Y_MIN, IPS_Y_MAX = -12.0, 10.0  # Widened from (-7.75, 6.11)
+        IPS_Z_MIN, IPS_Z_MAX = 0.0, 0.2     # Widened from (0.056, 0.061)
+        
+        # Normalize and clip to ensure bounds
+        self.latest_observation[base_idx] = np.clip(
+            2 * ((msg.x - IPS_X_MIN) / (IPS_X_MAX - IPS_X_MIN)) - 1, -1.0, 1.0
+        )
+        self.latest_observation[base_idx+1] = np.clip(
+            2 * ((msg.y - IPS_Y_MIN) / (IPS_Y_MAX - IPS_Y_MIN)) - 1, -1.0, 1.0
+        )
+        self.latest_observation[base_idx+2] = np.clip(
+            2 * ((msg.z - IPS_Z_MIN) / (IPS_Z_MAX - IPS_Z_MIN)) - 1, -1.0, 1.0
+        )
         self.current_x = msg.x
         self.current_y = msg.y
         
@@ -276,44 +296,87 @@ class AutodriveEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def _calculate_traj_tracking_reward(self):
-        # Calculate the distance between the current position and the trajectory
+        """
+        Improved trajectory tracking reward with balanced components:
+        - Progress reward: Encourages forward motion along trajectory
+        - Lap completion bonus: Big reward for completing a lap
+        - Distance penalty: Penalizes deviation from trajectory (scaled)
+        - Direction penalty: Penalizes going backwards
+        """
+        # Find nearest waypoint
         min_distance = float('inf')
-        nearest_point_A = [0,0]
-        nearest_point_B = [0,0]
-        direction_penalty = 0.0
+        nearest_point_A = [0, 0]
+        nearest_point_B = [0, 0]
         nearest_idx_current = 0
+        
         for x in range(len(self.waypoints)):
             next_idx = (x + 10) % len(self.waypoints)
-            distance = np.linalg.norm(np.array([self.current_x, self.current_y]) - np.array([self.waypoints[x][0], self.waypoints[x][1]]))
+            distance = np.linalg.norm(
+                np.array([self.current_x, self.current_y]) - 
+                np.array([self.waypoints[x][0], self.waypoints[x][1]])
+            )
             if distance < min_distance:
                 min_distance = distance
                 nearest_point_A = [self.waypoints[x][0], self.waypoints[x][1]]
                 nearest_point_B = [self.waypoints[next_idx][0], self.waypoints[next_idx][1]]
                 nearest_idx_current = x
+        
         current_point = [self.current_x, self.current_y]
-        print(self.previous_index_waypoint, nearest_idx_current, "INDEXES")
-        if(self.previous_index_waypoint > nearest_idx_current and not (self.previous_index_waypoint - nearest_idx_current > 30)): # to cater for loop around case
-            direction_penalty = -10000
+        num_waypoints = len(self.waypoints)
+        
+        # === PROGRESS REWARD ===
+        # Calculate how many waypoints we've advanced (handles wraparound)
+        if nearest_idx_current >= self.previous_index_waypoint:
+            waypoints_advanced = nearest_idx_current - self.previous_index_waypoint
         else:
-            direction_penalty = 10.0
+            # Wrapped around the track
+            waypoints_advanced = (num_waypoints - self.previous_index_waypoint) + nearest_idx_current
+        
+        # Reward for forward progress (0.5 per waypoint advanced, capped)
+        progress_reward = min(waypoints_advanced * 0.5, 5.0)
+        
+        # === LAP COMPLETION BONUS ===
+        lap_bonus = 0.0
+        # Detect lap completion: crossed from high index back to low index
+        if self.previous_index_waypoint > num_waypoints * 0.9 and nearest_idx_current < num_waypoints * 0.1:
+            lap_bonus = 100.0  # Big bonus for completing a lap!
+            self.node.get_logger().info("🏁 LAP COMPLETED! +100 bonus")
+        
+        # === DIRECTION PENALTY ===
+        direction_penalty = 0.0
+        # Going backwards: previous > current, but not due to lap wraparound
+        if (self.previous_index_waypoint > nearest_idx_current and 
+            self.previous_index_waypoint - nearest_idx_current < num_waypoints * 0.1):
+            direction_penalty = -50.0  # Reduced from -1000 for balance
         
         self.previous_index_waypoint = nearest_idx_current
         
+        # === DISTANCE PENALTY (perpendicular distance to trajectory line) ===
         x1, y1 = nearest_point_A
         x2, y2 = nearest_point_B
         x3, y3 = current_point
 
         dx = x2 - x1
         dy = y2 - y1
-
-        numerator = abs(dx * (y1 - y3) + dy * (x3 - x1))
+        
         denominator = np.sqrt(dx**2 + dy**2)
+        if denominator > 0:
+            numerator = abs(dx * (y1 - y3) + dy * (x3 - x1))
+            perpendicular_distance = numerator / denominator
+        else:
+            perpendicular_distance = min_distance
+        
+        # Exponential penalty: more forgiving for small deviations, harsh for large ones
+        # Scales from 0 (on track) to -5 (far off track)
+        MAX_DISTANCE_PENALTY = 5.0
+        DISTANCE_SCALE = 2.0  # How quickly penalty increases with distance
+        distance_penalty = -MAX_DISTANCE_PENALTY * (1 - np.exp(-DISTANCE_SCALE * perpendicular_distance))
         
         # Publish markers for visualization
         self._publish_debug_markers(nearest_point_A, nearest_point_B)
-        distance_penalty = -numerator / denominator  # Negative because we want to minimize the distance
-        print(distance_penalty, direction_penalty, "Penalties")
-        return distance_penalty + direction_penalty
+        
+        total_reward = progress_reward + lap_bonus + direction_penalty + distance_penalty
+        return total_reward
 
     def _publish_debug_markers(self, point_a, point_b):
         marker = Marker()
@@ -345,44 +408,48 @@ class AutodriveEnv(gym.Env):
         self.marker_publisher.publish(marker)
 
     def _calculate_reward(self, action):
-        # 1. Denormalize Speed for meaningful reward
-        # normalized_speed = self.latest_observation[self.LIDAR_POINTS] 
-        # denormalized_speed = (normalized_speed + 1.0) * 2.5 # [0.0 to 5.0 m/s]
+        """
+        Tuned reward function with balanced components for trajectory tracking.
+        """
+        # === SPEED REWARD ===
+        # Target speed approach: reward for reaching optimal speed, slight penalty for too fast/slow
+        TARGET_SPEED = 3.0  # m/s - adjust based on your track
         
-        # Reward component: Encourage speed 
-        # Increase weight to synthesize "Go Fast"
-        speed_reward = self.current_speed * 2
+        # Base reward for moving (encourages the car to go)
+        base_speed_reward = self.current_speed * 1.5
         
-        # 2. Wall Distance Reward (Continuous)
-        # Encourage keeping a healthy distance from walls
-        # Use simple average of downsampled Lidar
-        # avg_dist = np.mean(self.latest_observation[:self.LIDAR_POINTS])
-        # distance_reward = (avg_dist + 1) * 0.5 # Shift to positive range roughly
+        # Bonus for being close to target speed (bell curve around target)
+        speed_diff = abs(self.current_speed - TARGET_SPEED)
+        target_speed_bonus = 3.0 * np.exp(-0.5 * (speed_diff ** 2))  # Gaussian bonus, max +3 at target
         
-        # 3. Smoothness Penalty
-        # Penalize large changes in steering
-        # delta_steering = abs(action[0] - self.last_steering)
-        # smoothness_penalty = delta_steering * 0.5
+        speed_reward = base_speed_reward + target_speed_bonus
+        
+        # === SMOOTHNESS PENALTY ===
+        # Penalize jerky steering more aggressively with exponential scaling
+        delta_steering = abs(action[0] - self.last_steering)
+        
+        # Small changes (< 0.1): minimal penalty
+        # Medium changes (0.1-0.5): moderate penalty  
+        # Large changes (> 0.5): severe penalty
+        if delta_steering < 0.1:
+            smoothness_penalty = delta_steering * 1.0  # Light penalty for micro-adjustments
+        elif delta_steering < 0.5:
+            smoothness_penalty = 0.1 + (delta_steering - 0.1) * 3.0  # Medium penalty
+        else:
+            smoothness_penalty = 1.3 + (delta_steering - 0.5) * 8.0  # Harsh penalty for jerky moves
 
-        # 4. Collision Penalty
-        # min_dist = np.min(self.latest_observation[:self.LIDAR_POINTS])
-        
-        # Penalty threshold: Normalized value corresponding to a raw Lidar reading of ~0.375m (0.25m clearance)
-        # PENALTY_THRESHOLD = -0.936 
-        
-        # if min_dist < PENALTY_THRESHOLD:
-        #     # Strong penalty to force the agent away from the walls
-        #     collision_penalty = -10.0 
-        # else:
-        #     collision_penalty = 0.0
-
-        # New Reward
+        # reward for following track
         traj_tracking_reward = self._calculate_traj_tracking_reward()
             
-        # 5. Combine Rewards
-        # total_reward = speed_reward + distance_reward - smoothness_penalty + collision_penalty
-        total_reward = speed_reward + traj_tracking_reward
-        print(speed_reward, traj_tracking_reward, "Rewards")
+        # Combine Rewards
+        total_reward = speed_reward - smoothness_penalty + traj_tracking_reward
+        
+        # Debug logging
+        self.node.get_logger().debug(
+            f"Reward: speed={speed_reward:.2f}, smooth_pen={smoothness_penalty:.2f}, "
+            f"traj={traj_tracking_reward:.2f}, total={total_reward:.2f}"
+        )
+        
         return total_reward
 
     def close(self):
@@ -396,9 +463,10 @@ def main(args=None):
     # It will check custom environment and output additional warnings if needed
     check_env(env)
     
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    package_dir = os.path.dirname(script_dir)
+    # Save directory (absolute path to source)
+    package_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control"
     tensorboard_log_dir = os.path.join(package_dir, "tensorboard_logs")
+    os.makedirs(tensorboard_log_dir, exist_ok=True)
 
     # Checkpoint directory for saving models during training
     checkpoint_dir = os.path.join(package_dir, "checkpoints")
@@ -423,7 +491,7 @@ def main(args=None):
     
     try:
         # Train the agent with callbacks
-        model.learn(total_timesteps=200000, callback=checkpoint_callback, tb_log_name=run_name)
+        model.learn(total_timesteps=400000, callback=checkpoint_callback, tb_log_name=run_name)
         
         # Save the final model
         model.save(os.path.join(package_dir, "models", "ppo_autodrive"))
