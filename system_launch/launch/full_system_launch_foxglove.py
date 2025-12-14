@@ -19,20 +19,20 @@ def generate_launch_description():
     #     'waypoints_loader_launch.py'
     # )
 
-    control_launch_path = os.path.join(
-        get_package_share_directory('control'),
-        'launch',
-        # 'pid_controller_launch.py'
-        # 'ftg_controller_launch.py'
-        'pure_pursuit_launch.py'
-    )
-
-    # mpcc_node = Node(
-    #     package="control_grampc",
-    #     executable="mpcc_grampc_node",
-    #     name="mpcc_controller",
-    #     output="screen",
+    # control_launch_path = os.path.join(
+    #     get_package_share_directory('control'),
+    #     'launch',
+    #     # 'pid_controller_launch.py'
+    #     # 'ftg_controller_launch.py'
+    #     'pure_pursuit_launch.py'
     # )
+
+    mpcc_node = Node(
+        package="control_grampc",
+        executable="mpcc_grampc_node",
+        name="mpcc_controller",
+        output="screen",
+    )
 
     # mpcc_tester_node = Node(
     #     package="control_grampc",
@@ -69,16 +69,16 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(autodrive_launch_path)
         ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(control_launch_path),
-            ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(control_launch_path),
+        #     ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(localization_launch_path)
         ),
         # IncludeLaunchDescription(
         #     PythonLaunchDescriptionSource(waypoints_loader_launch_path)
         # ),
-        # mpcc_node,
+        mpcc_node,
         foxglove_node,
         # mpcc_tester_node
         # initial_pose_node

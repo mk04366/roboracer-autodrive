@@ -241,7 +241,7 @@ double PurePursuitController::calculate_curvature(double alpha)
     return 2.0 * std::sin(alpha) / lookahead_distance_;
 }
 
-//calculates the deviation in a sliding window fashion
+// calculates the deviation in a sliding window fashion
 void PurePursuitController::calculate_deviation(const Eigen::Vector2d &pos, const Eigen::Vector2d &closest)
 {
     double deviation = (closest - pos).norm();
