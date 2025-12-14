@@ -58,7 +58,7 @@ print("track filename: ", file_paths["track_name"])
 
 
 # set import options ---------------------------------------------------------------------------------------------------
-imp_opts = {"flip_imp_track": False,                # flip imported track to reverse direction
+imp_opts = {"flip_imp_track": True,                # flip imported track to reverse direction
             "set_new_start": False,                 # set new starting point (changes order, not coordinates)
             "new_start": np.array([0.0, -47.0]),    # [x_m, y_m]
             "min_track_width": None,                # [m] minimum enforced track width (set None to deactivate)
@@ -619,7 +619,7 @@ t_profile_cl = np.array(t_profile_cl)
 # ------------------------------
 dt = 0.05  # desired sampling time in seconds
 t_uniform = np.arange(0, t_profile_cl[-1], dt)
-output_file = "second_map3/traj_time_based.csv"
+output_file = "traj_time_based.csv"
 # ------------------------------
 # Interpolation functions
 # ------------------------------
