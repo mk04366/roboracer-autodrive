@@ -58,11 +58,11 @@ private:
     double calculate_alpha(const Eigen::Vector2d &goal_point, double yaw);
     double calculate_heading_angle(double alpha);
     double calculate_curvature(double alpha);
-    double calculate_deviation(const Eigen::Vector2d &pos, const Eigen::Vector2d &closest);
+    void calculate_deviation(const Eigen::Vector2d &pos, const Eigen::Vector2d &closest);
     double calculate_max_velocity_pure_pursuit(double curvature);
-    double calculate_min_deviation_pure_pursuit(double area);
-    double adjust_beta(double current_speed, double area);
-    double convex_combination(double max_v_pp, double min_d_pp, double cur_spd, double area);
+    double calculate_min_deviation_pure_pursuit();
+    double adjust_beta(double current_speed);
+    double convex_combination(double max_v_pp, double min_d_pp, double cur_spd);
     void publish_markers(const Eigen::Vector2d &closest_point, const Eigen::Vector2d &goal_point);
     void publish_raceline_visualization();
     void publish_control_commands();
@@ -76,7 +76,7 @@ private:
     std::deque<double> area_window_;
     double max_speed_, min_speed_, max_lookahead_, min_lookahead_, wheelbase_;
     double lookahead_distance_ = 1.0, beta_, previous_deviation_ = 0.0, total_area_ = 0.0, control_velocity_ = 0.1, heading_angle_ = 0.5;
-    double heading_scale_, area_threshold_, speed_factor_;
+    double heading_scale_, area_threshold_;
     double r_ = 0.8;
     size_t window_size_, vel_window;
     double current_speed_;

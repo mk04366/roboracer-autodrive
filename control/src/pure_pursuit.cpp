@@ -13,7 +13,6 @@ PurePursuitController::PurePursuitController()
     beta_ = this->declare_parameter("beta", 0.5);
     heading_scale_ = this->declare_parameter("heading_scale", 1.1);
     area_threshold_ = this->declare_parameter("area_threshold", 1.0);
-    speed_factor_ = this->declare_parameter("speed_factor", 0.3);
     window_size_ = this->declare_parameter("window_size", 5);
     vel_window = this->declare_parameter("vel_window", 5);
 
@@ -88,10 +87,11 @@ void PurePursuitController::main_control_loop()
     {
         double alpha = calculate_alpha(goal_point.value(), yaw_);
         heading_angle_ = calculate_heading_angle(alpha);
-        double area = calculate_deviation(current_position_.value(), closest_point);
-        double max_velocity_pp = calculate_max_velocity_pure_pursuit(calculate_curvature(alpha));
-        double min_deviation_pp = calculate_min_deviation_pure_pursuit(area);
-        control_velocity_ = convex_combination(max_velocity_pp, min_deviation_pp, current_speed_, area);
+        calculate_deviation(current_position_.value(), closest_point);
+        double curvature = calculate_curvature(alpha);
+        double max_velocity_pp = calculate_max_velocity_pure_pursuit(curvature);
+        double min_deviation_pp = calculate_min_deviation_pure_pursuit();
+        control_velocity_ = convex_combination(max_velocity_pp, min_deviation_pp, current_speed_);
         publish_markers(closest_point, goal_point.value());
         publish_raceline_visualization();
         publish_control_commands();
@@ -241,7 +241,8 @@ double PurePursuitController::calculate_curvature(double alpha)
     return 2.0 * std::sin(alpha) / lookahead_distance_;
 }
 
-double PurePursuitController::calculate_deviation(const Eigen::Vector2d &pos, const Eigen::Vector2d &closest)
+//calculates the deviation in a sliding window fashion
+void PurePursuitController::calculate_deviation(const Eigen::Vector2d &pos, const Eigen::Vector2d &closest)
 {
     double deviation = (closest - pos).norm();
     if (previous_position_.has_value())
@@ -255,7 +256,6 @@ double PurePursuitController::calculate_deviation(const Eigen::Vector2d &pos, co
     }
     previous_position_ = pos;
     previous_deviation_ = deviation;
-    return total_area_;
 }
 
 double PurePursuitController::calculate_max_velocity_pure_pursuit(double curvature)
@@ -264,24 +264,25 @@ double PurePursuitController::calculate_max_velocity_pure_pursuit(double curvatu
     return std::min(max_speed_, max_vel);
 }
 
-double PurePursuitController::calculate_min_deviation_pure_pursuit(double area)
+double PurePursuitController::calculate_min_deviation_pure_pursuit()
 {
-    return (area > 0.0) ? max_speed_ / (1.0 + area) : max_speed_;
+    return (total_area_ > 0.0) ? max_speed_ / (1.0 + total_area_) : max_speed_;
 }
 
-double PurePursuitController::adjust_beta(double current_speed, double area)
+double PurePursuitController::adjust_beta(double current_speed)
 {
-    if (area < area_threshold_)
+    if (total_area_ < area_threshold_)
         return std::min(1.0, beta_ + 0.25);
-    else if (current_speed < max_speed_ * speed_factor_)
+    else if (current_speed > min_speed_)
         return std::max(0.0, beta_ - 0.25);
     return beta_;
 }
 
-double PurePursuitController::convex_combination(double max_v_pp, double min_d_pp, double cur_spd, double area)
+double PurePursuitController::convex_combination(double max_v_pp, double min_d_pp, double cur_spd)
 {
-    beta_ = adjust_beta(cur_spd, area);
+    beta_ = adjust_beta(cur_spd);
     double control_v = beta_ * max_v_pp + (1.0 - beta_) * min_d_pp;
+
     velocities_.push_back(control_v);
     if (velocities_.size() > vel_window)
         velocities_.erase(velocities_.begin());
