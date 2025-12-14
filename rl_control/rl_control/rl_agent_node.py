@@ -385,52 +385,60 @@ class AutodriveEnv(gym.Env):
         Tuned reward function with balanced components for trajectory tracking.
         """
     # === DYNAMIC SPEED REWARD ===
-        # LOOKAHEAD LOGIC: Check both Reference Velocity AND Curvature
+        # LOOKAHEAD LOGIC: Curvature-based Speed Profile (Synthetic)
         lookahead_distance = 20
-        min_future_speed = float('inf')
         max_future_kappa = 0.0
         
         for i in range(lookahead_distance):
             idx = (self.nearest_idx_current + i) % len(self.waypoints)
             # waypoints structure: [x, y, psi, kappa, v_ref]
             k = abs(self.waypoints[idx][3])
-            v_ref = self.waypoints[idx][4]
             
-            if v_ref < min_future_speed:
-                min_future_speed = v_ref
             if k > max_future_kappa:
                 max_future_kappa = k
         
-        # 1. Target Speed Guidance (Positive Reward)
-        dynamic_target_speed = max(min_future_speed, 1.0)
+        # SYNTHETIC SPEED PROFILE
+        # Max Speed (Straights) = 3.0 m/s
+        # Min Speed (Heavy Turns) = 1.5 m/s
+        # Scaling: As kappa increases, speed drops linearly.
+        MAX_STRAIGHT_SPEED = 3.0
+        KAPPA_SCALING_FACTOR = 3.0 # Tuning parameter: Higher = faster drop off
         
+        # Formula: 3.0 - (3.0 * k). If k=0.6 -> 3.0 - 1.8 = 1.2 m/s.
+        synthetic_target = MAX_STRAIGHT_SPEED - (KAPPA_SCALING_FACTOR * max_future_kappa)
+        
+        # Clamp to ensure we don't go below 1.5 or above 3.0
+        dynamic_target_speed = np.clip(synthetic_target, 1.5, MAX_STRAIGHT_SPEED)
+
+        # 1. Target Speed Guidance (Positive Reward)
         base_speed_reward = self.current_speed * 1.5
         speed_diff = abs(self.current_speed - dynamic_target_speed)
         target_speed_bonus = 3.0 * np.exp(-0.5 * (speed_diff ** 2))
         speed_reward = base_speed_reward + target_speed_bonus
         
         # 2. Curvature Overspeed Penalty (Negative Reward)
-        # If a sharp curve is ahead (kappa > 0.2) and we are going fast, PENALIZE.
+        # Strict enforcement: if you exceed the calculated target + buffer, you are punished.
         overspeed_penalty = 0.0
-        CURVE_THRESHOLD = 0.25
         
-        if max_future_kappa > CURVE_THRESHOLD:
-            # We are approaching a curve. Speed should be roughly limited by physics/v_ref.
-            # Use dynamic_target_speed (derived from v_ref) as the strict limit.
-            speed_limit = dynamic_target_speed + 0.5 # Allow 0.5 m/s buffer
+        # If we are supposed to be going 1.2 m/s and we are going 2.0 m/s, that's bad.
+        speed_limit = dynamic_target_speed + 0.5 # Tight buffer
+        
+        if self.current_speed > speed_limit:
+            # Penalty proportional to violation
+            violation = self.current_speed - speed_limit
+            overspeed_penalty = -5.0 * violation
             
-            if self.current_speed > speed_limit:
-                # Strong linear penalty for every m/s or km/h over the limit
-                overspeed_penalty = -5.0 * (self.current_speed - speed_limit)
-                
-                # Cap the penalty to avoid insane values if it goes wild, but keep it high
-                overspeed_penalty = max(overspeed_penalty, -20.0) 
-                
-                if overspeed_penalty < -1.0:
-                    self.node.get_logger().debug(
-                        f"⚠️ OVERSPEED PENALTY! Curve (k={max_future_kappa:.2f}) ahead. "
-                        f"Speed: {self.current_speed:.2f} > Limit: {speed_limit:.2f}. Pen: {overspeed_penalty:.2f}"
-                    )
+            # Massive penalty for gross speeding (> 1.0 m/s over limit)
+            if violation > 1.0:
+                 overspeed_penalty -= 10.0
+            
+            # Cap extremely negative values for stability
+            overspeed_penalty = max(overspeed_penalty, -25.0)
+            
+            if overspeed_penalty < -1.0:
+                 self.node.get_logger().debug(
+                    f"OVERSPEED! Target={dynamic_target_speed:.2f}, Cur={self.current_speed:.2f}, Pen={overspeed_penalty:.2f}"
+                )
         
         # === SMOOTHNESS PENALTY ===
         # Penalize jerky steering more aggressively with exponential scaling
@@ -453,7 +461,7 @@ class AutodriveEnv(gym.Env):
         crash_penalty = 0.0
         if self.is_done:
              crash_penalty = -100.0
-             self.node.get_logger().info("💥 CRASH DETECTED! Applying -100 penalty.")
+             self.node.get_logger().info("CRASH DETECTED! Applying -100 penalty.")
             
         # Combine Rewards
         total_reward = speed_reward + overspeed_penalty - smoothness_penalty + traj_tracking_reward + crash_penalty
