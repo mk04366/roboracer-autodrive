@@ -9,7 +9,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('localization')
 
     amcl_params = os.path.join(pkg_share, 'config', 'amcl_config.yaml')
-    map_file = os.path.join(pkg_share, 'maps', 'second.yaml')
+    map_file = os.path.join(pkg_share, 'maps', 'map5.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument(
