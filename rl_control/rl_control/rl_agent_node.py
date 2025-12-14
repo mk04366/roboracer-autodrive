@@ -33,6 +33,7 @@ class AutodriveEnv(gym.Env):
         self.current_x = 0.0
         self.current_y = 0.0
         self.previous_index_waypoint = 0
+        self.nearest_idx_current = 0 
         
         # Observation Space (Lidar data (36 readings) + Current Speed (1 reading) + IMU (10 readings) + IPS (3 readings))
         # Downsampling Lidar from 1080 to 36 (Factor of 30)
@@ -57,9 +58,6 @@ class AutodriveEnv(gym.Env):
                 
         # Publisher for reset command
         self.reset_publisher = self.node.create_publisher(Bool, '/autodrive/reset_command', 10)
-
-        # Publisher for debug markers
-        self.marker_publisher = self.node.create_publisher(Marker, '/autodrive/debug_markers', 10)
 
         # Subscriber for sensor data (Lidar and other car info)
         self.node.create_subscription(LaserScan, 
@@ -92,6 +90,7 @@ class AutodriveEnv(gym.Env):
         self.last_steering = 0.0 # Track previous steering for smoothness penalty
         # flag for synchronization
         self.new_lidar_received = False
+        self.new_ips_received = False
 
     def _load_path_from_csv(self, filename):
         waypoints = []
@@ -109,9 +108,9 @@ class AutodriveEnv(gym.Env):
                             x = float(tokens[1])
                             y = float(tokens[2])
                             psi = float(tokens[3])
-                            steering = float(tokens[4])
-                            v_ref = float(tokens[5]) # vx_mps
-                            waypoints.append([x, y, psi, steering, v_ref])
+                            kappa = float(tokens[4]) # column 4 is kappa
+                            v_ref = float(tokens[5]) # column 5 is vx_mps
+                            waypoints.append([x, y, psi, kappa, v_ref])
                         except ValueError as e:
                             print(f"Error parsing line: {line} - {e}")
         except Exception as e:
@@ -147,7 +146,7 @@ class AutodriveEnv(gym.Env):
         # Check for collision/terminal state here
         # SENSITIVITY UPDATE: Increased threshold to -0.95 to detect crashes EARLIER.
         # This prevents the simulator from "rewinding" before we catch the failure.
-        if np.min(self.latest_observation[:self.LIDAR_POINTS]) < -0.88: 
+        if np.min(self.latest_observation[:self.LIDAR_POINTS]) < -0.959: 
            self.is_done = True
 
     def _speed_callback(self, msg):
@@ -206,6 +205,7 @@ class AutodriveEnv(gym.Env):
         )
         self.current_x = msg.x
         self.current_y = msg.y
+        self.new_ips_received = True
         
     # --- GYMNASIUM REQUIRED METHODS ---
 
@@ -231,15 +231,19 @@ class AutodriveEnv(gym.Env):
         self.reset_publisher.publish(reset_msg)
         self.node.get_logger().info('Environment reset released.')
         
-        self.node.get_logger().info('Waiting for Lidar data...')
-        data_received = False
-        while not data_received:
+        self.node.get_logger().info('Waiting for Lidar AND IPS data...')
+        lidar_received = False
+        # Clear flags before waiting
+        self.new_lidar_received = False 
+        self.new_ips_received = False # IMPORTANT: Ensure we wait for fresh position data after reset
+        
+        while not (lidar_received and self.new_ips_received):
             rclpy.spin_once(self.node, timeout_sec=0.1)
-            
+        
             if np.any(self.latest_observation[:self.LIDAR_POINTS] != 0): 
-                data_received = True
+                lidar_received = True
                 
-        self.node.get_logger().info('Simulator connected. Lidar data received.')
+        self.node.get_logger().info('Simulator connected. Lidar and IPS data received.')
         
         observation = self.latest_observation.copy()
         info = {}
@@ -308,7 +312,6 @@ class AutodriveEnv(gym.Env):
         min_distance = float('inf')
         nearest_point_A = [0, 0]
         nearest_point_B = [0, 0]
-        nearest_idx_current = 0
         
         for x in range(len(self.waypoints)):
             next_idx = (x + 10) % len(self.waypoints)
@@ -320,18 +323,18 @@ class AutodriveEnv(gym.Env):
                 min_distance = distance
                 nearest_point_A = [self.waypoints[x][0], self.waypoints[x][1]]
                 nearest_point_B = [self.waypoints[next_idx][0], self.waypoints[next_idx][1]]
-                nearest_idx_current = x
+                self.nearest_idx_current = x
         
         current_point = [self.current_x, self.current_y]
         num_waypoints = len(self.waypoints)
         
         # === PROGRESS REWARD ===
         # Calculate how many waypoints we've advanced (handles wraparound)
-        if nearest_idx_current >= self.previous_index_waypoint:
-            waypoints_advanced = nearest_idx_current - self.previous_index_waypoint
+        if self.nearest_idx_current >= self.previous_index_waypoint:
+            waypoints_advanced = self.nearest_idx_current - self.previous_index_waypoint
         else:
             # Wrapped around the track
-            waypoints_advanced = (num_waypoints - self.previous_index_waypoint) + nearest_idx_current
+            waypoints_advanced = (num_waypoints - self.previous_index_waypoint) + self.nearest_idx_current
         
         # Reward for forward progress (0.5 per waypoint advanced, capped)
         progress_reward = min(waypoints_advanced * 0.5, 5.0)
@@ -339,18 +342,18 @@ class AutodriveEnv(gym.Env):
         # === LAP COMPLETION BONUS ===
         lap_bonus = 0.0
         # Detect lap completion: crossed from high index back to low index
-        if self.previous_index_waypoint > num_waypoints * 0.9 and nearest_idx_current < num_waypoints * 0.1:
+        if self.previous_index_waypoint > num_waypoints * 0.9 and self.nearest_idx_current < num_waypoints * 0.1:
             lap_bonus = 100.0  # Big bonus for completing a lap!
             self.node.get_logger().info("🏁 LAP COMPLETED! +100 bonus")
         
         # === DIRECTION PENALTY ===
         direction_penalty = 0.0
         # Going backwards: previous > current, but not due to lap wraparound
-        if (self.previous_index_waypoint > nearest_idx_current and 
-            self.previous_index_waypoint - nearest_idx_current < num_waypoints * 0.1):
+        if (self.previous_index_waypoint > self.nearest_idx_current and 
+            self.previous_index_waypoint - self.nearest_idx_current < num_waypoints * 0.1):
             direction_penalty = -50.0  # Reduced from -1000 for balance
         
-        self.previous_index_waypoint = nearest_idx_current
+        self.previous_index_waypoint = self.nearest_idx_current
         
         # === DISTANCE PENALTY (perpendicular distance to trajectory line) ===
         x1, y1 = nearest_point_A
@@ -373,73 +376,61 @@ class AutodriveEnv(gym.Env):
         DISTANCE_SCALE = 2.0  # How quickly penalty increases with distance
         distance_penalty = -MAX_DISTANCE_PENALTY * (1 - np.exp(-DISTANCE_SCALE * perpendicular_distance))
         
-        # Publish markers for visualization
-        self._publish_debug_markers(nearest_point_A, nearest_point_B)
-        
         total_reward = progress_reward + lap_bonus + direction_penalty + distance_penalty
         return total_reward
 
-    def _publish_debug_markers(self, point_a, point_b):
-        marker = Marker()
-        marker.header.frame_id = "map"
-        marker.header.stamp = self.node.get_clock().now().to_msg()
-        marker.ns = "trajectory_tracking"
-        marker.id = 0
-        marker.type = Marker.LINE_STRIP
-        marker.action = Marker.ADD
-        marker.scale.x = 0.1  # Line width
-        marker.color.a = 1.0
-        marker.color.r = 0.0
-        marker.color.g = 1.0
-        marker.color.b = 0.0
-
-        p1 = Point()
-        p1.x = float(point_a[0])
-        p1.y = float(point_a[1])
-        p1.z = 0.0
-
-        p2 = Point()
-        p2.x = float(point_b[0])
-        p2.y = float(point_b[1])
-        p2.z = 0.0
-        
-        marker.points.append(p1)
-        marker.points.append(p2)
-
-        self.marker_publisher.publish(marker)
 
     def _calculate_reward(self, action):
         """
         Tuned reward function with balanced components for trajectory tracking.
         """
     # === DYNAMIC SPEED REWARD ===
-        # LOOKAHEAD LOGIC: Use the REFERENCE VELOCITY from the path file (v_ref)
-        # The path file already contains the optimal speed profile (vx_mps) for safe cornering.
-        lookahead_distance = 20  # Look ahead ~1-2 meters
+        # LOOKAHEAD LOGIC: Check both Reference Velocity AND Curvature
+        lookahead_distance = 20
         min_future_speed = float('inf')
+        max_future_kappa = 0.0
         
         for i in range(lookahead_distance):
             idx = (self.nearest_idx_current + i) % len(self.waypoints)
-            # waypoints structure: [x, y, psi, steering, v_ref]
+            # waypoints structure: [x, y, psi, kappa, v_ref]
+            k = abs(self.waypoints[idx][3])
             v_ref = self.waypoints[idx][4]
+            
             if v_ref < min_future_speed:
                 min_future_speed = v_ref
+            if k > max_future_kappa:
+                max_future_kappa = k
         
-        # Set target speed to the minimum found in the lookahead window
-        # This ensures we brake EARLY for upcoming curves
-        dynamic_target_speed = min_future_speed
+        # 1. Target Speed Guidance (Positive Reward)
+        dynamic_target_speed = max(min_future_speed, 1.0)
         
-        # Lower bound sanity check (don't stop completely unless required)
-        dynamic_target_speed = max(dynamic_target_speed, 1.0) 
-
-        # Base reward for moving (encourages the car to go)
         base_speed_reward = self.current_speed * 1.5
-        
-        # Bonus for being close to target speed (bell curve around target)
         speed_diff = abs(self.current_speed - dynamic_target_speed)
-        target_speed_bonus = 3.0 * np.exp(-0.5 * (speed_diff ** 2))  # Gaussian bonus, max +3 at target
-        
+        target_speed_bonus = 3.0 * np.exp(-0.5 * (speed_diff ** 2))
         speed_reward = base_speed_reward + target_speed_bonus
+        
+        # 2. Curvature Overspeed Penalty (Negative Reward)
+        # If a sharp curve is ahead (kappa > 0.2) and we are going fast, PENALIZE.
+        overspeed_penalty = 0.0
+        CURVE_THRESHOLD = 0.25
+        
+        if max_future_kappa > CURVE_THRESHOLD:
+            # We are approaching a curve. Speed should be roughly limited by physics/v_ref.
+            # Use dynamic_target_speed (derived from v_ref) as the strict limit.
+            speed_limit = dynamic_target_speed + 0.5 # Allow 0.5 m/s buffer
+            
+            if self.current_speed > speed_limit:
+                # Strong linear penalty for every m/s or km/h over the limit
+                overspeed_penalty = -5.0 * (self.current_speed - speed_limit)
+                
+                # Cap the penalty to avoid insane values if it goes wild, but keep it high
+                overspeed_penalty = max(overspeed_penalty, -20.0) 
+                
+                if overspeed_penalty < -1.0:
+                    self.node.get_logger().debug(
+                        f"⚠️ OVERSPEED PENALTY! Curve (k={max_future_kappa:.2f}) ahead. "
+                        f"Speed: {self.current_speed:.2f} > Limit: {speed_limit:.2f}. Pen: {overspeed_penalty:.2f}"
+                    )
         
         # === SMOOTHNESS PENALTY ===
         # Penalize jerky steering more aggressively with exponential scaling
@@ -465,11 +456,11 @@ class AutodriveEnv(gym.Env):
              self.node.get_logger().info("💥 CRASH DETECTED! Applying -100 penalty.")
             
         # Combine Rewards
-        total_reward = speed_reward - smoothness_penalty + traj_tracking_reward + crash_penalty
+        total_reward = speed_reward + overspeed_penalty - smoothness_penalty + traj_tracking_reward + crash_penalty
         
         # Debug logging
         self.node.get_logger().debug(
-            f"Reward: speed={speed_reward:.2f}, smooth_pen={smoothness_penalty:.2f}, "
+            f"Reward: speed={speed_reward:.2f}, overspeed={overspeed_penalty:.2f}, smooth={smoothness_penalty:.2f}, "
             f"traj={traj_tracking_reward:.2f}, crash={crash_penalty:.2f}, total={total_reward:.2f}"
         )
         
