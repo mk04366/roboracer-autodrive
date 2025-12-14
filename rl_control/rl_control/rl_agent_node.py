@@ -110,7 +110,8 @@ class AutodriveEnv(gym.Env):
                             y = float(tokens[2])
                             psi = float(tokens[3])
                             steering = float(tokens[4])
-                            waypoints.append([x, y, psi, steering])
+                            v_ref = float(tokens[5]) # vx_mps
+                            waypoints.append([x, y, psi, steering, v_ref])
                         except ValueError as e:
                             print(f"Error parsing line: {line} - {e}")
         except Exception as e:
@@ -146,7 +147,7 @@ class AutodriveEnv(gym.Env):
         # Check for collision/terminal state here
         # SENSITIVITY UPDATE: Increased threshold to -0.95 to detect crashes EARLIER.
         # This prevents the simulator from "rewinding" before we catch the failure.
-        if np.min(self.latest_observation[:self.LIDAR_POINTS]) < -0.95: 
+        if np.min(self.latest_observation[:self.LIDAR_POINTS]) < -0.88: 
            self.is_done = True
 
     def _speed_callback(self, msg):
@@ -411,15 +412,31 @@ class AutodriveEnv(gym.Env):
         """
         Tuned reward function with balanced components for trajectory tracking.
         """
-        # === SPEED REWARD ===
-        # Target speed approach: reward for reaching optimal speed, slight penalty for too fast/slow
-        TARGET_SPEED = 3.0  # m/s - adjust based on your track
+    # === DYNAMIC SPEED REWARD ===
+        # LOOKAHEAD LOGIC: Use the REFERENCE VELOCITY from the path file (v_ref)
+        # The path file already contains the optimal speed profile (vx_mps) for safe cornering.
+        lookahead_distance = 20  # Look ahead ~1-2 meters
+        min_future_speed = float('inf')
         
+        for i in range(lookahead_distance):
+            idx = (self.nearest_idx_current + i) % len(self.waypoints)
+            # waypoints structure: [x, y, psi, steering, v_ref]
+            v_ref = self.waypoints[idx][4]
+            if v_ref < min_future_speed:
+                min_future_speed = v_ref
+        
+        # Set target speed to the minimum found in the lookahead window
+        # This ensures we brake EARLY for upcoming curves
+        dynamic_target_speed = min_future_speed
+        
+        # Lower bound sanity check (don't stop completely unless required)
+        dynamic_target_speed = max(dynamic_target_speed, 1.0) 
+
         # Base reward for moving (encourages the car to go)
         base_speed_reward = self.current_speed * 1.5
         
         # Bonus for being close to target speed (bell curve around target)
-        speed_diff = abs(self.current_speed - TARGET_SPEED)
+        speed_diff = abs(self.current_speed - dynamic_target_speed)
         target_speed_bonus = 3.0 * np.exp(-0.5 * (speed_diff ** 2))  # Gaussian bonus, max +3 at target
         
         speed_reward = base_speed_reward + target_speed_bonus
@@ -440,14 +457,20 @@ class AutodriveEnv(gym.Env):
 
         # reward for following track
         traj_tracking_reward = self._calculate_traj_tracking_reward()
+        
+        # === CRASH PENALTY ===
+        crash_penalty = 0.0
+        if self.is_done:
+             crash_penalty = -100.0
+             self.node.get_logger().info("💥 CRASH DETECTED! Applying -100 penalty.")
             
         # Combine Rewards
-        total_reward = speed_reward - smoothness_penalty + traj_tracking_reward
+        total_reward = speed_reward - smoothness_penalty + traj_tracking_reward + crash_penalty
         
         # Debug logging
         self.node.get_logger().debug(
             f"Reward: speed={speed_reward:.2f}, smooth_pen={smoothness_penalty:.2f}, "
-            f"traj={traj_tracking_reward:.2f}, total={total_reward:.2f}"
+            f"traj={traj_tracking_reward:.2f}, crash={crash_penalty:.2f}, total={total_reward:.2f}"
         )
         
         return total_reward
@@ -474,13 +497,28 @@ def main(args=None):
     
     run_name = f"PPO_{time.strftime('%Y%m%d_%H%M%S')}"
     
-    model = PPO(
-        "MlpPolicy", 
-        env, 
-        verbose=1, 
-        device="cpu", 
-        tensorboard_log=tensorboard_log_dir
-    )
+    # Check if pre-trained model exists
+    model_path = os.path.join(package_dir, "models", "ppo_autodrive.zip")
+    
+    if os.path.exists(model_path):
+        env.node.get_logger().info(f"Loading existing model from {model_path}...")
+        model = PPO.load(
+            model_path,
+            env=env,
+            verbose=1,
+            device="cpu",
+            tensorboard_log=tensorboard_log_dir,
+            force_reset=False  # Keep current environment state
+        )
+    else:
+        env.node.get_logger().info("No existing model found. creating new PPO model.")
+        model = PPO(
+            "MlpPolicy", 
+            env, 
+            verbose=1, 
+            device="cpu", 
+            tensorboard_log=tensorboard_log_dir
+        )
     
     # Checkpoint callback to save model every 40000 timesteps
     checkpoint_callback = CheckpointCallback(

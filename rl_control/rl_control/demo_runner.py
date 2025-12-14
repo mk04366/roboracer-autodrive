@@ -14,29 +14,20 @@ def main(args=None):
     # Using the existing AutodriveEnv from rl_agent_node.py
     env = AutodriveEnv(node_name='rl_demo_node')
     
-    # Path to models
-    # Assuming we are running from the workspace or installed location, 
-    # we need to find the models directory relative to the package installation or source.
-    # A robust way is to check the typical location.
+    # Model directory (absolute path to source)
+    model_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control/models"
+    model_name = "ppo_autodrive.zip"
+    model_path = os.path.join(model_dir, model_name)
     
-    # Try detailed paths to find the model
-    possible_paths = [
-        os.path.join(os.getcwd(), "src/roboracer-autodrive/rl_control/models"),
-        os.path.join(os.path.dirname(os.path.realpath(__file__)), "../models"), # When running from source
-        "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control/models"
-    ]
-    
-    model_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            potential_model = os.path.join(p, "ppo_autodrive_model_200000_steps.zip")
-            if os.path.exists(potential_model):
-                model_path = potential_model
-                break
-    
-    if model_path is None:
-        env.node.get_logger().error("Could not find model file!")
+    # Check if model exists
+    if not os.path.exists(model_path):
+        env.node.get_logger().error(f"Model not found at: {model_path}")
+        env.node.get_logger().info(f"Available models in {model_dir}:")
+        if os.path.exists(model_dir):
+            for f in os.listdir(model_dir):
+                env.node.get_logger().info(f"  - {f}")
         env.close()
+        rclpy.shutdown()
         return
 
     env.node.get_logger().info(f"Loading model from: {model_path}")
@@ -47,6 +38,7 @@ def main(args=None):
     except Exception as e:
         env.node.get_logger().error(f"Failed to load model: {e}")
         env.close()
+        rclpy.shutdown()
         return
 
     env.node.get_logger().info("Model loaded successfully.")
@@ -54,7 +46,7 @@ def main(args=None):
     # Presentation Mode: Wait for user input
     print("\n" + "="*50)
     print("      ROBORACER DEMO MODE      ")
-    print("      Model: PPO Autodrive     ")
+    print(f"      Model: {model_name}     ")
     print("      Deterministic: ON        ")
     print("="*50)
     input("\n>>> Press ENTER to start the car... <<<")
