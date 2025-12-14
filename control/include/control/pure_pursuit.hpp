@@ -78,7 +78,7 @@ private:
     double lookahead_distance_ = 1.0, beta_, previous_deviation_ = 0.0, total_area_ = 0.0, control_velocity_ = 0.1, heading_angle_ = 0.5;
     double heading_scale_, area_threshold_;
     double r_ = 0.8;
-    size_t window_size_, vel_window;
+    size_t window_size_, vel_window, max_lateral_acc_;
     double current_speed_;
     double yaw_;
 

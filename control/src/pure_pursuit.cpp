@@ -15,11 +15,12 @@ PurePursuitController::PurePursuitController()
     area_threshold_ = this->declare_parameter("area_threshold", 1.0);
     window_size_ = this->declare_parameter("window_size", 5);
     vel_window = this->declare_parameter("vel_window", 5);
+    max_lateral_acc_ = this->declare_parameter("max_lateral_acc", 2.0); // m/s^2
 
     // PID parameters for throttle control
-    pid_kp_ = this->declare_parameter("pid_kp", 0.15);
-    pid_ki_ = this->declare_parameter("pid_ki", 0.02);
-    pid_kd_ = this->declare_parameter("pid_kd", 0.01);
+    pid_kp_ = this->declare_parameter("pid_kp", 1.0);
+    pid_ki_ = this->declare_parameter("pid_ki", 0.2);
+    pid_kd_ = this->declare_parameter("pid_kd", 0.1);
     throttle_pid_.setGains(pid_kp_, pid_ki_, pid_kd_);
 
     // Initialize position and IMU data
@@ -192,13 +193,15 @@ void PurePursuitController::update_lookahead_distance(double speed)
         lookahead_distance_ = std::min(max_lookahead_, min_lookahead_ + sigmoid_value * (max_lookahead_ - min_lookahead_));
 }
 
-std::pair<Eigen::Vector2d, std::optional<Eigen::Vector2d>> PurePursuitController::find_lookahead_point()
+std::pair<Eigen::Vector2d, std::optional<Eigen::Vector2d>>
+PurePursuitController::find_lookahead_point()
 {
     Eigen::Vector2d closest_point;
     std::optional<Eigen::Vector2d> goal_point;
     double min_dist = std::numeric_limits<double>::max();
     size_t closest_idx = 0;
 
+    // Find the closest path point
     for (size_t i = 0; i < path_.size(); ++i)
     {
         double dist = (path_[i] - current_position_.value()).norm();
@@ -210,18 +213,28 @@ std::pair<Eigen::Vector2d, std::optional<Eigen::Vector2d>> PurePursuitController
         }
     }
 
-    for (size_t i = closest_idx + 2; i < std::min(path_.size(), closest_idx + 10); ++i)
+    // Search forward for a lookahead point, wrapping around if needed
+    size_t path_size = path_.size();
+    for (size_t offset = 0; offset < path_size; ++offset)
     {
+        size_t i = (closest_idx + offset) % path_size; // wrap around
         double dist = (path_[i] - current_position_.value()).norm();
-        RCLCPP_INFO(this->get_logger(), "Distance to point %zu: %f", i, dist);
-        if (dist > lookahead_distance_)
+        if (dist >= lookahead_distance_)
         {
             goal_point = path_[i];
             break;
         }
     }
+
+    // If no point exceeds lookahead distance, pick the closest as fallback
+    if (!goal_point.has_value())
+    {
+        goal_point = path_[closest_idx];
+    }
+
     return {closest_point, goal_point};
 }
+
 
 double PurePursuitController::calculate_alpha(const Eigen::Vector2d &goal_point, double yaw)
 {
@@ -260,8 +273,10 @@ void PurePursuitController::calculate_deviation(const Eigen::Vector2d &pos, cons
 
 double PurePursuitController::calculate_max_velocity_pure_pursuit(double curvature)
 {
-    double max_vel = (curvature != 0.0) ? std::sqrt(1.0 / std::abs(curvature)) : max_speed_;
-    return std::min(max_speed_, max_vel);
+    if (curvature == 0.0)
+        return max_speed_;
+    double vmax = std::sqrt(max_lateral_acc_ / std::abs(curvature));
+    return std::min(max_speed_, vmax);
 }
 
 double PurePursuitController::calculate_min_deviation_pure_pursuit()
@@ -271,12 +286,14 @@ double PurePursuitController::calculate_min_deviation_pure_pursuit()
 
 double PurePursuitController::adjust_beta(double current_speed)
 {
+    double beta_increment = 0.3; 
     if (total_area_ < area_threshold_)
-        return std::min(1.0, beta_ + 0.25);
+        beta_ = std::min(1.0, beta_ + beta_increment);
     else if (current_speed > min_speed_)
-        return std::max(0.0, beta_ - 0.25);
+        beta_ = std::max(0.0, beta_ - beta_increment);
     return beta_;
 }
+
 
 double PurePursuitController::convex_combination(double max_v_pp, double min_d_pp, double cur_spd)
 {
