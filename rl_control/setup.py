@@ -27,6 +27,8 @@ setup(
             'rl_train = rl_control.rl_agent_node:main',
             'demo_runner = rl_control.demo_runner:main',
             'rl_general = rl_control.rl_general:main',
+            'rl_general_resume = rl_control.rl_general_resume:main',
+            'rl_wp = rl_control.rl_wp:main',
         ],
     },
 )
