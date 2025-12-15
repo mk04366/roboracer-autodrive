@@ -17,6 +17,8 @@ PurePursuitController::PurePursuitController()
     vel_window = this->declare_parameter("vel_window", 5);
     max_lateral_acc_ = this->declare_parameter("max_lateral_acc", 2.0); // m/s^2
 
+    cte_window_size_ = this->declare_parameter("cte_window_size", 50);
+
     // PID parameters for throttle control
     pid_kp_ = this->declare_parameter("pid_kp", 1.0);
     pid_ki_ = this->declare_parameter("pid_ki", 0.2);
@@ -42,6 +44,11 @@ PurePursuitController::PurePursuitController()
     // Publish actuators
     steering_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
     throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
+    mean_cte_pub_ = this->create_publisher<std_msgs::msg::Float32>(
+        "/autodrive/f1tenth_1/mean_cte", 10);
+
+    lat_acc_pub_ = this->create_publisher<std_msgs::msg::Float32>(
+        "/autodrive/f1tenth_1/lateral_accel", 10);
 
     // For RViz visualization
     goal_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("/goal", 10);
@@ -76,6 +83,13 @@ void PurePursuitController::vehicle_callback(const autodrive_msgs::msg::Vehicles
     main_control_loop();
 }
 
+void PurePursuitController::publishLateralAccel(double a_lat)
+{
+    std_msgs::msg::Float32 msg;
+    msg.data = a_lat;
+    lat_acc_pub_->publish(msg);
+}
+
 void PurePursuitController::main_control_loop()
 {
     // Visualize estimated position
@@ -90,6 +104,8 @@ void PurePursuitController::main_control_loop()
         heading_angle_ = calculate_heading_angle(alpha);
         calculate_deviation(current_position_.value(), closest_point);
         double curvature = calculate_curvature(alpha);
+        double a_lat = current_speed_ * current_speed_ * std::abs(curvature);
+        publishLateralAccel(a_lat);
         double max_velocity_pp = calculate_max_velocity_pure_pursuit(curvature);
         double min_deviation_pp = calculate_min_deviation_pure_pursuit();
         control_velocity_ = convex_combination(max_velocity_pp, min_deviation_pp, current_speed_);
@@ -235,7 +251,6 @@ PurePursuitController::find_lookahead_point()
     return {closest_point, goal_point};
 }
 
-
 double PurePursuitController::calculate_alpha(const Eigen::Vector2d &goal_point, double yaw)
 {
     Eigen::Vector2d delta = goal_point - current_position_.value();
@@ -254,10 +269,29 @@ double PurePursuitController::calculate_curvature(double alpha)
     return 2.0 * std::sin(alpha) / lookahead_distance_;
 }
 
+void PurePursuitController::publish_mean_cte()
+{
+    std_msgs::msg::Float32 msg;
+    msg.data = mean_cte_;
+    mean_cte_pub_->publish(msg);
+}
 // calculates the deviation in a sliding window fashion
 void PurePursuitController::calculate_deviation(const Eigen::Vector2d &pos, const Eigen::Vector2d &closest)
 {
     double deviation = (closest - pos).norm();
+
+    cte_window_.push_back(deviation);
+    if (cte_window_.size() > cte_window_size_)
+        cte_window_.pop_front();
+
+    mean_cte_ = std::accumulate(
+                    cte_window_.begin(),
+                    cte_window_.end(),
+                    0.0) /
+                cte_window_.size();
+
+    publish_mean_cte();
+
     if (previous_position_.has_value())
     {
         double dist_travel = (pos - previous_position_.value()).norm();
@@ -286,14 +320,13 @@ double PurePursuitController::calculate_min_deviation_pure_pursuit()
 
 double PurePursuitController::adjust_beta(double current_speed)
 {
-    double beta_increment = 0.3; 
+    double beta_increment = 0.3;
     if (total_area_ < area_threshold_)
         beta_ = std::min(1.0, beta_ + beta_increment);
     else if (current_speed > min_speed_)
         beta_ = std::max(0.0, beta_ - beta_increment);
     return beta_;
 }
-
 
 double PurePursuitController::convex_combination(double max_v_pp, double min_d_pp, double cur_spd)
 {

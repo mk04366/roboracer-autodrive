@@ -44,6 +44,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_, throttle_pub_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_pub_, cp_pub_, est_pos_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr race_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr mean_cte_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr lat_acc_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
 
     void vehicle_callback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
@@ -66,6 +68,12 @@ private:
     void publish_markers(const Eigen::Vector2d &closest_point, const Eigen::Vector2d &goal_point);
     void publish_raceline_visualization();
     void publish_control_commands();
+    void publish_mean_cte();
+    void publishLateralAccel(double a_lat);
+    // --- CTE statistics ---
+    std::deque<double> cte_window_;
+    size_t cte_window_size_;
+    double mean_cte_ = 0.0;
 
     // State & Params
     std::vector<Eigen::Vector2d> path_;

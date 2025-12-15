@@ -19,6 +19,7 @@ MPCCGrampcNode::MPCCGrampcNode()
                                                               "/home/ammar/ros2_ws/src/global-planning/outputs/map5/"
                                                               "ay_safe_2.csv");
   path_ = std::make_shared<mpcc::Path>(mpcc::load_path_from_csv(csv_file));
+  cte_window_size_ = this->declare_parameter("cte_window_size", 50);
 
   if (path_ && path_->getTotalLength() > 1e-3)
   {
@@ -43,6 +44,11 @@ MPCCGrampcNode::MPCCGrampcNode()
   desired_accel_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/accel_desired", 10);
   path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/planned_path", 10);
   target_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/mpcc_target", 10);
+  lat_acc_pub_ = this->create_publisher<std_msgs::msg::Float32>(
+    "/autodrive/f1tenth_1/lateral_accel", 10);
+
+  mean_cte_pub_ = this->create_publisher<std_msgs::msg::Float32>(
+      "/autodrive/f1tenth_1/mean_cte", 10);
 
   path_timer_ = this->create_wall_timer(std::chrono::seconds(1), std::bind(&MPCCGrampcNode::publishPath, this));
   // ---------------------------------------- //
@@ -254,7 +260,7 @@ void MPCCGrampcNode::initializePathPosition()
 
 double MPCCGrampcNode::lookupThrottle(double a, double v)
 {
-  return -0.012833251448 + (0.002944490101 * (a)) + (0.057379678892 * (v)) + (0.000328776471 * (a*a)) + (0.000533089661 * (a * v)) + (-0.002773426265 * (v*v));
+  return -0.012833251448 + (0.002944490101 * (a)) + (0.057379678892 * (v)) + (0.000328776471 * (a * a)) + (0.000533089661 * (a * v)) + (-0.002773426265 * (v * v));
 }
 
 double MPCCGrampcNode::getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
@@ -293,6 +299,20 @@ void MPCCGrampcNode::vehicleCallback(const autodrive_msgs::msg::Vehiclestate::Sh
   controlLoop();
 }
 
+void MPCCGrampcNode::publishMeanCTE()
+{
+  std_msgs::msg::Float32 msg;
+  msg.data = mean_cte_;
+  mean_cte_pub_->publish(msg);
+}
+
+void MPCCGrampcNode::publishLateralAccel(double a_lat)
+{
+  std_msgs::msg::Float32 msg;
+  msg.data = a_lat;
+  lat_acc_pub_->publish(msg);
+}
+
 void MPCCGrampcNode::controlLoop()
 {
   initializePathPosition();
@@ -304,6 +324,24 @@ void MPCCGrampcNode::controlLoop()
   double target_heading = path_->getHeading(nextIdx);
   double target_steering = path_->getSteering(nextIdx);
   double target_speed = path_->getVelocity(nextIdx);
+
+  // ---- Compute instantaneous CTE ----
+  Eigen::Vector2d vehicle_pos(x_, y_);
+  double cte = (vehicle_pos - target_point).norm();
+
+  // ---- Sliding window mean ----
+  cte_window_.push_back(cte);
+  if (cte_window_.size() > cte_window_size_)
+    cte_window_.pop_front();
+
+  mean_cte_ = std::accumulate(
+                  cte_window_.begin(),
+                  cte_window_.end(),
+                  0.0) /
+              cte_window_.size();
+
+  // Publish
+  publishMeanCTE();
 
   // publish target pose for visualization
   publishTarget(target_point, target_heading);
@@ -353,6 +391,11 @@ void MPCCGrampcNode::controlLoop()
     prev_steer_ = steer_cmd;
     prev_throttle_ = throttle_cmd;
   }
+
+  double curvature = std::tan(steer_cmd) / L_;
+  double a_lat = v_ * v_ * std::abs(curvature);
+
+  publishLateralAccel(a_lat);
 
   // Publish steering command
   auto s_msg = std_msgs::msg::Float32();

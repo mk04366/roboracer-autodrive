@@ -4,6 +4,7 @@
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include <deque>
 #include "std_msgs/msg/float32.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 #include "control_grampc/path_utils.hpp"
@@ -44,11 +45,13 @@ private:
   void initializePathPosition();
   void initGrampcParams();
   void controlLoop();
+  void publishMeanCTE();
   void publishPath();
   void publishTarget(const Eigen::Vector2d& point, double heading);
   double getYawFromImu(const sensor_msgs::msg::Imu::ConstSharedPtr& imu_msg);
   void vehicleCallback(const autodrive_msgs::msg::Vehiclestate::SharedPtr msg);
   double lookupThrottle(double a, double v);
+  void publishLateralAccel(double a_lat);
   // ROS publishers/subscribers
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steering_pub_;
@@ -59,6 +62,15 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pub_;
   rclcpp::TimerBase::SharedPtr path_timer_;
   rclcpp::Subscription<autodrive_msgs::msg::Vehiclestate>::SharedPtr vehicle_sub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr lat_acc_pub_;
+
+    // ---- CTE stats ----
+  std::deque<double> cte_window_;
+  size_t cte_window_size_;
+  double mean_cte_ = 0.0;
+
+  // Publisher
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr mean_cte_pub_;
 
   std::shared_ptr<mpcc::Path> path_;
   // Vehicle state - 5D [x, y, psi, v, steering]

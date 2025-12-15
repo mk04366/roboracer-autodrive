@@ -13,18 +13,12 @@ def generate_launch_description():
         'simulator_bringup_headless.launch.py'
     )
 
-    # waypoints_loader_launch_path = os.path.join(
-    #     get_package_share_directory('control'),
-    #     'launch',
-    #     'waypoints_loader_launch.py'
-    # )
-
     control_launch_path = os.path.join(
         get_package_share_directory('control'),
         'launch',
-        # 'pid_controller_launch.py'
+        'pid_controller_launch.py'
         # 'ftg_controller_launch.py'
-        'pure_pursuit_launch.py'
+        # 'pure_pursuit_launch.py'
     )
 
     # mpcc_node = Node(
@@ -58,13 +52,6 @@ def generate_launch_description():
         }]
     )
 
-    # initial_pose_node = Node(
-    #     package='localization',
-    #     executable='initial_pose_publisher',
-    #     name='initial_pose_publisher',
-    #     output='screen'
-    # )
-
     return LaunchDescription([
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(autodrive_launch_path)
@@ -72,14 +59,10 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(control_launch_path),
             ),
+        # mpcc_node,
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(localization_launch_path)
         ),
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource(waypoints_loader_launch_path)
-        # ),
-        # mpcc_node,
         foxglove_node,
         # mpcc_tester_node
-        # initial_pose_node
     ])
