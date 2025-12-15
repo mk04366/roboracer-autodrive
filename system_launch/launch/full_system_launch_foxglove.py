@@ -16,8 +16,8 @@ def generate_launch_description():
     control_launch_path = os.path.join(
         get_package_share_directory('control'),
         'launch',
-        'pid_controller_launch.py'
-        # 'ftg_controller_launch.py'
+        # 'pid_controller_launch.py'
+        'ftg_controller_launch.py'
         # 'pure_pursuit_launch.py'
     )
 

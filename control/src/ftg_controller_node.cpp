@@ -25,6 +25,11 @@ private:
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr steer_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr throttle_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr accel_pub_;
+    // --- Lateral acceleration ---
+    float current_speed_ = 0.0f;
+    const float wheelbase_ = 0.33f;
+
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr lat_acc_pub_;
 
     void lidar_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
     {
@@ -36,8 +41,8 @@ private:
         float throttle = calculate_throttle(steering, processed);
         publish_steering(steering);
         publish_throttle(throttle);
+        publish_lateral_accel(steering);
     }
-
 
     std::vector<float> preprocess_lidar(const std::vector<float> &ranges)
     {
@@ -128,7 +133,7 @@ private:
     {
         int mid = ranges.size() / 2;
         int half_window = static_cast<int>(ranges.size() * target_pct / 2);
-        if(half_window < 1)
+        if (half_window < 1)
             half_window = 1; // Ensure at least one element in the window & safe for 0 division
 
         float center_avg = std::accumulate(ranges.begin() + mid - half_window,
@@ -171,12 +176,18 @@ public:
 
         lidar_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/autodrive/f1tenth_1/lidar", 10, std::bind(&FTGNode::lidar_callback, this, _1));
-        speed_sub =  this->create_subscription<std_msgs::msg::Float32>(
-            "/autodrive/f1tenth_1/speed", 10, [this](const std_msgs::msg::Float32::SharedPtr msg) {
+        speed_sub = this->create_subscription<std_msgs::msg::Float32>(
+            "/autodrive/f1tenth_1/speed", 10,
+            [this](const std_msgs::msg::Float32::SharedPtr msg)
+            {
                 float v = msg->data;
-                // (v - prev_v) / (1/17) == (v - prev_v) * 17
-                float accel = (v - prev_v) * 17.0f; // assuming 17 Hz
+
+                // longitudinal acceleration (already present)
+                float accel = (v - prev_v) * 17.0f;
                 prev_v = v;
+
+                current_speed_ = v; // 👈 store for lateral accel
+
                 auto amsg = std_msgs::msg::Float32();
                 amsg.data = accel;
                 accel_pub_->publish(amsg);
@@ -184,6 +195,8 @@ public:
         steer_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/steering_command", 10);
         accel_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/accel_current", 10);
         throttle_pub_ = this->create_publisher<std_msgs::msg::Float32>("/autodrive/f1tenth_1/throttle_command", 10);
+        lat_acc_pub_ = this->create_publisher<std_msgs::msg::Float32>(
+            "/autodrive/f1tenth_1/lateral_accel", 10);
     }
 
     void publish_steering(float angle)
@@ -192,6 +205,15 @@ public:
         msg.data = angle;
         steer_pub_->publish(msg);
         // RCLCPP_INFO(this->get_logger(), "Steering successfully published: %f", angle);
+    }
+
+    void publish_lateral_accel(float steering_angle)
+    {
+        float curvature = std::tan(steering_angle) / wheelbase_;
+        float a_lat = current_speed_ * current_speed_ * std::abs(curvature);
+        std_msgs::msg::Float32 msg;
+        msg.data = a_lat;
+        lat_acc_pub_->publish(msg);
     }
 
     void publish_throttle(float value)
