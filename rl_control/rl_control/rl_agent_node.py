@@ -344,7 +344,7 @@ class AutodriveEnv(gym.Env):
         # Detect lap completion: crossed from high index back to low index
         if self.previous_index_waypoint > num_waypoints * 0.9 and self.nearest_idx_current < num_waypoints * 0.1:
             lap_bonus = 100.0  # Big bonus for completing a lap!
-            self.node.get_logger().info("🏁 LAP COMPLETED! +100 bonus")
+            self.node.get_logger().info("LAP COMPLETED! +100 bonus")
         
         # === DIRECTION PENALTY ===
         direction_penalty = 0.0
