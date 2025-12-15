@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'rl_train = rl_control.rl_agent_node:main',
             'demo_runner = rl_control.demo_runner:main',
+            'rl_general = rl_control.rl_general:main',
         ],
     },
 )

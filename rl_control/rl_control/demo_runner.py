@@ -16,6 +16,7 @@ def main(args=None):
     
     # Model directory (absolute path to source)
     model_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control/models"
+    # model_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control/checkpoints"
     model_name = "ppo_autodrive.zip"
     model_path = os.path.join(model_dir, model_name)
     
