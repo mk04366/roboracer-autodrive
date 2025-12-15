@@ -17,16 +17,16 @@ def generate_launch_description():
         get_package_share_directory('control'),
         'launch',
         # 'pid_controller_launch.py'
-        'ftg_controller_launch.py'
-        # 'pure_pursuit_launch.py'
+        # 'ftg_controller_launch.py'
+        'pure_pursuit_launch.py'
     )
 
-    # mpcc_node = Node(
-    #     package="control_grampc",
-    #     executable="mpcc_grampc_node",
-    #     name="mpcc_controller",
-    #     output="screen",
-    # )
+    mpcc_node = Node(
+        package="control_grampc",
+        executable="mpcc_grampc_node",
+        name="mpcc_controller",
+        output="screen",
+    )
 
     # mpcc_tester_node = Node(
     #     package="control_grampc",
@@ -56,10 +56,10 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(autodrive_launch_path)
         ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(control_launch_path),
-            ),
-        # mpcc_node,
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(control_launch_path),
+        #     ),
+        mpcc_node,
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(localization_launch_path)
         ),
