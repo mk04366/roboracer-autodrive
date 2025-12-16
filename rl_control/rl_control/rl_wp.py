@@ -437,29 +437,40 @@ def main(args=None):
     checkpoint_dir = os.path.join(package_dir, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
     
-    run_name = f"PPO_{time.strftime('%Y%m%d_%H%M%S')}"
+    # Resume training from existing model
+    model_path = os.path.join(package_dir, "models", "ppo_autodrive.zip")
     
-    model = PPO(
-        "MlpPolicy", 
-        env, 
-        verbose=1, 
-        device="cpu", 
+    # Use existing TensorBoard run name to continue logging
+    run_name = "PPO_20251213_225047"
+    
+    # Load the pre-trained model and set the new environment
+    model = PPO.load(
+        model_path,
+        env=env,
+        device="cpu",
         tensorboard_log=tensorboard_log_dir
     )
+    env.node.get_logger().info(f"Resumed model from {model_path}")
     
-    # Checkpoint callback to save model every 40000 timesteps
+    # Checkpoint callback to save model every 80000 timesteps
     checkpoint_callback = CheckpointCallback(
-        save_freq=40000,
+        save_freq=80000,
         save_path=checkpoint_dir,
         name_prefix=run_name
     )
     
     try:
         # Train the agent with callbacks
-        model.learn(total_timesteps=400000, callback=checkpoint_callback, tb_log_name=run_name)
+        # reset_num_timesteps=False to continue counting from where we left off
+        model.learn(
+            total_timesteps=800000, 
+            callback=checkpoint_callback, 
+            tb_log_name=run_name,
+            reset_num_timesteps=False
+        )
         
         # Save the final model
-        model.save(os.path.join(package_dir, "models", "ppo_autodrive"))
+        model.save(os.path.join(package_dir, "models", "ppo_autodrive_wp"))
         env.node.get_logger().info("Training finished and model saved.")
         
     except KeyboardInterrupt:
