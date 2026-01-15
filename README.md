@@ -84,7 +84,3 @@ This directory hosts ROS 2 API (a meta-package), which supports modular algorith
   ```bash
   $ ros2 run autodrive_f1tenth teleop_keyboard
   ```
-
-## Demonstration
-
-<video src="ftg.webm" width="600" autoplay loop muted playsinline></video>
