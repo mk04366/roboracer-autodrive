@@ -1,14 +1,6 @@
 # Demonstration
 
-<iframe
-  width="560"
-  height="315"
-  src="https://www.youtube.com/watch?v=ZMOKa8dJni0"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-  allowfullscreen>
-</iframe>
+[![FTG Algorithm Demo](https://img.youtube.com/vi/ZMOKa8dJni0/hqdefault.jpg)](https://www.youtube.com/watch?v=ZMOKa8dJni0)
 
 # ROS 2 API
 
