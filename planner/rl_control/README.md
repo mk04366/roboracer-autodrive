@@ -79,6 +79,8 @@ Here are visuals demonstrating the car's performance under different algorithms.
 ### Generalized Algorithm
 ![Generalized GIF](demo/rl_general.gif)
 
+> **Performance note:** The behaviours shown above are not good enough. The trained models still struggle with consistency and speed; they need additional training time and reward/hyperparameter tuning to improve lap performance.
+
 ## Logs and Monitoring
 - Training logs are saved to `tensorboard_logs/`.
 - Use TensorBoard to monitor training progress: `tensorboard --logdir tensorboard_logs/`.
