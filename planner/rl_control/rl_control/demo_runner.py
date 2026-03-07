@@ -15,9 +15,9 @@ def main(args=None):
     env = AutodriveEnv(node_name='rl_demo_node')
     
     # Model directory (absolute path to source)
-    model_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control/models"
-    # model_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control/checkpoints"
-    model_name = "ppo_autodrive.zip"
+    model_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/planner/rl_control/models"
+    model_name = "ppo_autodrive_wp.zip"
+    # model_name = "rl_general_model.zip"
     model_path = os.path.join(model_dir, model_name)
     
     # Check if model exists
