@@ -346,38 +346,63 @@ def main(args=None):
     
     # Create the environment
     env = AutodriveEnv()
-    # It will check custom environment and output additional warnings if needed
     check_env(env)
     
-    # Initialize the agent
-    # Enable TensorBoard logging
-    package_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control"
-    log_dir = os.path.join(package_dir, "tensorboard_logs")
+    # Define absolute paths
+    package_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/planner/rl_control"
+    tensorboard_log_dir = os.path.join(package_dir, "tensorboard_logs")
+    checkpoint_dir = os.path.join(package_dir, "checkpoints")
+    models_dir = os.path.join(package_dir, "models")
     
-    model = PPO("MlpPolicy", env, verbose=1, device="cpu", tensorboard_log=log_dir)
+    # Create necessary directories
+    os.makedirs(tensorboard_log_dir, exist_ok=True)
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    os.makedirs(models_dir, exist_ok=True)
     
-    # Create checkpoint callback
-    # Save a checkpoint every 20,000 steps
-    save_dir = os.path.join(package_dir, "checkpoints")
-    checkpoint_callback = CheckpointCallback(
-        save_freq=50000,
-        save_path=save_dir,
-        name_prefix="rl_general_model"
+    # Model configuration
+    run_name = f"PPO_{time.strftime('%Y%m%d_%H%M%S')}"
+    final_model_path = os.path.join(models_dir, "rl_general_model.zip")
+    
+    # Create new PPO model for training
+    env.node.get_logger().info("Creating new PPO model for training")
+    model = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        device="cpu",
+        tensorboard_log=tensorboard_log_dir
     )
     
+    # Setup checkpoint callback to save model every 50000 timesteps
+    checkpoint_callback = CheckpointCallback(
+        save_freq=50000,
+        save_path=checkpoint_dir,
+        name_prefix=run_name
+    )
+    
+    # Train the model
     try:
-        # Train the agent
-        model.learn(total_timesteps=500000, callback=checkpoint_callback)
+        env.node.get_logger().info("Starting training...")
+        model.learn(
+            total_timesteps=500000,
+            callback=checkpoint_callback,
+            tb_log_name=run_name
+        )
         
-        # Save the model
-        model.save("rl_general_model")
-        
-        env.node.get_logger().info("Training finished and model saved.")
+        # Save the final trained model
+        model.save(final_model_path)
+        env.node.get_logger().info(f"Training completed successfully. Model saved to: {final_model_path}")
         
     except KeyboardInterrupt:
-        env.node.get_logger().info("Training interrupted.")
-        model.save(os.path.join(save_dir, "rl_general_model_interrupted"))
-        env.node.get_logger().info(f"Model saved to {save_dir}/rl_general_model_interrupted.zip")
+        env.node.get_logger().warning("Training interrupted by user")
+        interrupted_model_path = os.path.join(checkpoint_dir, f"{run_name}_interrupted.zip")
+        model.save(interrupted_model_path)
+        env.node.get_logger().info(f"Interrupted model saved to: {interrupted_model_path}")
+        
+    except Exception as e:
+        env.node.get_logger().error(f"Training failed with error: {str(e)}")
+        raise
+        
     finally:
         env.close()
         rclpy.shutdown()
