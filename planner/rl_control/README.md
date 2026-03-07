@@ -71,19 +71,21 @@ Pre-trained models are stored in the `models/` folder. To test a model:
 
 ## Demonstrations
 
-Here are videos demonstrating the car's performance under different algorithms:
+Here are visuals demonstrating the car's performance under different algorithms. GIFs below show motion; snapshots illustrate the corresponding track.
 
 ### Waypoint-Based Algorithm
-<video width="640" height="480" controls>
-  <source src="demo/ppo_wp.webm" type="video/webm">
-  Your browser does not support the video tag.
-</video>
+![Waypoint GIF](demo/waypoint.gif)
 
 ### Generalized Algorithm
-<video width="640" height="480" controls>
-  <source src="demo/rl_general.webm" type="video/webm">
-  Your browser does not support the video tag.
-</video>
+![Generalized GIF](demo/general.gif)
+
+### Track Visualizations
+
+#### Waypoint-based Path
+![Waypoint track](demo/track_waypoint.png)
+
+#### Generalized Model Path
+![Generalized track](demo/track_general.png)
 
 ## Logs and Monitoring
 - Training logs are saved to `tensorboard_logs/`.
