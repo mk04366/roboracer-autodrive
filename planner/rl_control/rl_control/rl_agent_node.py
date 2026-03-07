@@ -48,7 +48,7 @@ class AutodriveEnv(gym.Env):
                                             dtype=np.float32)
 
         # import waypoints
-        self.waypoints = self._load_path_from_csv('/home/bl/ros2_ws/src/roboracer-autodrive/global-planning/outputs/map5/ay_safe_2.csv')
+        self.waypoints = self._load_path_from_csv('/home/bl/ros2_ws/src/roboracer-autodrive/planner/global-planning/outputs/map5/ay_safe_2.csv')
         
         # Publisher for steering command
         self.steering_publisher = self.node.create_publisher(Float32, '/autodrive/f1tenth_1/steering_command', 10)
@@ -495,64 +495,65 @@ class AutodriveEnv(gym.Env):
 def main(args=None):
     rclpy.init(args=args)
     
-    # Create the environment
+    # Initialize environment
     env = AutodriveEnv()
-    # It will check custom environment and output additional warnings if needed
     check_env(env)
     
-    # Save directory (absolute path to source)
-    package_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/rl_control"
+    # Define absolute paths
+    package_dir = "/home/bl/ros2_ws/src/roboracer-autodrive/planner/rl_control"
     tensorboard_log_dir = os.path.join(package_dir, "tensorboard_logs")
-    os.makedirs(tensorboard_log_dir, exist_ok=True)
-
-    # Checkpoint directory for saving models during training
     checkpoint_dir = os.path.join(package_dir, "checkpoints")
+    models_dir = os.path.join(package_dir, "models")
+    
+    # Create necessary directories
+    os.makedirs(tensorboard_log_dir, exist_ok=True)
     os.makedirs(checkpoint_dir, exist_ok=True)
+    os.makedirs(models_dir, exist_ok=True)
     
+    # Model configuration
     run_name = f"PPO_{time.strftime('%Y%m%d_%H%M%S')}"
+    final_model_path = os.path.join(models_dir, "PPO_final.zip")
     
-    # Check if pre-trained model exists
-    model_path = os.path.join(package_dir, "checkpoints", "PPO_20251214_163001_400000_steps.zip")
+    # Create new PPO model for training
+    env.node.get_logger().info("Creating new PPO model for training")
+    model = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        device="cpu",
+        tensorboard_log=tensorboard_log_dir
+    )
     
-    if os.path.exists(model_path):
-        env.node.get_logger().info(f"Loading existing model from {model_path}...")
-        model = PPO.load(
-            model_path,
-            env=env,
-            verbose=1,
-            device="cpu",
-            tensorboard_log=tensorboard_log_dir,
-            force_reset=False  # Keep current environment state
-        )
-    else:
-        env.node.get_logger().info("No existing model found. creating new PPO model.")
-        model = PPO(
-            "MlpPolicy", 
-            env, 
-            verbose=1, 
-            device="cpu", 
-            tensorboard_log=tensorboard_log_dir
-        )
-    
-    # Checkpoint callback to save model every 40000 timesteps
+    # Setup checkpoint callback to save model every 40000 timesteps
     checkpoint_callback = CheckpointCallback(
         save_freq=40000,
         save_path=checkpoint_dir,
         name_prefix=run_name
     )
     
+    # Train the model
     try:
-        # Train the agent with callbacks
-        model.learn(total_timesteps=400000, callback=checkpoint_callback, tb_log_name=run_name)
+        env.node.get_logger().info("Starting training...")
+        model.learn(
+            total_timesteps=400000,
+            callback=checkpoint_callback,
+            tb_log_name=run_name
+        )
         
-        # Save the final model
-        model.save(os.path.join(package_dir, "checkpoints", "PPO_smoother-cornering.zip"))
-        env.node.get_logger().info("Training finished and model saved.")
+        # Save the final trained model
+        model.save(final_model_path)
+        env.node.get_logger().info(f"Training completed successfully. Model saved to: {final_model_path}")
         
     except KeyboardInterrupt:
-        env.node.get_logger().info("Training interrupted.")
-        model.save(os.path.join(checkpoint_dir, f"{run_name}_interrupted"))
-        env.node.get_logger().info(f"Model saved to {checkpoint_dir}/{run_name}_interrupted.zip")
+        env.node.get_logger().warning("Training interrupted by user")
+        interrupted_model_path = os.path.join(checkpoint_dir, f"{run_name}_interrupted.zip")
+        model.save(interrupted_model_path)
+        env.node.get_logger().info(f"Interrupted model saved to: {interrupted_model_path}")
+        
+    except Exception as e:
+        env.node.get_logger().error(f"Training failed with error: {str(e)}")
+        raise
+        
     finally:
         env.close()
         rclpy.shutdown()
