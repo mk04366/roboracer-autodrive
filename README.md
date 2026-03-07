@@ -1,3 +1,11 @@
+# Introduction
+
+The idea of this repository is to develop a modular and scalable simulation framework repository for the F1TENTH platform that integrates various autonomous driving algorithms across perception, planning, and control. The repository will enable future contributors to easily test and evaluate different algorithmic combinations under varying conditions, promoting a better way of experimentation, benchmarking, and rapid prototyping in a reproducible environment.
+
+# Demonstration
+
+[![FTG Algorithm Demo](https://img.youtube.com/vi/ZMOKa8dJni0/hqdefault.jpg)](https://www.youtube.com/watch?v=ZMOKa8dJni0)
+
 # ROS 2 API
 
 <p align="justify">
@@ -68,16 +76,19 @@ This directory hosts ROS 2 API (a meta-package), which supports modular algorith
 
 ## USAGE
 
-- **Bringup:**
+There are multiple algorithms implemented for each domain in their respective directories. In order to run the whole system, there is a dedicated package `system_launch` to instantiate all the required nodes together. Currently, they can be flexibly configured together for testing out different combinations.
 
-  - **Headless Mode Bringup:**
+Full system launch can be debugged and visualized via both `foxglove` and `rviz` and the user can run the launch file of their preference. Although, please make sure to keep the required nodes in the file before build and launch and run the autodrive simulator from `autodrive_simulator` folder to connect with the ROS node via the bridge.
+
+- **Bringup:**
+  - **Foxglove Bringup:**
     ```bash
-    $ ros2 launch autodrive_f1tenth simulator_bringup_headless.launch.py
+    $ ros2 launch system_launch full_system_launch_foxglove.launch.py
     ```
     **[OR]**
   - **RViz Mode Bringup:**
     ```bash
-    $ ros2 launch autodrive_f1tenth simulator_bringup_rviz.launch.py
+    $ ros2 launch system_launch full_system_launch_rviz.launch.py
     ```
 
 - **Teleoperation:**

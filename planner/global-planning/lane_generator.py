@@ -6,7 +6,7 @@ import yaml
 import os
 
 WIDTH = 0.270  # (m)
-WHEEL_LENGTH = 0.324  # (m)
+WHEEL_LENGTH = 0.33  # (m)
 MAX_STEER = 0.5236  # (rad)
 
 lane_colors = [(0, 0, 255),
@@ -43,37 +43,62 @@ def show_result(imgs, title):
 
 def reorder_vertex(image, lane, plot=False):
     path_img = np.zeros_like(image)
+
     for idx in range(len(lane)):
-        cv2.circle(path_img, lane[idx], 1, (255, 255, 255), 1)
+        pt = as_int_pt(lane[idx])
+        cv2.circle(path_img, pt, 1, (255, 255, 255), 1)
+
     curr_kernel = np.ones((3, 3), np.uint8)
     iter_cnt = 0
+
     while True:
         if iter_cnt > 10:
             print("Unable to reorder vertex")
             exit(0)
-        curr_contours, curr_hierarchy = cv2.findContours(path_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        curr_contours, curr_hierarchy = cv2.findContours(
+            path_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+        )
+
         if len(curr_contours) == 2 and curr_hierarchy[0][-1][-1] == 0:
             break
+
         path_img = cv2.dilate(path_img, curr_kernel, iterations=1)
         iter_cnt += 1
+
     path_img = cv2.ximgproc.thinning(path_img)
-    curr_contours, curr_hierarchy = cv2.findContours(path_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    curr_contours, _ = cv2.findContours(
+        path_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+
     if plot and not show_result([path_img], title="track"):
         exit(0)
-    return np.squeeze(curr_contours[0])
 
+    return np.squeeze(curr_contours[0]).astype(np.float32)
+
+def resample_path(path, step=3.0):
+    deltas = np.diff(path, axis=0)
+    dist = np.hypot(deltas[:, 0], deltas[:, 1])
+    s = np.insert(np.cumsum(dist), 0, 0.0)
+    s_new = np.arange(0, s[-1], step)
+
+    x_new = np.interp(s_new, s, path[:, 0])
+    y_new = np.interp(s_new, s, path[:, 1])
+    return np.vstack((x_new, y_new)).T
 
 def remove_duplicate(arr):
     _, idx = np.unique(arr, return_index=True)
     return arr[np.sort(idx)]
 
-
+def as_int_pt(p):
+    return (int(p[0]), int(p[1]))
+    
 def draw_lane(img, lane, color=(0, 0, 255), show_arrow=True):
     h, w = img.shape[:2]
     lane = lane[:, 0:2].astype(int)
     for idx in range(len(lane) - 1):
-        cv2.line(img, lane[idx], lane[idx + 1], color, 1)
-    cv2.line(img, lane[-1], lane[0], color, 1)  # connect tail to head
+        cv2.line(img, as_int_pt(lane[idx]), as_int_pt(lane[idx + 1]), color, 1)
+    cv2.line(img, as_int_pt(lane[-1]), as_int_pt(lane[0]), color, 1)  # connect tail to head
 
     if show_arrow:
         start = lane[0]
@@ -212,12 +237,18 @@ if __name__ == "__main__":
     print("Plotting track bounds...")
     track_img = cv2.cvtColor(~output_img, cv2.COLOR_GRAY2BGR)
     for pt in valid_pts:
-        cv2.circle(track_img, (int(pt[0]), int(pt[1])), 1, (0, 0, 255), 1)
+        cv2.circle(track_img, as_int_pt(pt), 1, (0, 0, 255), 1)
     opp_bound_img = cv2.cvtColor(~output_img, cv2.COLOR_GRAY2BGR)
     for i in range(len(opp_outer_bound)):
-        cv2.line(opp_bound_img, opp_outer_bound[i - 1], opp_outer_bound[i], (0, 0, 255), 1)
+        p1 = as_int_pt(opp_outer_bound[i - 1])
+        p2 = as_int_pt(opp_outer_bound[i])
+        cv2.line(opp_bound_img, p1, p2, (0, 0, 255), 1)
+
     for i in range(len(opp_inner_bound)):
-        cv2.line(opp_bound_img, opp_inner_bound[i - 1], opp_inner_bound[i], (0, 0, 255), 1)
+        p1 = as_int_pt(opp_inner_bound[i - 1])
+        p2 = as_int_pt(opp_inner_bound[i])
+        cv2.line(opp_bound_img, p1, p2, (0, 0, 255), 1)
+
     if not show_result([track_img, opp_bound_img], title="track"):
         exit(0)
 
@@ -226,8 +257,9 @@ if __name__ == "__main__":
     for idx in range(len(lane_ratios)):
         print("Calculating lane" + str(idx))
         valid_ratio = (np.abs(valid_pts[:, -1] - lane_ratios[idx]) < lane_ratios[idx] / 10)
-        lane = valid_pts[valid_ratio, 0:2].astype(int)
+        lane = valid_pts[valid_ratio, 0:2].astype(np.float32)
         lane = reorder_vertex(output_img, lane)
+        lane = resample_path(lane, step=3.0)
         if clockwise:
             lane = np.flipud(lane)
         left_dists, right_dists = [], []

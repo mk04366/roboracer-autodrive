@@ -12,7 +12,6 @@ setup(
     maintainer_email='user@example.com',
     description='RL SAC environment for RoboRacer AutoDRIVE',
     license='Apache License 2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'train_sac = rl_training.train_sac:main'

@@ -4,9 +4,9 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         Node(
-            package='control_py',
-            executable='mpcc_controller',
-            name='mpcc_controller',
-            output='screen',
+            package='control', 
+            executable='pure_pursuit', 
+            name='pure_pursuit',
+            output='screen'
         )
     ])
