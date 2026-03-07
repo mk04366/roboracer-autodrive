@@ -35,16 +35,16 @@ This package contains reinforcement learning (RL) implementations for autonomous
 ### Prerequisites
 - ROS 2 environment set up.
 - AutoDRIVE simulator running.
-- Required Python packages: `rclpy`, `gymnasium`, `stable-baselines3`, `numpy`.
+- Required Python packages: Install via `pip install -r requirements.txt`.
 
 ### Training Waypoint-Based Model
 1. Ensure waypoints are available (e.g., `.../ros2_ws/src/roboracer-autodrive/planner/global-planning/outputs/map5/ay_safe_2.csv`).
-2. Run: `python rl_control/rl_agent_node.py`
+2. Run: `ros2 run rl_control rl_train`
    - This will train a new PPO model and save checkpoints every 40,000 timesteps.
    - Final model saved to `models/PPO_final.zip`.
 
 ### Training Generalized Model
-1. Run: `python rl_control/rl_general.py`
+1. Run: `ros2 run rl_control rl_general`
    - Trains without track-specific data.
    - Saves checkpoints every 50,000 timesteps.
    - Final model saved to `models/rl_general_model.zip`.
@@ -64,7 +64,7 @@ Pre-trained models are stored in the `models/` folder. To test a model:
 
 3. **Run the Demo**:
    - Ensure the AutoDRIVE simulator is running.
-   - Execute: `python rl_control/demo_runner.py`
+   - Execute: `ros2 run rl_control demo_runner`
    - Press Enter when prompted to start.
    - The car will drive autonomously using the loaded model.
    - Stop with Ctrl+C.

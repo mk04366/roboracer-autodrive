@@ -15,7 +15,6 @@ from std_msgs.msg import Bool, Float32
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Imu
 from visualization_msgs.msg import Marker
-# Import other relevant messages for state/reward calculation (e.g., Odometry, CarState, etc.)
 
 class AutodriveEnv(gym.Env):
         
