@@ -6,6 +6,17 @@ The idea of this repository is to develop a modular and scalable simulation fram
 
 [![FTG Algorithm Demo](https://img.youtube.com/vi/ZMOKa8dJni0/hqdefault.jpg)](https://www.youtube.com/watch?v=ZMOKa8dJni0)
 
+# MODULES
+
+This repository is organized into modular algorithm packages for each main autonomous driving domain. For more detail, visit the README in each module.
+
+- [localization](localization/README.md) — state estimation and mapping support for vehicle pose and environment awareness.
+- [planner - global planning](planner/global-planning/README.md) — high-level route and path generation across the track.
+- [planner - reinforcement learning control](planner/rl_control/README.md) — using RL algorithms to control the vehicle.
+- [control](control/README.md) — classical motion control algorithms for steering and throttle actuation.
+- [control_grampc](control_grampc/README.md) — GRAMPC-based optimal control for trajectory tracking and performance.
+- [system_launch](system_launch/README.md) — launch configurations to bring the full system together for testing.
+
 # ROS 2 API
 
 <p align="justify">
@@ -62,7 +73,7 @@ This directory hosts ROS 2 API (a meta-package), which supports modular algorith
   $ pip3 install opencv-contrib-python
   ```
 
-## SETUP
+# SETUP
 
 1. Clone this repository inside the `~/ros2_ws/src` folder (ROS workspace).
    ```bash
@@ -74,7 +85,7 @@ This directory hosts ROS 2 API (a meta-package), which supports modular algorith
    $ colcon build
    ```
 
-## USAGE
+# USAGE
 
 There are multiple algorithms implemented for each domain in their respective directories. In order to run the whole system, there is a dedicated package `system_launch` to instantiate all the required nodes together. Currently, they can be flexibly configured together for testing out different combinations.
 
